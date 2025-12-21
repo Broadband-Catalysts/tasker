@@ -1,0 +1,29 @@
+# Example .tasker.yml configuration file
+#
+# Place this file in your project root directory.
+# The tasker package will automatically find it.
+#
+# Environment variables can be referenced using ${VAR_NAME} syntax
+
+database:
+  # Database host
+  host: localhost
+  
+  # Database port
+  port: 5432
+  
+  # Database name
+  dbname: myproject
+  
+  # Username - uses $USER environment variable by default
+  user: ${USER}
+  
+  # Password - reference from environment variable for security
+  # Never commit passwords directly to version control!
+  password: ${TASKER_DB_PASSWORD}
+  
+  # Schema name for tasker tables
+  schema: tasker
+  
+  # Database driver: postgresql, sqlite, or mysql
+  driver: postgresql

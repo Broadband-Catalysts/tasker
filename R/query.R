@@ -1,0 +1,258 @@
+#' Get current task status
+#'
+#' @param stage Filter by stage (optional)
+#' @param task Filter by task name (optional)
+#' @param status Filter by status (optional)
+#' @param limit Maximum number of results (default: all)
+#' @param conn Database connection (optional)
+#' @return Data frame with task status
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' get_task_status()
+#' get_task_status(status = "RUNNING")
+#' get_task_status(stage = "DAILY")
+#' }
+get_task_status <- function(stage = NULL, task = NULL, status = NULL,
+                           limit = NULL, conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  schema <- config$database$schema
+  
+  where_clauses <- c()
+  params <- list()
+  
+  if (!is.null(stage)) {
+    where_clauses <- c(where_clauses, "stage_name = $1")
+    params <- c(params, list(stage))
+  }
+  
+  if (!is.null(task)) {
+    param_num <- length(params) + 1
+    where_clauses <- c(where_clauses, sprintf("task_name = $%d", param_num))
+    params <- c(params, list(task))
+  }
+  
+  if (!is.null(status)) {
+    param_num <- length(params) + 1
+    where_clauses <- c(where_clauses, sprintf("status = $%d", param_num))
+    params <- c(params, list(status))
+  }
+  
+  where_sql <- if (length(where_clauses) > 0) {
+    paste("WHERE", paste(where_clauses, collapse = " AND "))
+  } else {
+    ""
+  }
+  
+  limit_sql <- if (!is.null(limit)) {
+    sprintf("LIMIT %d", as.integer(limit))
+  } else {
+    ""
+  }
+  
+  sql <- sprintf(
+    "SELECT * FROM %s.current_task_status %s
+     ORDER BY stage_order NULLS LAST, task_order NULLS LAST, start_time DESC
+     %s",
+    schema, where_sql, limit_sql
+  )
+  
+  tryCatch({
+    result <- if (length(params) > 0) {
+      DBI::dbGetQuery(conn, sql, params = params)
+    } else {
+      DBI::dbGetQuery(conn, sql)
+    }
+    
+    result
+    
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}
+
+
+#' Get active (running) tasks
+#'
+#' @param conn Database connection (optional)
+#' @return Data frame with active tasks
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' get_active_tasks()
+#' }
+get_active_tasks <- function(conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  schema <- config$database$schema
+  
+  tryCatch({
+    DBI::dbGetQuery(conn, sprintf("SELECT * FROM %s.active_tasks", schema))
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}
+
+
+#' Get subtask progress for a task run
+#'
+#' @param run_id Run ID
+#' @param conn Database connection (optional)
+#' @return Data frame with subtask progress
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' get_subtask_progress(run_id)
+#' }
+get_subtask_progress <- function(run_id, conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  schema <- config$database$schema
+  
+  tryCatch({
+    DBI::dbGetQuery(
+      conn,
+      sprintf("SELECT * FROM %s.subtask_progress 
+               WHERE run_id = $1 
+               ORDER BY subtask_number", schema),
+      params = list(run_id)
+    )
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}
+
+
+#' Get all stages
+#'
+#' @param conn Database connection (optional)
+#' @return Data frame with stages
+#' @export
+get_stages <- function(conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  schema <- config$database$schema
+  
+  tryCatch({
+    DBI::dbGetQuery(
+      conn,
+      sprintf("SELECT * FROM %s.stages 
+               ORDER BY stage_order NULLS LAST, stage_name", schema)
+    )
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}
+
+
+#' Get task execution history
+#'
+#' @param stage Stage name (optional)
+#' @param task Task name (optional)
+#' @param limit Maximum number of results (default: 100)
+#' @param conn Database connection (optional)
+#' @return Data frame with task execution history
+#' @export
+get_task_history <- function(stage = NULL, task = NULL, limit = 100, conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  schema <- config$database$schema
+  
+  where_clauses <- c()
+  params <- list()
+  
+  if (!is.null(stage)) {
+    where_clauses <- c(where_clauses, "s.stage_name = $1")
+    params <- c(params, list(stage))
+  }
+  
+  if (!is.null(task)) {
+    param_num <- length(params) + 1
+    where_clauses <- c(where_clauses, sprintf("t.task_name = $%d", param_num))
+    params <- c(params, list(task))
+  }
+  
+  where_sql <- if (length(where_clauses) > 0) {
+    paste("WHERE", paste(where_clauses, collapse = " AND "))
+  } else {
+    ""
+  }
+  
+  sql <- sprintf(
+    "SELECT tr.run_id, s.stage_name, t.task_name, t.task_type,
+            tr.hostname, tr.process_id, tr.status,
+            tr.start_time, tr.end_time, tr.last_update,
+            tr.total_subtasks, tr.current_subtask,
+            tr.overall_percent_complete, tr.overall_progress_message,
+            tr.error_message
+     FROM %s.task_runs tr
+     JOIN %s.tasks t ON tr.task_id = t.task_id
+     JOIN %s.stages s ON t.stage_id = s.stage_id
+     %s
+     ORDER BY tr.start_time DESC
+     LIMIT %d",
+    schema, schema, schema, where_sql, as.integer(limit)
+  )
+  
+  tryCatch({
+    result <- if (length(params) > 0) {
+      DBI::dbGetQuery(conn, sql, params = params)
+    } else {
+      DBI::dbGetQuery(conn, sql)
+    }
+    
+    result
+    
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}

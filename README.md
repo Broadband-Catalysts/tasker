@@ -1,1 +1,158 @@
 # tasker
+
+Task and Pipeline Execution Tracking
+
+## Overview
+
+`tasker` provides a comprehensive system for tracking the status and progress of tasks, subtasks, and pipeline executions in a PostgreSQL database. It supports hierarchical tracking (stages → tasks → subtasks) with detailed progress monitoring.
+
+## Features
+
+- **Hierarchical tracking**: Organize work into stages, tasks, and subtasks
+- **Real-time progress monitoring**: Track overall and per-subtask progress
+- **Database persistence**: Store execution history in PostgreSQL
+- **Flexible configuration**: YAML files, environment variables, or direct parameters
+- **Rich metadata**: Capture hostname, PID, timing, errors, and custom metadata
+- **Query functions**: Retrieve current status, history, and active tasks
+- **Shiny dashboard**: Visual monitoring of pipeline execution
+
+## Installation
+
+```r
+# Install from GitHub
+devtools::install_github("Broadband-Catalysts/tasker")
+```
+
+## Quick Start
+
+### 1. Configure
+
+Create `.tasker.yml` in your project root:
+
+```yaml
+database:
+  host: localhost
+  port: 5432
+  dbname: mydb
+  user: ${USER}
+  password: ${DB_PASSWORD}
+  schema: tasker
+  driver: postgresql
+```
+
+Or use environment variables:
+
+```bash
+export TASKER_DB_HOST=localhost
+export TASKER_DB_PORT=5432
+export TASKER_DB_NAME=mydb
+export TASKER_DB_USER=myuser
+export TASKER_DB_PASSWORD=mypassword
+```
+
+### 2. Initialize Schema
+
+```r
+library(tasker)
+tasker_config()
+create_schema()
+```
+
+### 3. Register Tasks
+
+```r
+# Register individual tasks
+register_task(stage = "PREREQ", name = "Install System Dependencies", type = "sh")
+register_task(stage = "PREREQ", name = "Install R Packages", type = "R")
+
+# Or register multiple tasks at once
+tasks <- data.frame(
+  stage = c("STATIC", "STATIC", "DAILY"),
+  name = c("Build Database", "Create Indexes", "Update Records"),
+  type = c("R", "SQL", "R")
+)
+register_tasks(tasks)
+```
+
+### 4. Track Execution
+
+```r
+# Start task
+run_id <- task_start("STATIC", "Build Database", total_subtasks = 3)
+
+# Track subtask 1
+subtask_start(run_id, 1, "Loading data", items_total = 56)
+for (i in 1:56) {
+  # ... do work ...
+  subtask_update(run_id, 1, "RUNNING", 
+                 percent = (i/56)*100, 
+                 items_complete = i,
+                 message = sprintf("Processing item %d", i))
+}
+subtask_complete(run_id, 1, "Data loaded")
+
+# Track subtask 2
+subtask_start(run_id, 2, "Processing")
+# ... do work ...
+subtask_complete(run_id, 2)
+
+# Complete task
+task_complete(run_id, "All subtasks finished")
+```
+
+### 5. Query Status
+
+```r
+# Get current status of all tasks
+get_task_status()
+
+# Get active (running) tasks
+get_active_tasks()
+
+# Get task history
+get_task_history(stage = "STATIC", limit = 50)
+
+# Get subtask details
+get_subtask_progress(run_id)
+```
+
+## Configuration
+
+`tasker` supports three configuration methods (in order of precedence):
+
+1. **Direct parameters** to `tasker_config()`
+2. **Environment variables** (`TASKER_DB_*`)
+3. **YAML configuration file** (`.tasker.yml`)
+
+The package automatically searches for `.tasker.yml` starting from the current directory and walking up the directory tree.
+
+## Status Values
+
+**Task Status:**
+- `NOT_STARTED` - Registered but not yet started
+- `STARTED` - Just started
+- `RUNNING` - Currently executing
+- `COMPLETED` - Finished successfully
+- `FAILED` - Finished with errors
+- `SKIPPED` - Deliberately skipped
+- `CANCELLED` - Cancelled mid-execution
+
+**Subtask Status:**
+- `NOT_STARTED`, `STARTED`, `RUNNING`, `COMPLETED`, `FAILED`, `SKIPPED`
+
+## Database Schema
+
+The package uses four main tables:
+
+- **`stages`** - Pipeline stages (e.g., PREREQ, STATIC, DAILY)
+- **`tasks`** - Tasks within stages
+- **`task_runs`** - Individual task executions
+- **`subtask_progress`** - Progress tracking for subtasks
+
+## License
+
+GPL-3
+
+## Author
+
+Gregory Warnes <greg@warnes.net>
