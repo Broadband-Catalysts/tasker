@@ -1,0 +1,8 @@
+.gitignore
+^\.Rproj\.user$
+^.*\.Rproj$
+^\.tasker\.yml$
+^\.git$
+^\.github$
+^doc$
+^Meta$
