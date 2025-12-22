@@ -116,6 +116,59 @@ get_task_history(stage = "STATIC", limit = 50)
 get_subtask_progress(run_id)
 ```
 
+## Shiny Dashboard
+
+The package includes an interactive Shiny dashboard for visual monitoring of pipeline execution.
+
+### Launching the Dashboard
+
+```r
+# Launch from within R
+tasker::run_monitor()
+
+# Launch on a specific port
+tasker::run_monitor(port = 8080)
+
+# Or run from the command line
+R -e "tasker::run_monitor()"
+```
+
+### Dashboard Features
+
+The Shiny app provides real-time monitoring with three main views:
+
+**Overview Tab:**
+- Interactive table showing all tasks with their current status
+- Color-coded status indicators (running, completed, failed, etc.)
+- Stage and status filtering
+- Click on any task to see detailed information including:
+  - Task identification (ID, stage, name, type)
+  - Execution timing (start time, duration, last update)
+  - Progress tracking (task and overall progress percentages)
+  - Subtask progress with individual status and completion
+  - Error messages and logs (if applicable)
+  - Process information (hostname, PID)
+
+**Stage Summary Tab:**
+- Visual progress charts by stage
+- Summary statistics for each pipeline stage
+- Task count and completion status
+
+**Timeline Tab:**
+- Gantt-chart style visualization of task execution
+- Shows start times, durations, and overlapping executions
+- Useful for identifying bottlenecks and parallelization opportunities
+
+### Configuration
+
+The dashboard uses the same configuration as the rest of the package (`.tasker.yml` or environment variables). Make sure your database connection is properly configured before launching.
+
+### Auto-refresh
+
+- Configurable auto-refresh interval (default: 5 seconds)
+- Manual refresh button for on-demand updates
+- Displays last update timestamp
+
 ## Configuration
 
 `tasker` supports three configuration methods (in order of precedence):

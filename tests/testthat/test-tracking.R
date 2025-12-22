@@ -1,12 +1,106 @@
-test_that("task tracking creates proper run_id", {
+test_that("task_start creates execution record", {
   skip_on_cran()
-  skip_if_not(check_test_db_available())
+  setup_test_db()
   
-  # Test that task_start returns a UUID
-  # This is a mock test without actual database
-  expect_true(exists("task_start"))
-  expect_true(exists("task_update"))
-  expect_true(exists("task_end"))
+  # Register a task
+  register_task(stage = "TEST", name = "test_task", type = "R")
+  
+  # Start the task
+  run_id <- task_start(
+    stage = "TEST",
+    task = "test_task",
+    message = "Testing task start"
+  )
+  
+  # Verify run_id is a valid UUID (hyphenated) or hex string (SQLite)
+  expect_match(run_id, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^[0-9a-f]{32}$")
+  
+  # Verify record in database
+  conn <- get_test_db_connection()
+  on.exit(DBI::dbDisconnect(conn))
+  
+  result <- DBI::dbGetQuery(conn,
+    glue::glue_sql("SELECT * FROM task_runs WHERE run_id = {run_id}", .con = conn))
+  
+  expect_equal(nrow(result), 1)
+  expect_equal(result$status, "STARTED")
+})
+
+test_that("task_update modifies execution state", {
+  skip_on_cran()
+  setup_test_db()
+  
+  register_task(stage = "TEST", name = "test_update", type = "R")
+  run_id <- task_start(stage = "TEST", task = "test_update", total_subtasks = 10)
+  
+  # Update to running
+  task_update(
+    run_id = run_id,
+    status = "RUNNING",
+    current_subtask = 1,
+    overall_percent = 10.0,
+    message = "Processing items"
+  )
+  
+  conn <- get_test_db_connection()
+  on.exit(DBI::dbDisconnect(conn))
+  
+  result <- DBI::dbGetQuery(conn,
+    "SELECT * FROM task_runs WHERE run_id = $1",
+    params = list(run_id))
+  
+  expect_equal(result$status, "RUNNING")
+  expect_equal(result$current_subtask, 1)
+  expect_equal(result$overall_percent_complete, 10.0)
+})
+
+test_that("task_end finalizes execution", {
+  skip_on_cran()
+  setup_test_db()
+  
+  register_task(stage = "TEST", name = "test_end", type = "R")
+  run_id <- task_start(stage = "TEST", task = "test_end")
+  
+  # End the task
+  task_end(run_id = run_id, status = "COMPLETED")
+  
+  conn <- get_test_db_connection()
+  on.exit(DBI::dbDisconnect(conn))
+  
+  result <- DBI::dbGetQuery(conn,
+    "SELECT * FROM task_runs WHERE run_id = $1",
+    params = list(run_id))
+  
+  expect_equal(result$status, "COMPLETED")
+  expect_false(is.na(result$end_time))
+  expect_equal(result$overall_percent_complete, 100.0)
+})
+
+test_that("task_end handles failures", {
+  skip_on_cran()
+  setup_test_db()
+  
+  register_task(stage = "TEST", name = "test_fail", type = "R")
+  run_id <- task_start(stage = "TEST", task = "test_fail")
+  
+  # End with failure
+  task_end(
+    run_id = run_id,
+    status = "FAILED",
+    error_message = "Test error",
+    error_detail = "Detailed error information"
+  )
+  
+  conn <- get_test_db_connection()
+  on.exit(DBI::dbDisconnect(conn))
+  
+  result <- DBI::dbGetQuery(conn,
+    "SELECT * FROM task_runs WHERE run_id = $1",
+    params = list(run_id))
+  
+  expect_equal(result$status, "FAILED")
+  expect_equal(result$error_message, "Test error")
+  expect_equal(result$error_detail, "Detailed error information")
 })
 
 test_that("progress calculations work", {
@@ -28,12 +122,3 @@ test_that("status values are valid", {
   expect_true("COMPLETED" %in% valid_statuses)
   expect_true("FAILED" %in% valid_statuses)
 })
-
-check_test_db_available <- function() {
-  tryCatch({
-    config <- Sys.getenv("TASKER_TEST_DB")
-    return(nchar(config) > 0)
-  }, error = function(e) {
-    FALSE
-  })
-}

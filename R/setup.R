@@ -37,37 +37,64 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE) 
     }
   })
   
+  # Get driver type
+  config <- getOption("tasker.config")
+  driver <- config$database$driver
+  
   tryCatch({
-    # Check if schema exists
-    schema_exists <- DBI::dbGetQuery(
-      conn,
-      "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)",
-      params = list(schema_name)
-    )[[1]]
-    
-    if (schema_exists && !force) {
-      message("Schema '", schema_name, "' already exists. Use force = TRUE to recreate.")
-      return(FALSE)
+    if (driver == "postgresql") {
+      # PostgreSQL-specific setup
+      schema_exists <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql("SELECT EXISTS(SELECT 1 FROM information_schema.schemata 
+                        WHERE schema_name = {schema_name})", .con = conn)
+      )[[1]]
+      
+      if (schema_exists && !force) {
+        message("Schema '", schema_name, "' already exists. Use force = TRUE to recreate.")
+        return(FALSE)
+      }
+      
+      if (schema_exists && force) {
+        warning("Dropping existing schema '", schema_name, "' and all its data!")
+        DBI::dbExecute(conn, paste0("DROP SCHEMA ", schema_name, " CASCADE"))
+      }
+      
+      message("Creating schema '", schema_name, "'...")
+      DBI::dbExecute(conn, paste0("CREATE SCHEMA IF NOT EXISTS ", schema_name))
+      
+      sql_file <- system.file("sql", "postgresql", "create_schema.sql", package = "tasker")
+      
+    } else if (driver == "sqlite") {
+      # SQLite-specific setup
+      if (force) {
+        warning("Dropping existing SQLite tables and recreating!")
+        tables <- c("subtask_progress", "task_runs", "tasks", "stages")
+        for (tbl in tables) {
+          DBI::dbExecute(conn, paste0("DROP TABLE IF EXISTS ", tbl))
+        }
+        views <- c("active_tasks", "current_task_status")
+        for (v in views) {
+          DBI::dbExecute(conn, paste0("DROP VIEW IF EXISTS ", v))
+        }
+      }
+      
+      message("Creating SQLite schema...")
+      sql_file <- system.file("sql", "sqlite", "create_schema.sql", package = "tasker")
+      
+    } else {
+      stop("Unsupported database driver: ", driver)
     }
-    
-    if (schema_exists && force) {
-      warning("Dropping existing schema '", schema_name, "' and all its data!")
-      DBI::dbExecute(conn, paste0("DROP SCHEMA ", schema_name, " CASCADE"))
-    }
-    
-    # Create schema
-    message("Creating schema '", schema_name, "'...")
-    DBI::dbExecute(conn, paste0("CREATE SCHEMA IF NOT EXISTS ", schema_name))
-    
-    # Read and execute SQL file
-    sql_file <- system.file("sql", "postgresql", "create_schema.sql", package = "tasker")
     
     if (!file.exists(sql_file)) {
       stop("SQL schema file not found: ", sql_file)
     }
     
     message("Executing schema creation SQL...")
-    bbcDB::dbExecuteScript(conn, sql_file)
+    
+    # Use bbcDB::dbExecuteScript which handles dollar-quoted strings and BEGIN...END blocks
+    # Use .open = "" to disable glue interpolation
+    bbcDB::dbExecuteScript(conn, sql_file, .open = "", .close = "", .quiet = FALSE)
     
     message("\u2713 tasker database schema created successfully")
     return(TRUE)
@@ -101,13 +128,21 @@ check_tasker_db <- function(conn = NULL) {
     }
   })
   
+  config <- getOption("tasker.config")
+  driver <- config$database$driver
+  
   # Check for required tables
   required_tables <- c("stages", "tasks", "task_runs", "subtask_progress")
   
   for (table in required_tables) {
-    exists <- DBI::dbExistsTable(conn, DBI::Id(schema = "tasker", table = table))
+    if (driver == "postgresql") {
+      exists <- DBI::dbExistsTable(conn, DBI::Id(schema = "tasker", table = table))
+    } else {
+      exists <- DBI::dbExistsTable(conn, table)
+    }
+    
     if (!exists) {
-      message("\u2717 Table tasker.", table, " does not exist")
+      message("\u2717 Table ", table, " does not exist")
       return(FALSE)
     }
   }

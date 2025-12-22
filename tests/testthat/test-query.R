@@ -8,7 +8,7 @@ test_that("query functions exist", {
 
 test_that("get_stages filters correctly", {
   skip_on_cran()
-  skip_if_not(check_test_db_available())
+  setup_test_db()
   
   # Just test function exists
   expect_true(exists("get_stages"))

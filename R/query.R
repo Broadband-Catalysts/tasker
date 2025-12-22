@@ -25,25 +25,24 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  driver <- config$database$driver
+  schema <- if (driver == "postgresql") config$database$schema else ""
   
   where_clauses <- c()
   params <- list()
   
   if (!is.null(stage)) {
-    where_clauses <- c(where_clauses, "stage_name = $1")
+    where_clauses <- c(where_clauses, "stage_name = ?")
     params <- c(params, list(stage))
   }
   
   if (!is.null(task)) {
-    param_num <- length(params) + 1
-    where_clauses <- c(where_clauses, sprintf("task_name = $%d", param_num))
+    where_clauses <- c(where_clauses, "task_name = ?")
     params <- c(params, list(task))
   }
   
   if (!is.null(status)) {
-    param_num <- length(params) + 1
-    where_clauses <- c(where_clauses, sprintf("status = $%d", param_num))
+    where_clauses <- c(where_clauses, "status = ?")
     params <- c(params, list(status))
   }
   
@@ -59,11 +58,17 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
     ""
   }
   
+  table_ref <- if (nchar(schema) > 0) {
+    paste0(schema, ".current_task_status")
+  } else {
+    "current_task_status"
+  }
+  
   sql <- sprintf(
-    "SELECT * FROM %s.current_task_status %s
-     ORDER BY stage_order NULLS LAST, task_order NULLS LAST, start_time DESC
+    "SELECT * FROM %s %s
+     ORDER BY stage_order, task_order, start_time DESC
      %s",
-    schema, where_sql, limit_sql
+    table_ref, where_sql, limit_sql
   )
   
   tryCatch({
@@ -103,10 +108,17 @@ get_active_tasks <- function(conn = NULL) {
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  driver <- config$database$driver
+  schema <- if (driver == "postgresql") config$database$schema else ""
+  
+  table_ref <- if (nchar(schema) > 0) {
+    paste0(schema, ".active_tasks")
+  } else {
+    "active_tasks"
+  }
   
   tryCatch({
-    DBI::dbGetQuery(conn, sprintf("SELECT * FROM %s.active_tasks", schema))
+    DBI::dbGetQuery(conn, sprintf("SELECT * FROM %s", table_ref))
   }, finally = {
     if (close_on_exit) {
       DBI::dbDisconnect(conn)
@@ -136,14 +148,21 @@ get_subtask_progress <- function(run_id, conn = NULL) {
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  driver <- config$database$driver
+  schema <- if (driver == "postgresql") config$database$schema else ""
+  
+  table_ref <- if (nchar(schema) > 0) {
+    paste0(schema, ".subtask_progress")
+  } else {
+    "subtask_progress"
+  }
   
   tryCatch({
     DBI::dbGetQuery(
       conn,
-      sprintf("SELECT * FROM %s.subtask_progress 
-               WHERE run_id = $1 
-               ORDER BY subtask_number", schema),
+      sprintf("SELECT * FROM %s 
+               WHERE run_id = ? 
+               ORDER BY subtask_number", table_ref),
       params = list(run_id)
     )
   }, finally = {
@@ -169,13 +188,20 @@ get_stages <- function(conn = NULL) {
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  driver <- config$database$driver
+  schema <- if (driver == "postgresql") config$database$schema else ""
+  
+  table_ref <- if (nchar(schema) > 0) {
+    paste0(schema, ".stages")
+  } else {
+    "stages"
+  }
   
   tryCatch({
     DBI::dbGetQuery(
       conn,
-      sprintf("SELECT * FROM %s.stages 
-               ORDER BY stage_order NULLS LAST, stage_name", schema)
+      sprintf("SELECT * FROM %s 
+               ORDER BY stage_order, stage_name", table_ref)
     )
   }, finally = {
     if (close_on_exit) {
@@ -218,19 +244,19 @@ get_task_history <- function(stage = NULL, task = NULL, limit = 100, conn = NULL
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  driver <- config$database$driver
+  schema <- if (driver == "postgresql") config$database$schema else ""
   
   where_clauses <- c()
   params <- list()
   
   if (!is.null(stage)) {
-    where_clauses <- c(where_clauses, "s.stage_name = $1")
+    where_clauses <- c(where_clauses, "s.stage_name = ?")
     params <- c(params, list(stage))
   }
   
   if (!is.null(task)) {
-    param_num <- length(params) + 1
-    where_clauses <- c(where_clauses, sprintf("t.task_name = $%d", param_num))
+    where_clauses <- c(where_clauses, "t.task_name = ?")
     params <- c(params, list(task))
   }
   
@@ -240,21 +266,39 @@ get_task_history <- function(stage = NULL, task = NULL, limit = 100, conn = NULL
     ""
   }
   
-  sql <- sprintf(
-    "SELECT tr.run_id, s.stage_name, t.task_name, t.task_type,
-            tr.hostname, tr.process_id, tr.status,
-            tr.start_time, tr.end_time, tr.last_update,
-            tr.total_subtasks, tr.current_subtask,
-            tr.overall_percent_complete, tr.overall_progress_message,
-            tr.error_message
-     FROM %s.task_runs tr
-     JOIN %s.tasks t ON tr.task_id = t.task_id
-     JOIN %s.stages s ON t.stage_id = s.stage_id
-     %s
-     ORDER BY tr.start_time DESC
-     LIMIT %d",
-    schema, schema, schema, where_sql, as.integer(limit)
-  )
+  if (nchar(schema) > 0) {
+    sql <- sprintf(
+      "SELECT tr.run_id, s.stage_name, t.task_name, t.task_type,
+              tr.hostname, tr.process_id, tr.status,
+              tr.start_time, tr.end_time, tr.last_update,
+              tr.total_subtasks, tr.current_subtask,
+              tr.overall_percent_complete, tr.overall_progress_message,
+              tr.error_message
+       FROM %s.task_runs tr
+       JOIN %s.tasks t ON tr.task_id = t.task_id
+       JOIN %s.stages s ON t.stage_id = s.stage_id
+       %s
+       ORDER BY tr.start_time DESC
+       LIMIT %d",
+      schema, schema, schema, where_sql, as.integer(limit)
+    )
+  } else {
+    sql <- sprintf(
+      "SELECT tr.run_id, s.stage_name, t.task_name, t.task_type,
+              tr.hostname, tr.process_id, tr.status,
+              tr.start_time, tr.end_time, tr.last_update,
+              tr.total_subtasks, tr.current_subtask,
+              tr.overall_percent_complete, tr.overall_progress_message,
+              tr.error_message
+       FROM task_runs tr
+       JOIN tasks t ON tr.task_id = t.task_id
+       JOIN stages s ON t.stage_id = s.stage_id
+       %s
+       ORDER BY tr.start_time DESC
+       LIMIT %d",
+      where_sql, as.integer(limit)
+    )
+  }
   
   tryCatch({
     result <- if (length(params) > 0) {

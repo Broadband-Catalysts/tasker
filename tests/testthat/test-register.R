@@ -1,6 +1,6 @@
 test_that("task registration validates input", {
   skip_on_cran()
-  skip_if_not(check_test_db_available())
+  setup_test_db()
   
   # Should require stage and name
   expect_error(
@@ -16,7 +16,7 @@ test_that("task registration validates input", {
 
 test_that("register_tasks handles data.frame input", {
   skip_on_cran()
-  skip_if_not(check_test_db_available())
+  setup_test_db()
   
   tasks_df <- data.frame(
     stage = c("TEST", "TEST"),
@@ -35,7 +35,7 @@ test_that("register_tasks handles data.frame input", {
 
 test_that("get_or_create functions work correctly", {
   skip_on_cran()
-  skip_if_not(check_test_db_available())
+  setup_test_db()
   
   # Test that these functions exist
   expect_true(exists("get_or_create_stage"))

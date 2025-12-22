@@ -25,42 +25,48 @@ task_start <- function(stage, task, total_subtasks = NULL,
     close_on_exit <- TRUE
   }
   
+  tasks_table <- get_table_name("tasks", conn)
+  stages_table <- get_table_name("stages", conn)
+  task_runs_table <- get_table_name("task_runs", conn)
+  
+  # Convert NULL to NA for glue_sql
+  total_subtasks <- if (is.null(total_subtasks)) NA else total_subtasks
+  message <- if (is.null(message)) NA else message
+  version <- if (is.null(version)) NA else version
+  git_commit <- if (is.null(git_commit)) NA else git_commit
+  
+  # Determine the current timestamp function based on driver
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  time_func <- if (config$database$driver == "sqlite") "datetime('now')" else "NOW()"
   
   tryCatch({
     task_id <- DBI::dbGetQuery(
       conn,
-      sprintf("SELECT t.task_id FROM %s.tasks t
-               JOIN %s.stages s ON t.stage_id = s.stage_id
-               WHERE s.stage_name = $1 AND t.task_name = $2",
-              schema, schema),
-      params = list(stage, task)
+      glue::glue_sql("SELECT t.task_id FROM {tasks_table*} t
+               JOIN {stages_table*} s ON t.stage_id = s.stage_id
+               WHERE s.stage_name = {stage} AND t.task_name = {task}",
+              .con = conn)
     )$task_id
     
     if (length(task_id) == 0) {
       stop("Task '", task, "' in stage '", stage, "' not found. Register it first with register_task()")
     }
     
+    hostname <- Sys.info()["nodename"]
+    process_id <- Sys.getpid()
+    parent_pid <- get_parent_pid()
+    user_name <- Sys.info()["user"]
+    
     run_id <- DBI::dbGetQuery(
       conn,
-      sprintf("INSERT INTO %s.task_runs 
+      glue::glue_sql("INSERT INTO {task_runs_table*} 
                (task_id, hostname, process_id, parent_pid, start_time, 
                 status, total_subtasks, overall_progress_message, 
                 version, git_commit, user_name)
-               VALUES ($1, $2, $3, $4, NOW(), 'STARTED', $5, $6, $7, $8, $9)
-               RETURNING run_id", schema),
-      params = list(
-        task_id,
-        Sys.info()["nodename"],
-        Sys.getpid(),
-        get_parent_pid(),
-        total_subtasks,
-        message,
-        version,
-        git_commit,
-        Sys.info()["user"]
-      )
+               VALUES ({task_id}, {hostname}, {process_id}, {parent_pid}, {time_func*}, 
+                       'STARTED', {total_subtasks}, {message}, {version},
+                       {git_commit}, {user_name})
+               RETURNING run_id", .con = conn)
     )$run_id
     
     log_message <- sprintf("[TASK START] %s / %s (run_id: %s)", stage, task, run_id)
@@ -110,7 +116,9 @@ task_update <- function(run_id, status, current_subtask = NULL,
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  task_runs_table <- get_table_name("task_runs", conn)
+  db_driver <- config$database$driver
+  time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
   
   valid_statuses <- c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED")
   if (!status %in% valid_statuses) {
@@ -118,52 +126,48 @@ task_update <- function(run_id, status, current_subtask = NULL,
          paste(valid_statuses, collapse = ", "))
   }
   
+  # Convert NULL to NA for glue_sql
+  current_subtask <- if (is.null(current_subtask)) NA else current_subtask
+  overall_percent <- if (is.null(overall_percent)) NA else overall_percent
+  message <- if (is.null(message)) NA else message
+  error_message <- if (is.null(error_message)) NA else error_message
+  error_detail <- if (is.null(error_detail)) NA else error_detail
+  
   tryCatch({
-    updates <- c("status = $2")
-    params <- list(run_id, status)
-    param_num <- 2
+    # Build UPDATE clause parts
+    update_clauses <- c("status = {status}")
     
-    if (!is.null(current_subtask)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("current_subtask = $%d", param_num))
-      params <- c(params, list(current_subtask))
+    if (!is.na(current_subtask)) {
+      update_clauses <- c(update_clauses, "current_subtask = {current_subtask}")
     }
     
-    if (!is.null(overall_percent)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("overall_percent_complete = $%d", param_num))
-      params <- c(params, list(overall_percent))
+    if (!is.na(overall_percent)) {
+      update_clauses <- c(update_clauses, "overall_percent_complete = {overall_percent}")
     }
     
-    if (!is.null(message)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("overall_progress_message = $%d", param_num))
-      params <- c(params, list(message))
+    if (!is.na(message)) {
+      update_clauses <- c(update_clauses, "overall_progress_message = {message}")
     }
     
-    if (!is.null(error_message)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("error_message = $%d", param_num))
-      params <- c(params, list(error_message))
+    if (!is.na(error_message)) {
+      update_clauses <- c(update_clauses, "error_message = {error_message}")
     }
     
-    if (!is.null(error_detail)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("error_detail = $%d", param_num))
-      params <- c(params, list(error_detail))
+    if (!is.na(error_detail)) {
+      update_clauses <- c(update_clauses, "error_detail = {error_detail}")
     }
     
     if (status %in% c("COMPLETED", "FAILED", "CANCELLED")) {
-      updates <- c(updates, "end_time = NOW()")
+      update_clauses <- c(update_clauses, paste0("end_time = ", time_func))
     }
     
-    sql <- sprintf(
-      "UPDATE %s.task_runs SET %s WHERE run_id = $1",
-      schema,
-      paste(updates, collapse = ", ")
-    )
+    update_str <- paste(update_clauses, collapse = ", ")
+    sql_template <- paste0("UPDATE {task_runs_table*} SET ", update_str, " WHERE run_id = {run_id}")
     
-    DBI::dbExecute(conn, sql, params = params)
+    DBI::dbExecute(
+      conn, 
+      glue::glue_sql(sql_template, .con = conn)
+    )
     
     log_message <- sprintf("[TASK UPDATE] %s - %s", run_id, status)
     if (!is.null(message)) {
@@ -207,6 +211,35 @@ task_fail <- function(run_id, error_message, error_detail = NULL, conn = NULL) {
               error_message = error_message,
               error_detail = error_detail,
               conn = conn)
+}
+
+
+#' End a task execution with specified status
+#'
+#' Generic function to end a task with any status. For convenience,
+#' use task_complete() or task_fail() instead.
+#'
+#' @param run_id Run ID from task_start()
+#' @param status Status: "COMPLETED", "FAILED", "CANCELLED", "SKIPPED"
+#' @param message Final message (optional)
+#' @param error_message Error message (for FAILED status)
+#' @param error_detail Detailed error info (optional)
+#' @param conn Database connection (optional)
+#' @return TRUE on success
+#' @export
+task_end <- function(run_id, status, message = NULL, 
+                     error_message = NULL, error_detail = NULL, conn = NULL) {
+  if (status == "COMPLETED") {
+    task_complete(run_id, message = message, conn = conn)
+  } else if (status == "FAILED") {
+    if (is.null(error_message)) error_message <- "Task failed"
+    task_fail(run_id, error_message = error_message, 
+              error_detail = error_detail, conn = conn)
+  } else {
+    task_update(run_id, status = status, message = message,
+                error_message = error_message, error_detail = error_detail,
+                conn = conn)
+  }
 }
 
 

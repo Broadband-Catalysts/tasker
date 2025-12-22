@@ -24,24 +24,30 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  subtask_progress_table <- get_table_name("subtask_progress", conn)
+  db_driver <- config$database$driver
+  time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
+  
+  # Convert NULL to NA for glue_sql
+  items_total <- if (is.null(items_total)) NA else items_total
+  message <- if (is.null(message)) NA else message
   
   tryCatch({
     progress_id <- DBI::dbGetQuery(
       conn,
-      sprintf("INSERT INTO %s.subtask_progress
+      glue::glue_sql("INSERT INTO {subtask_progress_table*}
                (run_id, subtask_number, subtask_name, status, start_time,
                 items_total, progress_message)
-               VALUES ($1, $2, $3, 'STARTED', NOW(), $4, $5)
+               VALUES ({run_id}, {subtask_number}, {subtask_name}, 'STARTED', {time_func*}, 
+                       {items_total}, {message})
                ON CONFLICT (run_id, subtask_number) 
                DO UPDATE SET 
                  subtask_name = EXCLUDED.subtask_name,
                  status = 'STARTED',
-                 start_time = NOW(),
+                 start_time = {time_func*},
                  items_total = EXCLUDED.items_total,
                  progress_message = EXCLUDED.progress_message
-               RETURNING progress_id", schema),
-      params = list(run_id, subtask_number, subtask_name, items_total, message)
+               RETURNING progress_id", .con = conn)
     )$progress_id
     
     log_message <- sprintf("[SUBTASK START] Subtask %d: %s", 
@@ -92,7 +98,9 @@ subtask_update <- function(run_id, subtask_number, status,
   }
   
   config <- getOption("tasker.config")
-  schema <- config$database$schema
+  subtask_progress_table <- get_table_name("subtask_progress", conn)
+  db_driver <- config$database$driver
+  time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
   
   valid_statuses <- c("RUNNING", "COMPLETED", "FAILED", "SKIPPED")
   if (!status %in% valid_statuses) {
@@ -100,47 +108,44 @@ subtask_update <- function(run_id, subtask_number, status,
          paste(valid_statuses, collapse = ", "))
   }
   
+  # Convert NULL to NA for glue_sql
+  percent <- if (is.null(percent)) NA else percent
+  items_complete <- if (is.null(items_complete)) NA else items_complete
+  message <- if (is.null(message)) NA else message
+  error_message <- if (is.null(error_message)) NA else error_message
+  
   tryCatch({
-    updates <- c("status = $3")
-    params <- list(run_id, subtask_number, status)
-    param_num <- 3
+    # Build UPDATE clause parts
+    update_clauses <- c("status = {status}")
     
-    if (!is.null(percent)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("percent_complete = $%d", param_num))
-      params <- c(params, list(percent))
+    if (!is.na(percent)) {
+      update_clauses <- c(update_clauses, "percent_complete = {percent}")
     }
     
-    if (!is.null(items_complete)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("items_complete = $%d", param_num))
-      params <- c(params, list(items_complete))
+    if (!is.na(items_complete)) {
+      update_clauses <- c(update_clauses, "items_complete = {items_complete}")
     }
     
-    if (!is.null(message)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("progress_message = $%d", param_num))
-      params <- c(params, list(message))
+    if (!is.na(message)) {
+      update_clauses <- c(update_clauses, "progress_message = {message}")
     }
     
-    if (!is.null(error_message)) {
-      param_num <- param_num + 1
-      updates <- c(updates, sprintf("error_message = $%d", param_num))
-      params <- c(params, list(error_message))
+    if (!is.na(error_message)) {
+      update_clauses <- c(update_clauses, "error_message = {error_message}")
     }
     
     if (status %in% c("COMPLETED", "FAILED")) {
-      updates <- c(updates, "end_time = NOW()")
+      update_clauses <- c(update_clauses, paste0("end_time = ", time_func))
     }
     
-    sql <- sprintf(
-      "UPDATE %s.subtask_progress SET %s 
-       WHERE run_id = $1 AND subtask_number = $2",
-      schema,
-      paste(updates, collapse = ", ")
-    )
+    update_str <- paste(update_clauses, collapse = ", ")
+    sql_template <- paste0("UPDATE {subtask_progress_table*} SET ", update_str, 
+                          " WHERE run_id = {run_id} AND subtask_number = {subtask_number}")
     
-    DBI::dbExecute(conn, sql, params = params)
+    DBI::dbExecute(
+      conn,
+      glue::glue_sql(sql_template, .con = conn)
+    )
     
     log_message <- sprintf("[SUBTASK UPDATE] Subtask %d - %s", 
                           subtask_number, status)

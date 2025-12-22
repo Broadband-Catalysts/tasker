@@ -60,6 +60,49 @@ get_db_connection <- function() {
 }
 
 
+#' Get SQL placeholder for parameter
+#' 
+#' Returns the correct parameter placeholder syntax for the database
+#' 
+#' @param n Parameter number (1-based)
+#' @param conn Database connection (optional)
+#' @return Placeholder string ("$1" for PostgreSQL, "?" for SQLite/MySQL)
+#' @keywords internal
+get_placeholder <- function(n = NULL, conn = NULL) {
+  config <- getOption("tasker.config")
+  driver <- config$database$driver
+  
+  if (driver == "postgresql") {
+    if (is.null(n)) return("$")
+    return(paste0("$", n))
+  } else {
+    # SQLite and MySQL use ?
+    return("?")
+  }
+}
+
+
+#' Build parameterized SQL with correct placeholders
+#' 
+#' Replaces $1, $2, etc. with correct placeholders for the database
+#' 
+#' @param sql SQL string with $1, $2, ... placeholders
+#' @param conn Database connection (optional)
+#' @return SQL string with correct placeholders
+#' @keywords internal
+build_sql <- function(sql, conn = NULL) {
+  config <- getOption("tasker.config")
+  driver <- config$database$driver
+  
+  if (driver == "sqlite" || driver == "mysql") {
+    # Replace $1, $2, ... with ?
+    sql <- gsub("\\$[0-9]+", "?", sql)
+  }
+  
+  sql
+}
+
+
 #' Create tasker database schema
 #'
 #' @param conn Database connection (optional, will create if NULL)

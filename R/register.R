@@ -1,3 +1,30 @@
+# Helper function to get table name with or without schema
+get_table_name <- function(table, conn) {
+  config <- getOption("tasker.config")
+  if (is.null(config) || is.null(config$database) || is.null(config$database$driver)) {
+    stop("tasker configuration not loaded. Call load_tasker_config() first.")
+  }
+  
+  db_driver <- config$database$driver
+  
+  if (db_driver == "sqlite") {
+    return(table)
+  } else {
+    schema <- config$database$schema
+    if (is.null(schema) || nchar(schema) == 0) {
+      return(table)
+    }
+    return(sprintf("%s.%s", schema, table))
+  }
+}
+
+# Helper to prepare parameters for SQL queries (handle NULLs)
+prepare_params <- function(...) {
+  params <- list(...)
+  # Convert NULL to NA for RSQLite compatibility
+  lapply(params, function(x) if (is.null(x)) NA else x)
+}
+
 #' Register a task in the tasker system
 #'
 #' @param stage Stage name (e.g., "PREREQ", "STATIC", "DAILY")
@@ -38,38 +65,45 @@ register_task <- function(stage,
     close_on_exit <- TRUE
   }
   
-  config <- getOption("tasker.config")
-  schema <- config$database$schema
+  stages_table <- get_table_name("stages", conn)
+  tasks_table <- get_table_name("tasks", conn)
+  
+  # Convert NULL to NA for glue_sql
+  stage_order <- if (is.null(stage_order)) NA else stage_order
+  description <- if (is.null(description)) NA else description
+  script_path <- if (is.null(script_path)) NA else script_path
+  script_filename <- if (is.null(script_filename)) NA else script_filename
+  log_path <- if (is.null(log_path)) NA else log_path
+  log_filename <- if (is.null(log_filename)) NA else log_filename
+  task_order <- if (is.null(task_order)) NA else task_order
   
   tryCatch({
     stage_id <- DBI::dbGetQuery(
       conn,
-      sprintf("INSERT INTO %s.stages (stage_name, stage_order, description) 
-               VALUES ($1, $2, $3) 
+      glue::glue_sql("INSERT INTO {stages_table*} (stage_name, stage_order, description) 
+               VALUES ({stage}, {stage_order}, {description}) 
                ON CONFLICT (stage_name) 
-               DO UPDATE SET stage_order = COALESCE(EXCLUDED.stage_order, %s.stages.stage_order)
-               RETURNING stage_id", schema, schema),
-      params = list(stage, stage_order, description)
+               DO UPDATE SET stage_order = COALESCE(EXCLUDED.stage_order, {stages_table*}.stage_order)
+               RETURNING stage_id", .con = conn)
     )$stage_id
     
     task_id <- DBI::dbGetQuery(
       conn,
-      sprintf("INSERT INTO %s.tasks 
+      glue::glue_sql("INSERT INTO {tasks_table*} 
                (stage_id, task_name, task_type, task_order, description, 
                 script_path, script_filename, log_path, log_filename)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+               VALUES ({stage_id}, {name}, {type}, {task_order}, {description}, 
+                       {script_path}, {script_filename}, {log_path}, {log_filename})
                ON CONFLICT (stage_id, task_name) 
                DO UPDATE SET 
                  task_type = EXCLUDED.task_type,
-                 task_order = COALESCE(EXCLUDED.task_order, %s.tasks.task_order),
-                 description = COALESCE(EXCLUDED.description, %s.tasks.description),
-                 script_path = COALESCE(EXCLUDED.script_path, %s.tasks.script_path),
-                 script_filename = COALESCE(EXCLUDED.script_filename, %s.tasks.script_filename),
-                 log_path = COALESCE(EXCLUDED.log_path, %s.tasks.log_path),
-                 log_filename = COALESCE(EXCLUDED.log_filename, %s.tasks.log_filename)
-               RETURNING task_id", schema, schema, schema, schema, schema, schema, schema),
-      params = list(stage_id, name, type, task_order, description,
-                   script_path, script_filename, log_path, log_filename)
+                 task_order = COALESCE(EXCLUDED.task_order, {tasks_table*}.task_order),
+                 description = COALESCE(EXCLUDED.description, {tasks_table*}.description),
+                 script_path = COALESCE(EXCLUDED.script_path, {tasks_table*}.script_path),
+                 script_filename = COALESCE(EXCLUDED.script_filename, {tasks_table*}.script_filename),
+                 log_path = COALESCE(EXCLUDED.log_path, {tasks_table*}.log_path),
+                 log_filename = COALESCE(EXCLUDED.log_filename, {tasks_table*}.log_filename)
+               RETURNING task_id", .con = conn)
     )$task_id
     
     invisible(task_id)
@@ -166,49 +200,42 @@ get_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
     close_on_exit <- TRUE
   }
   
-  config <- getOption("tasker.config")
-  schema <- config$database$schema
+  stages_table <- get_table_name("stages", conn)
+  tasks_table <- get_table_name("tasks", conn)
   
-  where_clauses <- c()
-  params <- list()
+  # Build WHERE clause
+  where_parts <- c()
   
   if (!is.null(stage)) {
-    where_clauses <- c(where_clauses, "s.stage_name = $1")
-    params <- c(params, list(stage))
+    where_parts <- c(where_parts, glue::glue("s.stage_name = {DBI::dbQuoteLiteral(conn, stage)}"))
   }
   
   if (!is.null(name)) {
-    param_num <- length(params) + 1
-    where_clauses <- c(where_clauses, sprintf("t.task_name = $%d", param_num))
-    params <- c(params, list(name))
+    where_parts <- c(where_parts, glue::glue("t.task_name = {DBI::dbQuoteLiteral(conn, name)}"))
   }
   
-  where_sql <- if (length(where_clauses) > 0) {
-    paste("WHERE", paste(where_clauses, collapse = " AND "))
+  where_sql <- if (length(where_parts) > 0) {
+    DBI::SQL(paste("WHERE", paste(where_parts, collapse = " AND ")))
   } else {
-    ""
+    DBI::SQL("")
   }
   
-  sql <- sprintf(
+  sql <- glue::glue_sql(
     "SELECT s.stage_id, s.stage_name, s.stage_order,
             t.task_id, t.task_name, t.task_type, t.task_order,
             t.description, t.script_path, t.script_filename,
             t.log_path, t.log_filename,
             t.created_at, t.updated_at
-     FROM %s.tasks t
-     JOIN %s.stages s ON t.stage_id = s.stage_id
-     %s
+     FROM {tasks_table*} t
+     JOIN {stages_table*} s ON t.stage_id = s.stage_id
+     {where_sql*}
      ORDER BY s.stage_order NULLS LAST, s.stage_name, 
               t.task_order NULLS LAST, t.task_name",
-    schema, schema, where_sql
+    .con = conn
   )
   
   tryCatch({
-    result <- if (length(params) > 0) {
-      DBI::dbGetQuery(conn, sql, params = params)
-    } else {
-      DBI::dbGetQuery(conn, sql)
-    }
+    result <- DBI::dbGetQuery(conn, sql)
     
     result
     
