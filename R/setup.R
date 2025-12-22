@@ -66,11 +66,8 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE) 
       stop("SQL schema file not found: ", sql_file)
     }
     
-    sql <- readLines(sql_file)
-    sql <- paste(sql, collapse = "\n")
-    
     message("Executing schema creation SQL...")
-    DBI::dbExecute(conn, sql)
+    bbcDB::dbExecuteScript(conn, sql_file)
     
     message("\u2713 tasker database schema created successfully")
     return(TRUE)

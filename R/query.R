@@ -185,6 +185,21 @@ get_stages <- function(conn = NULL) {
 }
 
 
+#' Get all tasks (alias for get_task_status)
+#'
+#' @param ... Arguments passed to get_task_status
+#' @return Data frame with task status
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' get_tasks()
+#' }
+get_tasks <- function(...) {
+  get_task_status(...)
+}
+
+
 #' Get task execution history
 #'
 #' @param stage Stage name (optional)

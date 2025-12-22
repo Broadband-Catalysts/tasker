@@ -13,7 +13,8 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     DBI,
-    yaml
+    yaml,
+    bbcDB
 Suggests:
     RPostgres,
     RSQLite,

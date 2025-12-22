@@ -134,12 +134,12 @@ CREATE TRIGGER tasks_updated_at
 
 -- Update last_update triggers
 CREATE OR REPLACE FUNCTION tasker.update_last_update()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $func$
 BEGIN
     NEW.last_update = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$func$ LANGUAGE plpgsql;
 
 CREATE TRIGGER task_runs_last_update
     BEFORE UPDATE ON tasker.task_runs
