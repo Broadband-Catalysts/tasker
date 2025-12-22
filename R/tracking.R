@@ -41,17 +41,20 @@ task_start <- function(stage, task, total_subtasks = NULL,
   time_func <- if (config$database$driver == "sqlite") "datetime('now')" else "NOW()"
   
   tryCatch({
-    task_id <- DBI::dbGetQuery(
+    task_info <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("SELECT t.task_id FROM {tasks_table} t
+      glue::glue_sql("SELECT t.task_id, t.task_order FROM {tasks_table} t
                JOIN {stages_table} s ON t.stage_id = s.stage_id
                WHERE s.stage_name = {stage} AND t.task_name = {task}",
               .con = conn)
-    )$task_id
+    )
     
-    if (length(task_id) == 0) {
+    if (nrow(task_info) == 0) {
       stop("Task '", task, "' in stage '", stage, "' not found. Register it first with register_task()")
     }
+    
+    task_id <- task_info$task_id
+    task_order <- task_info$task_order
     
     hostname <- Sys.info()["nodename"]
     process_id <- Sys.getpid()
@@ -71,9 +74,12 @@ task_start <- function(stage, task, total_subtasks = NULL,
     )$run_id
     
     if (!quiet) {
-      log_message <- sprintf("[TASK START] %s / %s (run_id: %s)", stage, task, run_id)
-      if (!is.null(message)) {
-        log_message <- paste0(log_message, " - ", message)
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      task_num <- if (!is.na(task_order)) paste0("Task ", task_order) else "Task"
+      log_message <- sprintf("[%s] %s START | %s / %s | run_id: %s", 
+                            timestamp, task_num, stage, task, run_id)
+      if (!is.na(message)) {
+        log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)
     }
@@ -174,9 +180,24 @@ task_update <- function(run_id, status, current_subtask = NULL,
     )
     
     if (!quiet) {
-      log_message <- sprintf("[TASK UPDATE] %s - %s", run_id, status)
-      if (!is.null(message)) {
-        log_message <- paste0(log_message, ": ", message)
+      # Get task_order for display
+      task_order_info <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql("SELECT t.task_order FROM {task_runs_table} tr
+                 JOIN {`get_table_name('tasks', conn)`} t ON tr.task_id = t.task_id
+                 WHERE tr.run_id = {run_id}", .con = conn)
+      )
+      
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      task_num <- if (nrow(task_order_info) > 0 && !is.na(task_order_info$task_order[1])) {
+        paste0("Task ", task_order_info$task_order[1])
+      } else {
+        "Task"
+      }
+      log_message <- sprintf("[%s] %s %s | run_id: %s", 
+                            timestamp, task_num, status, run_id)
+      if (!is.na(message)) {
+        log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)
     }

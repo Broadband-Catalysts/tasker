@@ -34,6 +34,16 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
   message_sql <- if (is.null(message)) DBI::SQL("NULL") else message
   
   tryCatch({
+    # Get task_order for display
+    task_runs_table <- get_table_name("task_runs", conn)
+    tasks_table <- get_table_name("tasks", conn)
+    task_order_info <- DBI::dbGetQuery(
+      conn,
+      glue::glue_sql("SELECT t.task_order FROM {task_runs_table} tr
+               JOIN {tasks_table} t ON tr.task_id = t.task_id
+               WHERE tr.run_id = {run_id}", .con = conn)
+    )
+    
     progress_id <- DBI::dbGetQuery(
       conn,
       glue::glue_sql("INSERT INTO {subtask_progress_table}
@@ -52,10 +62,16 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
     )$progress_id
     
     if (!quiet) {
-      log_message <- sprintf("[SUBTASK START] Subtask %d: %s", 
-                            subtask_number, subtask_name)
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      subtask_label <- if (nrow(task_order_info) > 0 && !is.na(task_order_info$task_order[1])) {
+        sprintf("Subtask %d.%d", task_order_info$task_order[1], subtask_number)
+      } else {
+        sprintf("Subtask %d", subtask_number)
+      }
+      log_message <- sprintf("[%s] %s START | %s", 
+                            timestamp, subtask_label, subtask_name)
       if (!is.null(message)) {
-        log_message <- paste0(log_message, " - ", message)
+        log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)
     }
@@ -152,10 +168,32 @@ subtask_update <- function(run_id, subtask_number, status,
     )
     
     if (!quiet) {
-      log_message <- sprintf("[SUBTASK UPDATE] Subtask %d - %s", 
-                            subtask_number, status)
+      # Get task_order for display
+      task_runs_table <- get_table_name("task_runs", conn)
+      tasks_table <- get_table_name("tasks", conn)
+      task_order_info <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql("SELECT t.task_order FROM {task_runs_table} tr
+                 JOIN {tasks_table} t ON tr.task_id = t.task_id
+                 WHERE tr.run_id = {run_id}", .con = conn)
+      )
+      
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      subtask_label <- if (nrow(task_order_info) > 0 && !is.na(task_order_info$task_order[1])) {
+        sprintf("Subtask %d.%d", task_order_info$task_order[1], subtask_number)
+      } else {
+        sprintf("Subtask %d", subtask_number)
+      }
+      log_message <- sprintf("[%s] %s %s", 
+                            timestamp, subtask_label, status)
+      if (!is.null(percent) && !is.na(percent)) {
+        log_message <- paste0(log_message, sprintf(" | %.1f%%", percent))
+      }
+      if (!is.null(items_complete) && !is.na(items_complete)) {
+        log_message <- paste0(log_message, sprintf(" | %d items", items_complete))
+      }
       if (!is.null(message)) {
-        log_message <- paste0(log_message, ": ", message)
+        log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)
     }
