@@ -10,7 +10,7 @@ Task and Pipeline Execution Tracking
 
 - **Hierarchical tracking**: Organize work into stages, tasks, and subtasks
 - **Real-time progress monitoring**: Track overall and per-subtask progress
-- **Database persistence**: Store execution history in PostgreSQL
+- **Database persistence**: Store execution history in PostgreSQL or SQLite
 - **Flexible configuration**: YAML files, environment variables, or direct parameters
 - **Rich metadata**: Capture hostname, PID, timing, errors, and custom metadata
 - **Query functions**: Retrieve current status, history, and active tasks
@@ -30,6 +30,7 @@ devtools::install_github("Broadband-Catalysts/tasker")
 Create `.tasker.yml` in your project root:
 
 ```yaml
+# PostgreSQL configuration
 database:
   host: localhost
   port: 5432
@@ -38,6 +39,11 @@ database:
   password: ${DB_PASSWORD}
   schema: tasker
   driver: postgresql
+
+# Or SQLite configuration (simpler, no server required)
+database:
+  path: /path/to/tasker.db
+  driver: sqlite
 ```
 
 Or use environment variables:
@@ -54,8 +60,15 @@ export TASKER_DB_PASSWORD=mypassword
 
 ```r
 library(tasker)
+
+# Load configuration (auto-discovers .tasker.yml)
 tasker_config()
-create_schema()
+
+# Create database schema
+setup_tasker_db()
+
+# Or force recreate (drops existing schema!)
+setup_tasker_db(force = TRUE)
 ```
 
 ### 3. Register Tasks
@@ -178,6 +191,34 @@ The dashboard uses the same configuration as the rest of the package (`.tasker.y
 3. **YAML configuration file** (`.tasker.yml`)
 
 The package automatically searches for `.tasker.yml` starting from the current directory and walking up the directory tree.
+
+### Database Drivers
+
+**PostgreSQL** (production use):
+```yaml
+database:
+  driver: postgresql
+  host: localhost
+  port: 5432
+  dbname: mydb
+  user: myuser
+  password: mypassword
+  schema: tasker
+```
+
+**SQLite** (testing, single-user, or embedded use):
+```yaml
+database:
+  driver: sqlite
+  path: /path/to/tasker.db
+```
+
+SQLite is ideal for:
+- Unit testing
+- Single-user applications
+- Embedded systems
+- Development environments
+- No need for a database server
 
 ## Status Values
 
