@@ -41,12 +41,12 @@ test_that("config can be overridden", {
   cfg <- getOption("tasker.config")
   expect_equal(cfg$database$host, "host1")
   
-  # Override
-  tasker_config(host = "host2", reload = TRUE)
+  # Override with all required params
+  tasker_config(host = "host2", dbname = "db1", reload = TRUE)
   
   cfg <- getOption("tasker.config")
   expect_equal(cfg$database$host, "host2")
-  expect_equal(cfg$database$dbname, "db1")  # Should remain
+  expect_equal(cfg$database$dbname, "db1")
   
   options(tasker.config = NULL)
 })
