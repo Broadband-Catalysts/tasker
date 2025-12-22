@@ -1,5 +1,9 @@
+^renv$
+^renv\.lock$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.tasker\.yml$
 ^\.git$
 ^\.github$
+.tasker.yml.example
+TASKER_IMPLEMENTATION_SUMMARY\.md

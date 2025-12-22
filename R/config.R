@@ -33,35 +33,43 @@ tasker_config <- function(config_file = NULL,
                           driver = NULL,
                           reload = FALSE) {
   
-  if (!reload && !is.null(getOption("tasker.config"))) {
+  # Start with existing config if reload and config exists
+  if (reload && !is.null(getOption("tasker.config"))) {
+    config <- getOption("tasker.config")
+  } else if (!reload && !is.null(getOption("tasker.config"))) {
     return(invisible(getOption("tasker.config")))
-  }
-  
-  config <- list(
-    database = list(
-      host = "localhost",
-      port = 5432,
-      dbname = NULL,
-      user = Sys.getenv("USER"),
-      password = NULL,
-      schema = "tasker",
-      driver = "postgresql"
+  } else {
+    # Default config
+    config <- list(
+      database = list(
+        host = "localhost",
+        port = 5432,
+        dbname = NULL,
+        user = Sys.getenv("USER"),
+        password = NULL,
+        schema = "tasker",
+        driver = "postgresql"
+      )
     )
-  )
-  
-  if (is.null(config_file)) {
-    config_file <- find_config_file()
   }
   
-  if (!is.null(config_file) && file.exists(config_file)) {
-    yaml_config <- load_yaml_config(config_file)
-    config <- merge_configs(config, yaml_config)
-    config$loaded_from <- config_file
+  # Only reload from file if not reloading with overrides
+  if (!reload || is.null(getOption("tasker.config"))) {
+    if (is.null(config_file)) {
+      config_file <- find_config_file()
+    }
+    
+    if (!is.null(config_file) && file.exists(config_file)) {
+      yaml_config <- load_yaml_config(config_file)
+      config <- merge_configs(config, yaml_config)
+      config$loaded_from <- config_file
+    }
+    
+    env_config <- load_env_config()
+    config <- merge_configs(config, env_config)
   }
   
-  env_config <- load_env_config()
-  config <- merge_configs(config, env_config)
-  
+  # Apply parameter overrides
   if (!is.null(host)) config$database$host <- host
   if (!is.null(port)) config$database$port <- as.integer(port)
   if (!is.null(dbname)) config$database$dbname <- dbname
