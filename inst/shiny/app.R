@@ -9,7 +9,11 @@ if (is.null(getOption("tasker.config"))) {
 }
 
 ui <- fluidPage(
-  titlePanel("Tasker Pipeline Monitor"),
+  titlePanel({
+    config <- getOption("tasker.config")
+    pipeline_name <- if (!is.null(config$pipeline$name)) config$pipeline$name else "Pipeline"
+    paste(pipeline_name, "- Tasker Monitor")
+  }),
   
   tags$head(
     tags$style(HTML("
@@ -41,11 +45,11 @@ ui <- fluidPage(
     sidebarPanel(
       width = 3,
       selectInput("stage_filter", "Filter by Stage:", 
-                  choices = c("All" = ""), multiple = FALSE),
+                  choices = c("All" = ""), multiple = TRUE),
       selectInput("status_filter", "Filter by Status:",
                   choices = c("All" = "", "NOT_STARTED", "STARTED", "RUNNING", 
                              "COMPLETED", "FAILED", "SKIPPED"),
-                  multiple = FALSE),
+                  multiple = TRUE),
       numericInput("refresh_interval", "Auto-refresh (seconds):", 
                    value = 5, min = 1, max = 60),
       checkboxInput("auto_refresh", "Auto-refresh", value = TRUE),
@@ -103,11 +107,15 @@ server <- function(input, output, session) {
       
       # Apply filters
       if (!is.null(data) && nrow(data) > 0) {
-        if (input$stage_filter != "") {
-          data <- data[data$stage == input$stage_filter, ]
+        # Filter by stage (exclude empty string which means "All")
+        stage_filters <- input$stage_filter[input$stage_filter != ""]
+        if (length(stage_filters) > 0) {
+          data <- data[data$stage %in% stage_filters, ]
         }
-        if (input$status_filter != "") {
-          data <- data[data$status == input$status_filter, ]
+        # Filter by status (exclude empty string which means "All")
+        status_filters <- input$status_filter[input$status_filter != ""]
+        if (length(status_filters) > 0) {
+          data <- data[data$status %in% status_filters, ]
         }
       }
       
@@ -118,13 +126,21 @@ server <- function(input, output, session) {
     })
   })
   
-  # Update stage filter choices
+  # Update stage filter choices dynamically
   observe({
-    data <- task_data()
+    data <- tryCatch({
+      tasker::get_task_status()
+    }, error = function(e) NULL)
+    
     if (!is.null(data) && nrow(data) > 0) {
-      stages <- unique(data$stage)
+      stages <- sort(unique(data$stage))
+      # Keep current selection if still valid
+      current_selection <- input$stage_filter
+      valid_selection <- current_selection[current_selection %in% stages]
+      
       updateSelectInput(session, "stage_filter", 
-                       choices = c("All" = "", stages))
+                       choices = c("All" = "", stages),
+                       selected = valid_selection)
     }
   })
   
