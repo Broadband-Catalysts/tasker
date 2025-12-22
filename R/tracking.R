@@ -6,6 +6,7 @@
 #' @param message Initial progress message (optional)
 #' @param version Version string (optional)
 #' @param git_commit Git commit hash (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return run_id (UUID) to track this execution
 #' @export
@@ -16,7 +17,7 @@
 #' }
 task_start <- function(stage, task, total_subtasks = NULL, 
                       message = NULL, version = NULL, 
-                      git_commit = NULL, conn = NULL) {
+                      git_commit = NULL, quiet = FALSE, conn = NULL) {
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -42,8 +43,8 @@ task_start <- function(stage, task, total_subtasks = NULL,
   tryCatch({
     task_id <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("SELECT t.task_id FROM {tasks_table*} t
-               JOIN {stages_table*} s ON t.stage_id = s.stage_id
+      glue::glue_sql("SELECT t.task_id FROM {tasks_table} t
+               JOIN {stages_table} s ON t.stage_id = s.stage_id
                WHERE s.stage_name = {stage} AND t.task_name = {task}",
               .con = conn)
     )$task_id
@@ -59,7 +60,7 @@ task_start <- function(stage, task, total_subtasks = NULL,
     
     run_id <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("INSERT INTO {task_runs_table*} 
+      glue::glue_sql("INSERT INTO {task_runs_table} 
                (task_id, hostname, process_id, parent_pid, start_time, 
                 status, total_subtasks, overall_progress_message, 
                 version, git_commit, user_name)
@@ -69,11 +70,13 @@ task_start <- function(stage, task, total_subtasks = NULL,
                RETURNING run_id", .con = conn)
     )$run_id
     
-    log_message <- sprintf("[TASK START] %s / %s (run_id: %s)", stage, task, run_id)
-    if (!is.null(message)) {
-      log_message <- paste0(log_message, " - ", message)
+    if (!quiet) {
+      log_message <- sprintf("[TASK START] %s / %s (run_id: %s)", stage, task, run_id)
+      if (!is.null(message)) {
+        log_message <- paste0(log_message, " - ", message)
+      }
+      message(log_message)
     }
-    message(log_message)
     
     run_id
     
@@ -94,6 +97,7 @@ task_start <- function(stage, task, total_subtasks = NULL,
 #' @param message Progress message (optional)
 #' @param error_message Error message if failed (optional)
 #' @param error_detail Detailed error info (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
@@ -106,7 +110,7 @@ task_start <- function(stage, task, total_subtasks = NULL,
 task_update <- function(run_id, status, current_subtask = NULL,
                        overall_percent = NULL, message = NULL,
                        error_message = NULL, error_detail = NULL,
-                       conn = NULL) {
+                       quiet = FALSE, conn = NULL) {
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -162,18 +166,20 @@ task_update <- function(run_id, status, current_subtask = NULL,
     }
     
     update_str <- paste(update_clauses, collapse = ", ")
-    sql_template <- paste0("UPDATE {task_runs_table*} SET ", update_str, " WHERE run_id = {run_id}")
+    sql_template <- paste0("UPDATE {task_runs_table} SET ", update_str, " WHERE run_id = {run_id}")
     
     DBI::dbExecute(
       conn, 
       glue::glue_sql(sql_template, .con = conn)
     )
     
-    log_message <- sprintf("[TASK UPDATE] %s - %s", run_id, status)
-    if (!is.null(message)) {
-      log_message <- paste0(log_message, ": ", message)
+    if (!quiet) {
+      log_message <- sprintf("[TASK UPDATE] %s - %s", run_id, status)
+      if (!is.null(message)) {
+        log_message <- paste0(log_message, ": ", message)
+      }
+      message(log_message)
     }
-    message(log_message)
     
     TRUE
     
@@ -189,12 +195,13 @@ task_update <- function(run_id, status, current_subtask = NULL,
 #'
 #' @param run_id Run ID from task_start()
 #' @param message Final message (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
-task_complete <- function(run_id, message = NULL, conn = NULL) {
+task_complete <- function(run_id, message = NULL, quiet = FALSE, conn = NULL) {
   task_update(run_id, status = "COMPLETED", overall_percent = 100,
-              message = message, conn = conn)
+              message = message, quiet = quiet, conn = conn)
 }
 
 
@@ -203,13 +210,15 @@ task_complete <- function(run_id, message = NULL, conn = NULL) {
 #' @param run_id Run ID from task_start()
 #' @param error_message Error message
 #' @param error_detail Detailed error info (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
-task_fail <- function(run_id, error_message, error_detail = NULL, conn = NULL) {
+task_fail <- function(run_id, error_message, error_detail = NULL, quiet = FALSE, conn = NULL) {
   task_update(run_id, status = "FAILED", 
               error_message = error_message,
               error_detail = error_detail,
+              quiet = quiet,
               conn = conn)
 }
 
@@ -224,21 +233,22 @@ task_fail <- function(run_id, error_message, error_detail = NULL, conn = NULL) {
 #' @param message Final message (optional)
 #' @param error_message Error message (for FAILED status)
 #' @param error_detail Detailed error info (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
 task_end <- function(run_id, status, message = NULL, 
-                     error_message = NULL, error_detail = NULL, conn = NULL) {
+                     error_message = NULL, error_detail = NULL, quiet = FALSE, conn = NULL) {
   if (status == "COMPLETED") {
-    task_complete(run_id, message = message, conn = conn)
+    task_complete(run_id, message = message, quiet = quiet, conn = conn)
   } else if (status == "FAILED") {
     if (is.null(error_message)) error_message <- "Task failed"
     task_fail(run_id, error_message = error_message, 
-              error_detail = error_detail, conn = conn)
+              error_detail = error_detail, quiet = quiet, conn = conn)
   } else {
     task_update(run_id, status = status, message = message,
                 error_message = error_message, error_detail = error_detail,
-                conn = conn)
+                quiet = quiet, conn = conn)
   }
 }
 

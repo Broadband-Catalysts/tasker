@@ -12,6 +12,7 @@ task_update(
   message = NULL,
   error_message = NULL,
   error_detail = NULL,
+  quiet = FALSE,
   conn = NULL
 )
 }
@@ -29,6 +30,8 @@ task_update(
 \item{error_message}{Error message if failed (optional)}
 
 \item{error_detail}{Detailed error info (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

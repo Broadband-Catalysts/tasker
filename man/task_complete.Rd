@@ -4,12 +4,14 @@
 \alias{task_complete}
 \title{Complete a task execution}
 \usage{
-task_complete(run_id, message = NULL, conn = NULL)
+task_complete(run_id, message = NULL, quiet = FALSE, conn = NULL)
 }
 \arguments{
 \item{run_id}{Run ID from task_start()}
 
 \item{message}{Final message (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

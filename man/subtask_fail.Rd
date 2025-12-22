@@ -4,7 +4,7 @@
 \alias{subtask_fail}
 \title{Mark a subtask as failed}
 \usage{
-subtask_fail(run_id, subtask_number, error_message, conn = NULL)
+subtask_fail(run_id, subtask_number, error_message, quiet = FALSE, conn = NULL)
 }
 \arguments{
 \item{run_id}{Run ID from task_start()}
@@ -12,6 +12,8 @@ subtask_fail(run_id, subtask_number, error_message, conn = NULL)
 \item{subtask_number}{Subtask number}
 
 \item{error_message}{Error message}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

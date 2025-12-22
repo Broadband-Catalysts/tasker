@@ -10,6 +10,7 @@ subtask_start(
   subtask_name,
   items_total = NULL,
   message = NULL,
+  quiet = FALSE,
   conn = NULL
 )
 }
@@ -23,6 +24,8 @@ subtask_start(
 \item{items_total}{Total items to process (optional)}
 
 \item{message}{Progress message (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

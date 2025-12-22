@@ -8,13 +8,13 @@ get_table_name <- function(table, conn) {
   db_driver <- config$database$driver
   
   if (db_driver == "sqlite") {
-    return(table)
+    return(DBI::SQL(table))
   } else {
     schema <- config$database$schema
     if (is.null(schema) || nchar(schema) == 0) {
-      return(table)
+      return(DBI::SQL(table))
     }
-    return(sprintf("%s.%s", schema, table))
+    return(DBI::SQL(sprintf("%s.%s", schema, table)))
   }
 }
 
@@ -79,41 +79,44 @@ register_task <- function(stage,
   stages_table <- get_table_name("stages", conn)
   tasks_table <- get_table_name("tasks", conn)
   
-  # Convert NULL to NA for glue_sql
-  stage_order <- if (is.null(stage_order)) NA else stage_order
-  description <- if (is.null(description)) NA else description
-  script_path <- if (is.null(script_path)) NA else script_path
-  script_filename <- if (is.null(script_filename)) NA else script_filename
-  log_path <- if (is.null(log_path)) NA else log_path
-  log_filename <- if (is.null(log_filename)) NA else log_filename
-  task_order <- if (is.null(task_order)) NA else task_order
-  
   tryCatch({
+    # Handle NULL values in SQL - use SQL NULL literal for NULL/NA values
+    stage_order_sql <- if (is.null(stage_order) || is.na(stage_order)) DBI::SQL("NULL") else stage_order
+    description_sql <- if (is.null(description) || is.na(description)) DBI::SQL("NULL") else description
+    
     stage_id <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("INSERT INTO {stages_table*} (stage_name, stage_order, description) 
-               VALUES ({stage}, {stage_order}, {description}) 
+      glue::glue_sql("INSERT INTO {stages_table} (stage_name, stage_order, description) 
+               VALUES ({stage}, {stage_order_sql}, {description_sql}) 
                ON CONFLICT (stage_name) 
-               DO UPDATE SET stage_order = COALESCE(EXCLUDED.stage_order, {stages_table*}.stage_order)
+               DO UPDATE SET stage_order = COALESCE(EXCLUDED.stage_order, {stages_table}.stage_order)
                RETURNING stage_id", .con = conn)
     )$stage_id
     
+    # Handle NULL values for task fields
+    script_path_sql <- if (is.null(script_path) || is.na(script_path)) DBI::SQL("NULL") else script_path
+    script_filename_sql <- if (is.null(script_filename) || is.na(script_filename)) DBI::SQL("NULL") else script_filename
+    log_path_sql <- if (is.null(log_path) || is.na(log_path)) DBI::SQL("NULL") else log_path
+    log_filename_sql <- if (is.null(log_filename) || is.na(log_filename)) DBI::SQL("NULL") else log_filename
+    task_order_sql <- if (is.null(task_order) || is.na(task_order)) DBI::SQL("NULL") else task_order
+    description_task_sql <- if (is.null(description) || is.na(description)) DBI::SQL("NULL") else description
+    
     task_id <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("INSERT INTO {tasks_table*} 
+      glue::glue_sql("INSERT INTO {tasks_table} 
                (stage_id, task_name, task_type, task_order, description, 
                 script_path, script_filename, log_path, log_filename)
-               VALUES ({stage_id}, {name}, {type}, {task_order}, {description}, 
-                       {script_path}, {script_filename}, {log_path}, {log_filename})
+               VALUES ({stage_id}, {name}, {type}, {task_order_sql}, {description_task_sql}, 
+                       {script_path_sql}, {script_filename_sql}, {log_path_sql}, {log_filename_sql})
                ON CONFLICT (stage_id, task_name) 
                DO UPDATE SET 
                  task_type = EXCLUDED.task_type,
-                 task_order = COALESCE(EXCLUDED.task_order, {tasks_table*}.task_order),
-                 description = COALESCE(EXCLUDED.description, {tasks_table*}.description),
-                 script_path = COALESCE(EXCLUDED.script_path, {tasks_table*}.script_path),
-                 script_filename = COALESCE(EXCLUDED.script_filename, {tasks_table*}.script_filename),
-                 log_path = COALESCE(EXCLUDED.log_path, {tasks_table*}.log_path),
-                 log_filename = COALESCE(EXCLUDED.log_filename, {tasks_table*}.log_filename)
+                 task_order = COALESCE(EXCLUDED.task_order, {tasks_table}.task_order),
+                 description = COALESCE(EXCLUDED.description, {tasks_table}.description),
+                 script_path = COALESCE(EXCLUDED.script_path, {tasks_table}.script_path),
+                 script_filename = COALESCE(EXCLUDED.script_filename, {tasks_table}.script_filename),
+                 log_path = COALESCE(EXCLUDED.log_path, {tasks_table}.log_path),
+                 log_filename = COALESCE(EXCLUDED.log_filename, {tasks_table}.log_filename)
                RETURNING task_id", .con = conn)
     )$task_id
     
@@ -237,8 +240,8 @@ get_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
             t.description, t.script_path, t.script_filename,
             t.log_path, t.log_filename,
             t.created_at, t.updated_at
-     FROM {tasks_table*} t
-     JOIN {stages_table*} s ON t.stage_id = s.stage_id
+     FROM {tasks_table} t
+     JOIN {stages_table} s ON t.stage_id = s.stage_id
      {where_sql*}
      ORDER BY s.stage_order NULLS LAST, s.stage_name, 
               t.task_order NULLS LAST, t.task_name",

@@ -10,6 +10,7 @@ task_end(
   message = NULL,
   error_message = NULL,
   error_detail = NULL,
+  quiet = FALSE,
   conn = NULL
 )
 }
@@ -23,6 +24,8 @@ task_end(
 \item{error_message}{Error message (for FAILED status)}
 
 \item{error_detail}{Detailed error info (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

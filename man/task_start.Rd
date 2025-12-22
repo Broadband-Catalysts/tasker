@@ -11,6 +11,7 @@ task_start(
   message = NULL,
   version = NULL,
   git_commit = NULL,
+  quiet = FALSE,
   conn = NULL
 )
 }
@@ -26,6 +27,8 @@ task_start(
 \item{version}{Version string (optional)}
 
 \item{git_commit}{Git commit hash (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

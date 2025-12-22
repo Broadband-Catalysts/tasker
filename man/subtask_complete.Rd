@@ -4,7 +4,13 @@
 \alias{subtask_complete}
 \title{Complete a subtask}
 \usage{
-subtask_complete(run_id, subtask_number, message = NULL, conn = NULL)
+subtask_complete(
+  run_id,
+  subtask_number,
+  message = NULL,
+  quiet = FALSE,
+  conn = NULL
+)
 }
 \arguments{
 \item{run_id}{Run ID from task_start()}
@@ -12,6 +18,8 @@ subtask_complete(run_id, subtask_number, message = NULL, conn = NULL)
 \item{subtask_number}{Subtask number}
 
 \item{message}{Final message (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }

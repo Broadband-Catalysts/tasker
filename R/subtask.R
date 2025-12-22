@@ -5,6 +5,7 @@
 #' @param subtask_name Subtask name/description
 #' @param items_total Total items to process (optional)
 #' @param message Progress message (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return progress_id
 #' @export
@@ -14,7 +15,7 @@
 #' subtask_start(run_id, 1, "Processing state-level data", items_total = 56)
 #' }
 subtask_start <- function(run_id, subtask_number, subtask_name,
-                         items_total = NULL, message = NULL, conn = NULL) {
+                         items_total = NULL, message = NULL, quiet = FALSE, conn = NULL) {
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -35,7 +36,7 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
   tryCatch({
     progress_id <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("INSERT INTO {subtask_progress_table*}
+      glue::glue_sql("INSERT INTO {subtask_progress_table}
                (run_id, subtask_number, subtask_name, status, start_time,
                 items_total, progress_message)
                VALUES ({run_id}, {subtask_number}, {subtask_name}, 'STARTED', {time_func*}, 
@@ -50,12 +51,14 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
                RETURNING progress_id", .con = conn)
     )$progress_id
     
-    log_message <- sprintf("[SUBTASK START] Subtask %d: %s", 
-                          subtask_number, subtask_name)
-    if (!is.null(message)) {
-      log_message <- paste0(log_message, " - ", message)
+    if (!quiet) {
+      log_message <- sprintf("[SUBTASK START] Subtask %d: %s", 
+                            subtask_number, subtask_name)
+      if (!is.null(message)) {
+        log_message <- paste0(log_message, " - ", message)
+      }
+      message(log_message)
     }
-    message(log_message)
     
     progress_id
     
@@ -76,6 +79,7 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
 #' @param items_complete Items completed (optional)
 #' @param message Progress message (optional)
 #' @param error_message Error message if failed (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
@@ -88,7 +92,7 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
 subtask_update <- function(run_id, subtask_number, status,
                           percent = NULL, items_complete = NULL,
                           message = NULL, error_message = NULL,
-                          conn = NULL) {
+                          quiet = FALSE, conn = NULL) {
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -139,7 +143,7 @@ subtask_update <- function(run_id, subtask_number, status,
     }
     
     update_str <- paste(update_clauses, collapse = ", ")
-    sql_template <- paste0("UPDATE {subtask_progress_table*} SET ", update_str, 
+    sql_template <- paste0("UPDATE {subtask_progress_table} SET ", update_str, 
                           " WHERE run_id = {run_id} AND subtask_number = {subtask_number}")
     
     DBI::dbExecute(
@@ -147,12 +151,14 @@ subtask_update <- function(run_id, subtask_number, status,
       glue::glue_sql(sql_template, .con = conn)
     )
     
-    log_message <- sprintf("[SUBTASK UPDATE] Subtask %d - %s", 
-                          subtask_number, status)
-    if (!is.null(message)) {
-      log_message <- paste0(log_message, ": ", message)
+    if (!quiet) {
+      log_message <- sprintf("[SUBTASK UPDATE] Subtask %d - %s", 
+                            subtask_number, status)
+      if (!is.null(message)) {
+        log_message <- paste0(log_message, ": ", message)
+      }
+      message(log_message)
     }
-    message(log_message)
     
     TRUE
     
@@ -169,12 +175,13 @@ subtask_update <- function(run_id, subtask_number, status,
 #' @param run_id Run ID from task_start()
 #' @param subtask_number Subtask number
 #' @param message Final message (optional)
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
-subtask_complete <- function(run_id, subtask_number, message = NULL, conn = NULL) {
+subtask_complete <- function(run_id, subtask_number, message = NULL, quiet = FALSE, conn = NULL) {
   subtask_update(run_id, subtask_number, status = "COMPLETED",
-                percent = 100, message = message, conn = conn)
+                percent = 100, message = message, quiet = quiet, conn = conn)
 }
 
 
@@ -183,10 +190,11 @@ subtask_complete <- function(run_id, subtask_number, message = NULL, conn = NULL
 #' @param run_id Run ID from task_start()
 #' @param subtask_number Subtask number
 #' @param error_message Error message
+#' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
-subtask_fail <- function(run_id, subtask_number, error_message, conn = NULL) {
+subtask_fail <- function(run_id, subtask_number, error_message, quiet = FALSE, conn = NULL) {
   subtask_update(run_id, subtask_number, status = "FAILED",
-                error_message = error_message, conn = conn)
+                error_message = error_message, quiet = quiet, conn = conn)
 }

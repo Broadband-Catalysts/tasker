@@ -12,6 +12,7 @@ subtask_update(
   items_complete = NULL,
   message = NULL,
   error_message = NULL,
+  quiet = FALSE,
   conn = NULL
 )
 }
@@ -29,6 +30,8 @@ subtask_update(
 \item{message}{Progress message (optional)}
 
 \item{error_message}{Error message if failed (optional)}
+
+\item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
 }
