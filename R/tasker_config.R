@@ -35,41 +35,60 @@ tasker_config <- function(config_file = NULL,
                           start_dir = getwd(),
                           reload = FALSE) {
   
-  # Start with existing config if reload and config exists
-  if (reload && !is.null(getOption("tasker.config"))) {
-    config <- getOption("tasker.config")
-  } else if (!reload && !is.null(getOption("tasker.config"))) {
+  # Return existing config if not reloading
+  if (!reload && !is.null(getOption("tasker.config"))) {
     return(invisible(getOption("tasker.config")))
-  } else {
-    # Default config
-    config <- list(
-      database = list(
-        host = "localhost",
-        port = 5432,
-        dbname = NULL,
-        user = Sys.getenv("USER"),
-        password = NULL,
-        schema = "tasker",
-        driver = "postgresql"
-      )
+  }
+  
+  # Find configuration file
+  if (is.null(config_file)) {
+    config_file <- find_config_file(start_dir = start_dir)
+  }
+  
+  # Check if explicit parameters were provided
+  has_explicit_params <- !is.null(host) || !is.null(port) || !is.null(dbname) || 
+                         !is.null(user) || !is.null(password) || !is.null(schema) || 
+                         !is.null(driver)
+  
+  # Check if environment variables provide config
+  has_env_config <- Sys.getenv("TASKER_DB_HOST") != "" && 
+                    Sys.getenv("TASKER_DB_NAME") != ""
+  
+  # Error if no config file, no env vars, and no explicit params
+  if (is.null(config_file) && !has_explicit_params && !has_env_config) {
+    stop(
+      "No tasker configuration found. Please:\n",
+      "  1. Create .tasker.yml in your project root, OR\n",
+      "  2. Set TASKER_DB_* environment variables (at minimum: TASKER_DB_HOST and TASKER_DB_NAME), OR\n",
+      "  3. Call tasker_config() with explicit parameters (host, dbname, user, etc.)\n",
+      "\nSearched from: ", start_dir,
+      call. = FALSE
     )
   }
   
-  # Only reload from file if not reloading with overrides
-  if (!reload || is.null(getOption("tasker.config"))) {
-    if (is.null(config_file)) {
-      config_file <- find_config_file(start_dir = start_dir)
-    }
-    
-    if (!is.null(config_file) && file.exists(config_file)) {
-      yaml_config <- load_yaml_config(config_file)
-      config <- merge_configs(config, yaml_config)
-      config$loaded_from <- config_file
-    }
-    
-    env_config <- load_env_config()
-    config <- merge_configs(config, env_config)
+  # Start with base config structure
+  config <- list(
+    database = list(
+      host = "localhost",
+      port = 5432,
+      dbname = NULL,
+      user = Sys.getenv("USER"),
+      password = NULL,
+      schema = "tasker",
+      driver = "postgresql"
+    )
+  )
+  
+  # Load from file if available
+  if (!is.null(config_file) && file.exists(config_file)) {
+    yaml_config <- load_yaml_config(config_file)
+    config <- merge_configs(config, yaml_config)
+    config$loaded_from <- config_file
   }
+  
+  # Load from environment variables
+  env_config <- load_env_config()
+  config <- merge_configs(config, env_config)
   
   # Apply parameter overrides
   if (!is.null(host)) config$database$host <- host
@@ -262,7 +281,13 @@ validate_config <- function(config) {
   } else {
     # For PostgreSQL/MySQL, require host, port, dbname, user
     required <- c("host", "port", "dbname", "user")
-    missing <- setdiff(required, names(config$database))
+    missing <- character(0)
+    
+    for (field in required) {
+      if (is.null(config$database[[field]]) || config$database[[field]] == "") {
+        missing <- c(missing, field)
+      }
+    }
     
     if (length(missing) > 0) {
       stop("Missing required configuration: ", paste(missing, collapse = ", "))

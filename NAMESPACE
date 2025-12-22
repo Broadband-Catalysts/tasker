@@ -2,6 +2,7 @@
 
 export(check_tasker_db)
 export(create_schema)
+export(create_tasker_config)
 export(find_config_file)
 export(get_active_tasks)
 export(get_db_connection)
