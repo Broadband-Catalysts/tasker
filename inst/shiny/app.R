@@ -133,7 +133,22 @@ server <- function(input, output, session) {
     data <- task_data()
     
     if (is.null(data) || nrow(data) == 0) {
-      return(datatable(data.frame(Message = "No tasks found")))
+      empty_df <- data.frame(
+        Stage = character(0),
+        Task = character(0),
+        Status = character(0),
+        Progress = character(0),
+        `Overall Progress` = character(0),
+        Started = character(0),
+        Duration = character(0),
+        Host = character(0),
+        Details = character(0),
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+      return(datatable(empty_df, options = list(
+        language = list(emptyTable = "No tasks found")
+      )))
     }
     
     # Prepare display columns
