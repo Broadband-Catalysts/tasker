@@ -107,7 +107,7 @@ server <- function(input, output, session) {
           data <- data[data$stage == input$stage_filter, ]
         }
         if (input$status_filter != "") {
-          data <- data[data$task_status == input$status_filter, ]
+          data <- data[data$status == input$status_filter, ]
         }
       }
       
@@ -153,16 +153,17 @@ server <- function(input, output, session) {
     
     # Prepare display columns
     display_data <- data.frame(
-      Stage = data$stage,
+      Stage = data$stage_name,
       Task = data$task_name,
-      Status = data$task_status,
-      Progress = sprintf("%.1f%%", data$task_percent_complete),
+      Status = data$status,
+      Progress = ifelse(is.na(data$current_subtask), "--", 
+                       sprintf("%d/%d", data$current_subtask, data$total_subtasks)),
       "Overall Progress" = sprintf("%.1f%%", data$overall_percent_complete),
-      Started = format(data$task_start, "%Y-%m-%d %H:%M:%S"),
-      Duration = format_duration(data$task_start, data$last_update),
+      Started = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
+      Duration = format_duration(data$start_time, data$last_update),
       Host = data$hostname,
       Details = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
-                       data$task_id),
+                       data$run_id),
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
@@ -199,7 +200,7 @@ server <- function(input, output, session) {
     }
     
     data <- task_data()
-    task <- data[data$task_id == rv$selected_task_id, ]
+    task <- data[data$run_id == rv$selected_task_id, ]
     
     if (nrow(task) == 0) {
       return(NULL)
@@ -213,11 +214,11 @@ server <- function(input, output, session) {
           column(6,
                  h4("Identification"),
                  tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Task ID:"), tags$td(task$task_id)),
-                           tags$tr(tags$th("Stage:"), tags$td(task$stage)),
+                           tags$tr(tags$th("Run ID:"), tags$td(task$run_id)),
+                           tags$tr(tags$th("Stage:"), tags$td(task$stage_name)),
                            tags$tr(tags$th("Task Name:"), tags$td(task$task_name)),
                            tags$tr(tags$th("Type:"), tags$td(task$task_type)),
-                           tags$tr(tags$th("Status:"), tags$td(task$task_status))
+                           tags$tr(tags$th("Status:"), tags$td(task$status))
                  )
           ),
           column(6,
@@ -225,9 +226,9 @@ server <- function(input, output, session) {
                  tags$table(class = "table table-sm",
                            tags$tr(tags$th("Hostname:"), tags$td(task$hostname)),
                            tags$tr(tags$th("PID:"), tags$td(task$process_id)),
-                           tags$tr(tags$th("Started:"), tags$td(format(task$task_start, "%Y-%m-%d %H:%M:%S"))),
+                           tags$tr(tags$th("Started:"), tags$td(format(task$start_time, "%Y-%m-%d %H:%M:%S"))),
                            tags$tr(tags$th("Last Update:"), tags$td(format(task$last_update, "%Y-%m-%d %H:%M:%S"))),
-                           tags$tr(tags$th("Duration:"), tags$td(format_duration(task$task_start, task$last_update)))
+                           tags$tr(tags$th("Duration:"), tags$td(format_duration(task$start_time, task$last_update)))
                  )
           )
         ),
@@ -238,17 +239,12 @@ server <- function(input, output, session) {
                            tags$tr(tags$th("Overall:"), 
                                   tags$td(sprintf("%.1f%% - %s", 
                                                 task$overall_percent_complete,
-                                                task$overall_progress_message))),
-                           tags$tr(tags$th("Current Task:"), 
-                                  tags$td(sprintf("%.1f%% - %s", 
-                                                task$task_percent_complete,
-                                                task$task_progress_message))),
-                           tags$tr(tags$th("Current Subtask:"), tags$td(task$subtask_name)),
-                           tags$tr(tags$th("Subtask Progress:"), 
-                                  tags$td(sprintf("%d / %d items (%.1f%%)",
-                                                task$subtask_items_complete,
-                                                task$subtask_items_total,
-                                                task$subtask_percent_complete)))
+                                                ifelse(is.na(task$overall_progress_message), "", task$overall_progress_message)))),
+                           tags$tr(tags$th("Subtasks:"), 
+                                  tags$td(ifelse(is.na(task$total_subtasks), "N/A",
+                                                sprintf("%s / %d", 
+                                                       ifelse(is.na(task$current_subtask), "0", task$current_subtask),
+                                                       task$total_subtasks))))
                  )
           )
         ),
@@ -256,20 +252,20 @@ server <- function(input, output, session) {
           column(12,
                  h4("Files"),
                  tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Script Path:"), tags$td(task$script_path)),
+                           tags$tr(tags$th("Script Path:"), tags$td(ifelse(is.na(task$script_path), "N/A", task$script_path))),
                            tags$tr(tags$th("Script File:"), tags$td(task$script_filename)),
                            tags$tr(tags$th("Log Path:"), tags$td(task$log_path)),
-                           tags$tr(tags$th("Log File:"), tags$td(task$log_filename))
+                           tags$tr(tags$th("Script:"), tags$td(ifelse(is.na(task$script_filename), "N/A", task$script_filename))),
+                           tags$tr(tags$th("Log Path:"), tags$td(ifelse(is.na(task$log_path), "N/A", task$log_path))),
+                           tags$tr(tags$th("Log File:"), tags$td(ifelse(is.na(task$log_filename), "N/A", task$log_filename)))
                  )
           )
         ),
         fluidRow(
           column(12,
-                 h4("Log Output (Last 50 lines)"),
-                 actionButton("refresh_log", "Refresh Log", class = "btn-sm"),
-                 div(class = "log-output",
-                     uiOutput("log_content")
-                 )
+                 h4("Error Message"),
+                 tags$div(ifelse(is.na(task$error_message) || task$error_message == "", 
+                                "No errors", task$error_message))
           )
         )
     )
@@ -280,37 +276,6 @@ server <- function(input, output, session) {
     rv$selected_task_id <- NULL
   })
   
-  # Log content
-  output$log_content <- renderUI({
-    if (is.null(rv$selected_task_id)) {
-      return(NULL)
-    }
-    
-    # Trigger refresh
-    input$refresh_log
-    autoRefresh()
-    
-    data <- task_data()
-    task <- data[data$task_id == rv$selected_task_id, ]
-    
-    if (nrow(task) == 0) {
-      return(HTML("<div>Task not found</div>"))
-    }
-    
-    log_file <- file.path(task$log_path, task$log_filename)
-    
-    if (!file.exists(log_file)) {
-      return(HTML("<div>Log file not found</div>"))
-    }
-    
-    tryCatch({
-      lines <- tail(readLines(log_file, warn = FALSE), 50)
-      HTML(paste(lines, collapse = "\n"))
-    }, error = function(e) {
-      HTML(sprintf("<div>Error reading log: %s</div>", e$message))
-    })
-  })
-  
   # Stage summary table
   output$stage_summary_table <- renderDT({
     data <- task_data()
@@ -319,13 +284,13 @@ server <- function(input, output, session) {
       return(datatable(data.frame(Message = "No data")))
     }
     
-    summary <- aggregate(cbind(Total = task_id) ~ stage + task_status, 
+    summary <- aggregate(cbind(Total = run_id) ~ stage_name + status, 
                         data = data, 
                         FUN = length)
     
     wide_summary <- reshape(summary, 
-                           idvar = "stage", 
-                           timevar = "task_status", 
+                           idvar = "stage_name", 
+                           timevar = "status", 
                            direction = "wide")
     
     datatable(wide_summary, options = list(pageLength = 10))
@@ -341,11 +306,11 @@ server <- function(input, output, session) {
     
     library(ggplot2)
     
-    stage_progress <- aggregate(overall_percent_complete ~ stage, 
-                                data = data, 
+    stage_progress <- aggregate(overall_percent_complete ~ stage_name, 
+                                data = data,
                                 FUN = mean)
     
-    ggplot(stage_progress, aes(x = stage, y = overall_percent_complete)) +
+    ggplot(stage_progress, aes(x = stage_name, y = overall_percent_complete)) +
       geom_bar(stat = "identity", fill = "steelblue") +
       geom_text(aes(label = sprintf("%.1f%%", overall_percent_complete)), 
                vjust = -0.5) +
@@ -368,17 +333,17 @@ server <- function(input, output, session) {
     library(ggplot2)
     
     # Prepare timeline data
-    data$end_time <- ifelse(is.na(data$task_end), 
+    data$end_display <- ifelse(is.na(data$end_time), 
                            as.numeric(Sys.time()), 
-                           as.numeric(data$task_end))
-    data$start_time <- as.numeric(data$task_start)
+                           as.numeric(data$end_time))
+    data$start_display <- as.numeric(data$start_time)
     
-    ggplot(data, aes(y = task_name, color = task_status)) +
-      geom_segment(aes(x = as.POSIXct(start_time, origin = "1970-01-01"),
-                      xend = as.POSIXct(end_time, origin = "1970-01-01"),
+    ggplot(data, aes(y = task_name, color = status)) +
+      geom_segment(aes(x = as.POSIXct(start_display, origin = "1970-01-01"),
+                      xend = as.POSIXct(end_display, origin = "1970-01-01"),
                       yend = task_name),
                   size = 8) +
-      facet_grid(stage ~ ., scales = "free_y", space = "free_y") +
+      facet_grid(stage_name ~ ., scales = "free_y", space = "free_y") +
       labs(title = "Task Timeline",
            x = "Time",
            y = "Task",
