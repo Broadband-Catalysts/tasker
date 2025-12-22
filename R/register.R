@@ -59,6 +59,17 @@ register_task <- function(stage,
                          conn = NULL) {
   ensure_configured()
   
+  # Validate required parameters
+  if (missing(stage) || is.null(stage) || nchar(stage) == 0) {
+    stop("'stage' is required and cannot be empty")
+  }
+  if (missing(name) || is.null(name) || nchar(name) == 0) {
+    stop("'name' is required and cannot be empty")
+  }
+  if (missing(type) || is.null(type) || nchar(type) == 0) {
+    stop("'type' is required and cannot be empty")
+  }
+  
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()

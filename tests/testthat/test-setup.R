@@ -6,16 +6,31 @@ test_that("database setup creates schema and tables", {
   conn <- get_test_db_connection()
   on.exit(DBI::dbDisconnect(conn))
   
-  # Drop if exists
-  DBI::dbExecute(conn, "DROP SCHEMA IF EXISTS tasker CASCADE")
+  # Drop if exists (handle both PostgreSQL and SQLite)
+  config <- getOption("tasker.config")
+  if (config$database$driver == "postgresql") {
+    DBI::dbExecute(conn, "DROP SCHEMA IF EXISTS tasker CASCADE")
+  } else {
+    # SQLite: drop tables individually
+    tables <- c("subtask_progress", "task_runs", "tasks", "stages")
+    for (tbl in tables) {
+      try(DBI::dbExecute(conn, paste0("DROP TABLE IF EXISTS ", tbl)), silent = TRUE)
+    }
+    views <- c("active_tasks", "current_task_status")
+    for (v in views) {
+      try(DBI::dbExecute(conn, paste0("DROP VIEW IF EXISTS ", v)), silent = TRUE)
+    }
+  }
   
   # Setup database
   setup_tasker_db(conn)
   
-  # Verify schema exists
-  schema_exists <- DBI::dbGetQuery(conn, 
-    "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'tasker'")
-  expect_equal(nrow(schema_exists), 1)
+  # Verify schema/tables exists
+  if (config$database$driver == "postgresql") {
+    schema_exists <- DBI::dbGetQuery(conn, 
+      "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'tasker'")
+    expect_equal(nrow(schema_exists), 1)
+  }
   
   # Verify main tables exist
   config <- getOption("tasker.config")
@@ -64,8 +79,14 @@ test_that("database setup with force drops existing schema", {
   setup_tasker_db(conn, force = TRUE)
   
   # Verify data is gone
+  config <- getOption("tasker.config")
+  table_name <- if (config$database$driver == "sqlite") {
+    "stages"
+  } else {
+    "tasker.stages"
+  }
   count <- DBI::dbGetQuery(conn, 
-    "SELECT COUNT(*) as n FROM stages")
+    glue::glue("SELECT COUNT(*) as n FROM {table_name}"))
   expect_equal(count$n, 0)
 })
 

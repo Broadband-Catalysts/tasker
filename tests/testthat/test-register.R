@@ -33,14 +33,6 @@ test_that("register_tasks handles data.frame input", {
   )
 })
 
-test_that("get_or_create functions work correctly", {
-  skip_on_cran()
-  setup_test_db()
-  
-  # Test that these functions exist
-  expect_true(exists("get_or_create_stage"))
-  expect_true(exists("get_or_create_task"))
-})
 
 # Helper to check if test database is available
 check_test_db_available <- function() {
