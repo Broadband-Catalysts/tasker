@@ -2,14 +2,13 @@ library(shiny)
 library(DT)
 library(tasker)
 
-# Ensure tasker configuration is loaded (should already be loaded by run_monitor)
-tryCatch({
-  tasker::ensure_configured()
-}, error = function(e) {
-  stop("Failed to initialize tasker configuration. Ensure .tasker.yml exists in project root or parents. Error: ", e$message)
-})
+# Configuration should already be loaded by run_monitor()
+# Just verify it's available
+if (is.null(getOption("tasker.config"))) {
+  stop("Tasker configuration not loaded. Please run this app via tasker::run_monitor()")
+}
 
-ui <- fluidPage(
+ui <- fluid Page(
   titlePanel("Tasker Pipeline Monitor"),
   
   tags$head(
