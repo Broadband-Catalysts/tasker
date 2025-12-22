@@ -2,6 +2,13 @@ library(shiny)
 library(DT)
 library(tasker)
 
+# Ensure tasker configuration is loaded (should already be loaded by run_monitor)
+tryCatch({
+  tasker::ensure_configured()
+}, error = function(e) {
+  stop("Failed to initialize tasker configuration. Ensure .tasker.yml exists in project root or parents. Error: ", e$message)
+})
+
 ui <- fluidPage(
   titlePanel("Tasker Pipeline Monitor"),
   
@@ -378,9 +385,12 @@ server <- function(input, output, session) {
 
 # Helper function
 format_duration <- function(start, end) {
-  if (is.na(start)) return("-")
+  if (is.null(start) || length(start) == 0 || is.na(start)) return("-")
   
-  end <- ifelse(is.na(end), Sys.time(), end)
+  if (is.null(end) || length(end) == 0 || is.na(end)) {
+    end <- Sys.time()
+  }
+  
   duration <- as.numeric(difftime(end, start, units = "secs"))
   
   hours <- floor(duration / 3600)

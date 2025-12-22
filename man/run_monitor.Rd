@@ -4,7 +4,12 @@
 \alias{run_monitor}
 \title{Launch the Tasker Pipeline Monitor}
 \usage{
-run_monitor(port = NULL, host = "127.0.0.1", launch.browser = TRUE)
+run_monitor(
+  port = NULL,
+  host = "127.0.0.1",
+  launch.browser = TRUE,
+  config_file = NULL
+)
 }
 \arguments{
 \item{port}{Integer port number for the Shiny app (default: NULL for random port)}
@@ -12,6 +17,8 @@ run_monitor(port = NULL, host = "127.0.0.1", launch.browser = TRUE)
 \item{host}{Character host IP address (default: "127.0.0.1")}
 
 \item{launch.browser}{Logical whether to launch browser automatically (default: TRUE)}
+
+\item{config_file}{Optional path to .tasker.yml config file}
 }
 \value{
 No return value, called for side effect of launching Shiny app
@@ -26,5 +33,8 @@ Launches the Shiny application for monitoring task progress.
   
   # Launch on specific port
   run_monitor(port = 8080)
+  
+  # Use specific config file
+  run_monitor(config_file = "/path/to/.tasker.yml")
 }
 }
