@@ -8,7 +8,7 @@ if (is.null(getOption("tasker.config"))) {
   stop("Tasker configuration not loaded. Please run this app via tasker::run_monitor()")
 }
 
-ui <- fluid Page(
+ui <- fluidPage(
   titlePanel("Tasker Pipeline Monitor"),
   
   tags$head(
