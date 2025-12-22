@@ -8,6 +8,7 @@
 #' @param password Password (overrides config file)
 #' @param schema Schema name (overrides config file, default: "tasker")
 #' @param driver Database driver (overrides config file, default: "postgresql")
+#' @param start_dir Directory to start searching for .tasker.yml (default: current working directory)
 #' @param reload Force reload configuration (default: FALSE)
 #' @return Invisibly returns configuration list
 #' @export
@@ -31,6 +32,7 @@ tasker_config <- function(config_file = NULL,
                           password = NULL,
                           schema = NULL,
                           driver = NULL,
+                          start_dir = getwd(),
                           reload = FALSE) {
   
   # Start with existing config if reload and config exists
@@ -56,7 +58,7 @@ tasker_config <- function(config_file = NULL,
   # Only reload from file if not reloading with overrides
   if (!reload || is.null(getOption("tasker.config"))) {
     if (is.null(config_file)) {
-      config_file <- find_config_file()
+      config_file <- find_config_file(start_dir = start_dir)
     }
     
     if (!is.null(config_file) && file.exists(config_file)) {

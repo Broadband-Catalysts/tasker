@@ -31,11 +31,13 @@ run_monitor <- function(port = NULL, host = "127.0.0.1", launch.browser = TRUE, 
   }
   
   # Pre-load configuration before launching app
+  # Start search from current working directory, not package directory
   tryCatch({
     if (!is.null(config_file)) {
       tasker_config(config_file = config_file)
     } else {
-      tasker_config()
+      # Force search from current working directory
+      tasker_config(start_dir = getwd())
     }
   }, error = function(e) {
     stop(

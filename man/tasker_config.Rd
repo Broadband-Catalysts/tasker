@@ -13,6 +13,7 @@ tasker_config(
   password = NULL,
   schema = NULL,
   driver = NULL,
+  start_dir = getwd(),
   reload = FALSE
 )
 }
@@ -32,6 +33,8 @@ tasker_config(
 \item{schema}{Schema name (overrides config file, default: "tasker")}
 
 \item{driver}{Database driver (overrides config file, default: "postgresql")}
+
+\item{start_dir}{Directory to start searching for .tasker.yml (default: current working directory)}
 
 \item{reload}{Force reload configuration (default: FALSE)}
 }
