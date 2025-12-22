@@ -364,23 +364,30 @@ server <- function(input, output, session) {
 
 # Helper function
 format_duration <- function(start, end) {
-  if (is.null(start) || length(start) == 0 || is.na(start)) return("-")
-  
-  if (is.null(end) || length(end) == 0 || is.na(end)) {
-    end <- Sys.time()
-  }
-  
-  duration <- as.numeric(difftime(end, start, units = "secs"))
-  
-  hours <- floor(duration / 3600)
-  minutes <- floor((duration %% 3600) / 60)
-  seconds <- round(duration %% 60)
-  
-  if (hours > 0) {
-    sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-  } else {
-    sprintf("%02d:%02d", minutes, seconds)
-  }
+  sapply(seq_along(start), function(i) {
+    s <- start[i]
+    e <- end[i]
+    
+    if (is.na(s)) return("-")
+    
+    if (is.na(e)) {
+      e <- Sys.time()
+    }
+    
+    duration <- as.numeric(difftime(e, s, units = "secs"))
+    
+    hours <- floor(duration / 3600)
+    minutes <- floor((duration %% 3600) / 60)
+    seconds <- round(duration %% 60)
+    
+    if (hours > 0) {
+      sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+    } else if (minutes > 0) {
+      sprintf("%02d:%02d", minutes, seconds)
+    } else {
+      sprintf("%ds", seconds)
+    }
+  })
 }
 
 shinyApp(ui = ui, server = server)
