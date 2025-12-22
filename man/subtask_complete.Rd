@@ -7,6 +7,7 @@
 subtask_complete(
   run_id,
   subtask_number,
+  items_completed = NULL,
   message = NULL,
   quiet = FALSE,
   conn = NULL
@@ -16,6 +17,8 @@ subtask_complete(
 \item{run_id}{Run ID from task_start()}
 
 \item{subtask_number}{Subtask number}
+
+\item{items_completed}{Items completed (optional)}
 
 \item{message}{Final message (optional)}
 

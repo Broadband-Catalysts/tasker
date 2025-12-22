@@ -29,9 +29,9 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
   db_driver <- config$database$driver
   time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
   
-  # Convert NULL to NA for glue_sql
-  items_total <- if (is.null(items_total)) NA else items_total
-  message <- if (is.null(message)) NA else message
+  # Convert NULL to SQL NULL literal
+  items_total_sql <- if (is.null(items_total)) DBI::SQL("NULL") else items_total
+  message_sql <- if (is.null(message)) DBI::SQL("NULL") else message
   
   tryCatch({
     progress_id <- DBI::dbGetQuery(
@@ -40,7 +40,7 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
                (run_id, subtask_number, subtask_name, status, start_time,
                 items_total, progress_message)
                VALUES ({run_id}, {subtask_number}, {subtask_name}, 'STARTED', {time_func*}, 
-                       {items_total}, {message})
+                       {items_total_sql}, {message_sql})
                ON CONFLICT (run_id, subtask_number) 
                DO UPDATE SET 
                  subtask_name = EXCLUDED.subtask_name,
@@ -174,14 +174,17 @@ subtask_update <- function(run_id, subtask_number, status,
 #'
 #' @param run_id Run ID from task_start()
 #' @param subtask_number Subtask number
+#' @param items_completed Items completed (optional)
 #' @param message Final message (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
-subtask_complete <- function(run_id, subtask_number, message = NULL, quiet = FALSE, conn = NULL) {
+subtask_complete <- function(run_id, subtask_number, items_completed = NULL, 
+                            message = NULL, quiet = FALSE, conn = NULL) {
   subtask_update(run_id, subtask_number, status = "COMPLETED",
-                percent = 100, message = message, quiet = quiet, conn = conn)
+                percent = 100, items_complete = items_completed, 
+                message = message, quiet = quiet, conn = conn)
 }
 
 
