@@ -1,6 +1,7 @@
 library(shiny)
 library(DT)
 library(tasker)
+library(dplyr)
 
 # Configuration should already be loaded by run_monitor()
 # Just verify it's available
@@ -38,8 +39,143 @@ ui <- fluidPage(
         overflow-y: auto;
         white-space: pre-wrap;
       }
+      /* Pipeline Status Tab Styles */
+      .pipeline-status-container {
+        padding: 15px;
+      }
+      .stage-panel {
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fff;
+      }
+      .stage-header {
+        padding: 12px 15px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #ddd;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .stage-header:hover {
+        background: #e9ecef;
+      }
+      .stage-name {
+        font-weight: 600;
+        font-size: 16px;
+        flex: 0 0 auto;
+        min-width: 120px;
+      }
+      .stage-badge {
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex: 0 0 auto;
+      }
+      .stage-badge.status-NOT_STARTED { background: #6c757d; color: white; }
+      .stage-badge.status-RUNNING { background: #0d6efd; color: white; }
+      .stage-badge.status-COMPLETED { background: #198754; color: white; }
+      .stage-badge.status-FAILED { background: #dc3545; color: white; }
+      .stage-progress {
+        flex: 1;
+        height: 20px;
+        background: #e9ecef;
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+      }
+      .stage-progress-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: white;
+      }
+      .stage-progress-fill.status-NOT_STARTED { background: #adb5bd; }
+      .stage-progress-fill.status-RUNNING { background: #0dcaf0; }
+      .stage-progress-fill.status-COMPLETED { background: #20c997; }
+      .stage-progress-fill.status-FAILED { background: #dc3545; }
+      .stage-count {
+        font-size: 13px;
+        color: #666;
+        flex: 0 0 auto;
+        min-width: 60px;
+        text-align: right;
+      }
+      .stage-body {
+        padding: 10px 15px;
+        display: none;
+      }
+      .stage-body.expanded {
+        display: block;
+      }
+      .task-row {
+        padding: 8px 10px;
+        margin: 5px 0;
+        background: #f8f9fa;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+      }
+      .task-name {
+        flex: 1;
+        font-weight: 500;
+      }
+      .task-status-badge {
+        padding: 2px 6px;
+        border-radius: 2px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex: 0 0 auto;
+      }
+      .task-status-badge.status-NOT_STARTED { background: #6c757d; color: white; }
+      .task-status-badge.status-RUNNING { background: #0d6efd; color: white; }
+      .task-status-badge.status-COMPLETED { background: #198754; color: white; }
+      .task-status-badge.status-FAILED { background: #dc3545; color: white; }
+      .task-progress {
+        flex: 0 0 150px;
+        height: 16px;
+        background: #e9ecef;
+        border-radius: 2px;
+        overflow: hidden;
+        position: relative;
+      }
+      .task-progress-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+        font-size: 10px;
+        font-weight: 600;
+        color: white;
+        text-align: center;
+        line-height: 16px;
+      }
+      .task-progress-fill.status-RUNNING { background: #0dcaf0; }
+      .task-progress-fill.status-COMPLETED { background: #20c997; }
+      .task-message {
+        flex: 0 0 200px;
+        font-size: 12px;
+        color: #666;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     "))
   ),
+  
+  tags$script(HTML("
+    $(document).on('click', '.stage-header', function() {
+      $(this).next('.stage-body').toggleClass('expanded');
+    });
+  ")),
   
   sidebarLayout(
     sidebarPanel(
@@ -63,7 +199,12 @@ ui <- fluidPage(
       width = 9,
       tabsetPanel(
         id = "main_tabs",
-        tabPanel("Overview",
+        tabPanel("Pipeline Status",
+                 div(class = "pipeline-status-container",
+                     uiOutput("pipeline_status_ui")
+                 )
+        ),
+        tabPanel("Task Details",
                  DTOutput("task_table"),
                  hr(),
                  uiOutput("detail_panel")
@@ -110,12 +251,12 @@ server <- function(input, output, session) {
         # Filter by stage (exclude empty string which means "All")
         stage_filters <- input$stage_filter[input$stage_filter != ""]
         if (length(stage_filters) > 0) {
-          data <- data[data$stage %in% stage_filters, ]
+          data <- data |> filter(stage_name %in% stage_filters)
         }
         # Filter by status (exclude empty string which means "All")
         status_filters <- input$status_filter[input$status_filter != ""]
         if (length(status_filters) > 0) {
-          data <- data[data$status %in% status_filters, ]
+          data <- data |> filter(status %in% status_filters)
         }
       }
       
@@ -133,15 +274,133 @@ server <- function(input, output, session) {
     }, error = function(e) NULL)
     
     if (!is.null(stages_data) && nrow(stages_data) > 0) {
-      stage_names <- stages_data$stage_name
+      stage_values <- stages_data$stage_name
+      names(stage_values) <- paste(stages_data$stage_order, ': ', stages_data$stage_name, sep = '')
+
       # Keep current selection if still valid
       current_selection <- input$stage_filter
-      valid_selection <- current_selection[current_selection %in% stage_names]
+      valid_selection <- current_selection[current_selection %in% stage_values]
       
       updateSelectInput(session, "stage_filter", 
-                        choices = c("All" = "", stage_names),
+                        choices = c("All" = "", stage_values),
                         selected = valid_selection)
     }
+  })
+  
+  # Pipeline Status Tab - shows all stages and tasks
+  output$pipeline_status_ui <- renderUI({
+    autoRefresh()  # Trigger on refresh
+    
+    # Get all stages and tasks
+    stages_data <- tryCatch({
+      tasker::get_stages()
+    }, error = function(e) NULL)
+    
+    if (is.null(stages_data) || nrow(stages_data) == 0) {
+      return(div(class = "alert alert-info", "No stages configured"))
+    }
+    
+    # Get all task status
+    all_tasks <- tryCatch({
+      tasker::get_task_status()
+    }, error = function(e) NULL)
+    
+    # Create stage panels
+    stage_panels <- lapply(seq_len(nrow(stages_data)), function(i) {
+      stage <- stages_data[i, ]
+      stage_name <- stage$stage_name
+      
+      # Get tasks for this stage
+      stage_tasks <- if (!is.null(all_tasks)) {
+        all_tasks[all_tasks$stage_name == stage_name, ]
+      } else {
+        data.frame()
+      }
+      
+      # Calculate stage stats
+      total_tasks <- nrow(stage_tasks)
+      if (total_tasks == 0) {
+        stage_status <- "NOT_STARTED"
+        completed_tasks <- 0
+        progress_pct <- 0
+      } else {
+        completed_tasks <- sum(stage_tasks$status == "COMPLETED", na.rm = TRUE)
+        running_tasks <- sum(stage_tasks$status == "RUNNING", na.rm = TRUE)
+        failed_tasks <- sum(stage_tasks$status == "FAILED", na.rm = TRUE)
+        
+        progress_pct <- round(100 * completed_tasks / total_tasks)
+        
+        if (failed_tasks > 0) {
+          stage_status <- "FAILED"
+        } else if (running_tasks > 0) {
+          stage_status <- "RUNNING"
+        } else if (completed_tasks == total_tasks) {
+          stage_status <- "COMPLETED"
+        } else {
+          stage_status <- "NOT_STARTED"
+        }
+      }
+      
+      # Create task rows
+      task_rows <- if (total_tasks > 0) {
+        lapply(seq_len(nrow(stage_tasks)), function(j) {
+          task <- stage_tasks[j, ]
+          task_status <- task$status
+          task_progress <- task$overall_percent_complete
+          
+          div(class = "task-row",
+              div(class = "task-name", task$task_name),
+              tags$span(class = paste("task-status-badge", paste0("status-", task_status)),
+                       task_status),
+              if (task_status == "RUNNING" && !is.na(task_progress) && task_progress > 0) {
+                div(class = "task-progress",
+                    div(class = paste("task-progress-fill", paste0("status-", task_status)),
+                        style = sprintf("width: %.1f%%", task_progress),
+                        sprintf("%.1f%%", task_progress))
+                )
+              } else if (task_status == "COMPLETED") {
+                div(class = "task-progress",
+                    div(class = "task-progress-fill status-COMPLETED",
+                        style = "width: 100%",
+                        "100%")
+                )
+              } else {
+                div(class = "task-progress")
+              },
+              if (!is.na(task$overall_progress_message) && task$overall_progress_message != "") {
+                div(class = "task-message", 
+                    title = task$overall_progress_message,
+                    task$overall_progress_message)
+              } else {
+                div(class = "task-message")
+              }
+          )
+        })
+      } else {
+        list(div(class = "alert alert-sm alert-secondary", "No tasks registered for this stage"))
+      }
+      
+      # Create stage panel
+      div(class = "stage-panel",
+          div(class = "stage-header",
+              div(class = "stage-name", stage_name),
+              tags$span(class = paste("stage-badge", paste0("status-", stage_status)),
+                       stage_status),
+              div(class = "stage-progress",
+                  div(class = paste("stage-progress-fill", paste0("status-", stage_status)),
+                      style = sprintf("width: %d%%", progress_pct),
+                      sprintf("%d%%", progress_pct))
+              ),
+              div(class = "stage-count",
+                  sprintf("%d/%d", completed_tasks, total_tasks))
+          ),
+          div(class = "stage-body expanded",
+              task_rows
+          )
+      )
+    })
+    
+    tagList(stage_panels)
   })
   
   # Main task table
@@ -169,16 +428,16 @@ server <- function(input, output, session) {
     
     # Prepare display columns
     display_data <- data.frame(
-      Stage = data$stage_name,
-      Task = data$task_name,
-      Status = data$status,
+      Stage    = paste(data$stage_order, ": ", data$stage_name, sep = ""),
+      Task     = data$task_name,
+      Status   = data$status,
       Progress = ifelse(is.na(data$current_subtask), "--", 
                        sprintf("%d/%d", data$current_subtask, data$total_subtasks)),
       "Overall Progress" = sprintf("%.1f%%", data$overall_percent_complete),
-      Started = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
+      Started  = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
       Duration = format_duration(data$start_time, data$last_update),
-      Host = data$hostname,
-      Details = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
+      Host     = data$hostname,
+      Details  = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
                        data$run_id),
       stringsAsFactors = FALSE,
       check.names = FALSE
@@ -230,21 +489,21 @@ server <- function(input, output, session) {
           column(6,
                  h4("Identification"),
                  tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Run ID:"), tags$td(task$run_id)),
-                           tags$tr(tags$th("Stage:"), tags$td(task$stage_name)),
+                           tags$tr(tags$th("Run ID:"),    tags$td(task$run_id)),
+                           tags$tr(tags$th("Stage:"),     tags$td(task$stage_name)),
                            tags$tr(tags$th("Task Name:"), tags$td(task$task_name)),
-                           tags$tr(tags$th("Type:"), tags$td(task$task_type)),
-                           tags$tr(tags$th("Status:"), tags$td(task$status))
+                           tags$tr(tags$th("Type:"),      tags$td(task$task_type)),
+                           tags$tr(tags$th("Status:"),    tags$td(task$status))
                  )
           ),
           column(6,
                  h4("Execution Info"),
                  tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Hostname:"), tags$td(task$hostname)),
-                           tags$tr(tags$th("PID:"), tags$td(task$process_id)),
-                           tags$tr(tags$th("Started:"), tags$td(format(task$start_time, "%Y-%m-%d %H:%M:%S"))),
+                           tags$tr(tags$th("Hostname:"),    tags$td(task$hostname)),
+                           tags$tr(tags$th("PID:"),         tags$td(task$process_id)),
+                           tags$tr(tags$th("Started:"),     tags$td(format(task$start_time, "%Y-%m-%d %H:%M:%S"))),
                            tags$tr(tags$th("Last Update:"), tags$td(format(task$last_update, "%Y-%m-%d %H:%M:%S"))),
-                           tags$tr(tags$th("Duration:"), tags$td(format_duration(task$start_time, task$last_update)))
+                           tags$tr(tags$th("Duration:"),    tags$td(format_duration(task$start_time, task$last_update)))
                  )
           )
         ),
@@ -270,10 +529,10 @@ server <- function(input, output, session) {
                  tags$table(class = "table table-sm",
                            tags$tr(tags$th("Script Path:"), tags$td(ifelse(is.na(task$script_path), "N/A", task$script_path))),
                            tags$tr(tags$th("Script File:"), tags$td(task$script_filename)),
-                           tags$tr(tags$th("Log Path:"), tags$td(task$log_path)),
-                           tags$tr(tags$th("Script:"), tags$td(ifelse(is.na(task$script_filename), "N/A", task$script_filename))),
-                           tags$tr(tags$th("Log Path:"), tags$td(ifelse(is.na(task$log_path), "N/A", task$log_path))),
-                           tags$tr(tags$th("Log File:"), tags$td(ifelse(is.na(task$log_filename), "N/A", task$log_filename)))
+                           tags$tr(tags$th("Log Path:"),    tags$td(task$log_path)),
+                           tags$tr(tags$th("Script:"),      tags$td(ifelse(is.na(task$script_filename), "N/A", task$script_filename))),
+                           tags$tr(tags$th("Log Path:"),    tags$td(ifelse(is.na(task$log_path), "N/A", task$log_path))),
+                           tags$tr(tags$th("Log File:"),    tags$td(ifelse(is.na(task$log_filename), "N/A", task$log_filename)))
                  )
           )
         ),
