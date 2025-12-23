@@ -126,21 +126,21 @@ server <- function(input, output, session) {
     })
   })
   
-  # Update stage filter choices dynamically
+  # Update stage filter choices dynamically from stages table
   observe({
-    data <- tryCatch({
-      tasker::get_task_status()
+    stages_data <- tryCatch({
+      tasker::get_stages()
     }, error = function(e) NULL)
     
-    if (!is.null(data) && nrow(data) > 0) {
-      stages <- sort(unique(data$stage))
+    if (!is.null(stages_data) && nrow(stages_data) > 0) {
+      stage_names <- stages_data$stage_name
       # Keep current selection if still valid
       current_selection <- input$stage_filter
-      valid_selection <- current_selection[current_selection %in% stages]
+      valid_selection <- current_selection[current_selection %in% stage_names]
       
       updateSelectInput(session, "stage_filter", 
-                       choices = c("All" = "", stages),
-                       selected = valid_selection)
+                        choices = c("All" = "", stage_names),
+                        selected = valid_selection)
     }
   })
   

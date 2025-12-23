@@ -1,0 +1,178 @@
+#' Update task execution status
+#'
+#' @param run_id Run ID from task_start()
+#' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED
+#' @param current_subtask Current subtask number (optional)
+#' @param overall_percent Overall percent complete 0-100 (optional)
+#' @param message Progress message (optional)
+#' @param error_message Error message if failed (optional)
+#' @param error_detail Detailed error info (optional)
+#' @param quiet Suppress console messages (default: FALSE)
+#' @param conn Database connection (optional)
+#' @return TRUE on success
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' task_update(run_id, status = "RUNNING", overall_percent = 50)
+#' task_update(run_id, status = "COMPLETED", overall_percent = 100)
+#' }
+task_update <- function(run_id, status, current_subtask = NULL,
+                       overall_percent = NULL, message = NULL,
+                       error_message = NULL, error_detail = NULL,
+                       quiet = FALSE, conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  task_runs_table <- get_table_name("task_runs", conn)
+  db_driver <- config$database$driver
+  time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
+  
+  valid_statuses <- c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED")
+  if (!status %in% valid_statuses) {
+    stop("Invalid status: ", status, ". Must be one of: ", 
+         paste(valid_statuses, collapse = ", "))
+  }
+  
+  # Convert NULL to NA for glue_sql
+  current_subtask <- if (is.null(current_subtask)) NA else current_subtask
+  overall_percent <- if (is.null(overall_percent)) NA else overall_percent
+  message <- if (is.null(message)) NA else message
+  error_message <- if (is.null(error_message)) NA else error_message
+  error_detail <- if (is.null(error_detail)) NA else error_detail
+  
+  tryCatch({
+    # Build UPDATE clause parts
+    update_clauses <- c("status = {status}")
+    
+    if (!is.na(current_subtask)) {
+      update_clauses <- c(update_clauses, "current_subtask = {current_subtask}")
+    }
+    
+    if (!is.na(overall_percent)) {
+      update_clauses <- c(update_clauses, "overall_percent_complete = {overall_percent}")
+    }
+    
+    if (!is.na(message)) {
+      update_clauses <- c(update_clauses, "overall_progress_message = {message}")
+    }
+    
+    if (!is.na(error_message)) {
+      update_clauses <- c(update_clauses, "error_message = {error_message}")
+    }
+    
+    if (!is.na(error_detail)) {
+      update_clauses <- c(update_clauses, "error_detail = {error_detail}")
+    }
+    
+    if (status %in% c("COMPLETED", "FAILED", "CANCELLED")) {
+      update_clauses <- c(update_clauses, paste0("end_time = ", time_func))
+    }
+    
+    update_str <- paste(update_clauses, collapse = ", ")
+    sql_template <- paste0("UPDATE {task_runs_table} SET ", update_str, " WHERE run_id = {run_id}")
+    
+    DBI::dbExecute(
+      conn, 
+      glue::glue_sql(sql_template, .con = conn)
+    )
+    
+    if (!quiet) {
+      # Get task_order for display
+      task_order_info <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql("SELECT t.task_order FROM {task_runs_table} tr
+                 JOIN {`get_table_name('tasks', conn)`} t ON tr.task_id = t.task_id
+                 WHERE tr.run_id = {run_id}", .con = conn)
+      )
+      
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      task_num <- if (nrow(task_order_info) > 0 && !is.na(task_order_info$task_order[1])) {
+        paste0("Task ", task_order_info$task_order[1])
+      } else {
+        "Task"
+      }
+      log_message <- sprintf("[%s] %s %s | run_id: %s", 
+                            timestamp, task_num, status, run_id)
+      if (!is.na(message)) {
+        log_message <- paste0(log_message, " | ", message)
+      }
+      message(log_message)
+    }
+    
+    TRUE
+    
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}
+
+
+#' Complete a task execution
+#'
+#' @param run_id Run ID from task_start()
+#' @param message Final message (optional)
+#' @param quiet Suppress console messages (default: FALSE)
+#' @param conn Database connection (optional)
+#' @return TRUE on success
+#' @export
+task_complete <- function(run_id, message = NULL, quiet = FALSE, conn = NULL) {
+  task_update(run_id, status = "COMPLETED", overall_percent = 100,
+              message = message, quiet = quiet, conn = conn)
+}
+
+
+#' Mark a task execution as failed
+#'
+#' @param run_id Run ID from task_start()
+#' @param error_message Error message
+#' @param error_detail Detailed error info (optional)
+#' @param quiet Suppress console messages (default: FALSE)
+#' @param conn Database connection (optional)
+#' @return TRUE on success
+#' @export
+task_fail <- function(run_id, error_message, error_detail = NULL, quiet = FALSE, conn = NULL) {
+  task_update(run_id, status = "FAILED", 
+              error_message = error_message,
+              error_detail = error_detail,
+              quiet = quiet,
+              conn = conn)
+}
+
+
+#' End a task execution with specified status
+#'
+#' Generic function to end a task with any status. For convenience,
+#' use task_complete() or task_fail() instead.
+#'
+#' @param run_id Run ID from task_start()
+#' @param status Status: "COMPLETED", "FAILED", "CANCELLED", "SKIPPED"
+#' @param message Final message (optional)
+#' @param error_message Error message (for FAILED status)
+#' @param error_detail Detailed error info (optional)
+#' @param quiet Suppress console messages (default: FALSE)
+#' @param conn Database connection (optional)
+#' @return TRUE on success
+#' @export
+task_end <- function(run_id, status, message = NULL, 
+                     error_message = NULL, error_detail = NULL, quiet = FALSE, conn = NULL) {
+  if (status == "COMPLETED") {
+    task_complete(run_id, message = message, quiet = quiet, conn = conn)
+  } else if (status == "FAILED") {
+    if (is.null(error_message)) error_message <- "Task failed"
+    task_fail(run_id, error_message = error_message, 
+              error_detail = error_detail, quiet = quiet, conn = conn)
+  } else {
+    task_update(run_id, status = status, message = message,
+                error_message = error_message, error_detail = error_detail,
+                quiet = quiet, conn = conn)
+  }
+}

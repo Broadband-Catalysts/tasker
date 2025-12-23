@@ -1,30 +1,3 @@
-# Helper function to get table name with or without schema
-get_table_name <- function(table, conn) {
-  config <- getOption("tasker.config")
-  if (is.null(config) || is.null(config$database) || is.null(config$database$driver)) {
-    stop("tasker configuration not loaded. Call load_tasker_config() first.")
-  }
-  
-  db_driver <- config$database$driver
-  
-  if (db_driver == "sqlite") {
-    return(DBI::SQL(table))
-  } else {
-    schema <- config$database$schema
-    if (is.null(schema) || nchar(schema) == 0) {
-      return(DBI::SQL(table))
-    }
-    return(DBI::SQL(sprintf("%s.%s", schema, table)))
-  }
-}
-
-# Helper to prepare parameters for SQL queries (handle NULLs)
-prepare_params <- function(...) {
-  params <- list(...)
-  # Convert NULL to NA for RSQLite compatibility
-  lapply(params, function(x) if (is.null(x)) NA else x)
-}
-
 #' Register a task in the tasker system
 #'
 #' @param stage Stage name (e.g., "PREREQ", "STATIC", "DAILY")
@@ -77,7 +50,7 @@ register_task <- function(stage,
   }
   
   stages_table <- get_table_name("stages", conn)
-  tasks_table <- get_table_name("tasks", conn)
+  tasks_table  <- get_table_name("tasks", conn)
   
   tryCatch({
     # Handle NULL values in SQL - use SQL NULL literal for NULL/NA values
@@ -94,12 +67,12 @@ register_task <- function(stage,
     )$stage_id
     
     # Handle NULL values for task fields
-    script_path_sql <- if (is.null(script_path) || is.na(script_path)) DBI::SQL("NULL") else script_path
-    script_filename_sql <- if (is.null(script_filename) || is.na(script_filename)) DBI::SQL("NULL") else script_filename
-    log_path_sql <- if (is.null(log_path) || is.na(log_path)) DBI::SQL("NULL") else log_path
-    log_filename_sql <- if (is.null(log_filename) || is.na(log_filename)) DBI::SQL("NULL") else log_filename
-    task_order_sql <- if (is.null(task_order) || is.na(task_order)) DBI::SQL("NULL") else task_order
-    description_task_sql <- if (is.null(description) || is.na(description)) DBI::SQL("NULL") else description
+    script_path_sql      <- if (is.null(script_path)      || is.na(script_path))      DBI::SQL("NULL") else script_path
+    script_filename_sql  <- if (is.null(script_filename)  || is.na(script_filename))  DBI::SQL("NULL") else script_filename
+    log_path_sql         <- if (is.null(log_path)         || is.na(log_path))         DBI::SQL("NULL") else log_path
+    log_filename_sql     <- if (is.null(log_filename)     || is.na(log_filename))     DBI::SQL("NULL") else log_filename
+    task_order_sql       <- if (is.null(task_order)       || is.na(task_order))       DBI::SQL("NULL") else task_order
+    description_task_sql <- if (is.null(description)      || is.na(description))      DBI::SQL("NULL") else description
     
     task_id <- DBI::dbGetQuery(
       conn,
@@ -121,137 +94,6 @@ register_task <- function(stage,
     )$task_id
     
     invisible(task_id)
-    
-  }, finally = {
-    if (close_on_exit) {
-      DBI::dbDisconnect(conn)
-    }
-  })
-}
-
-
-#' Register multiple tasks at once
-#'
-#' @param tasks_df Data frame with columns: stage, name, type, and optional columns
-#' @param conn Database connection (optional)
-#' @return Vector of task_ids (invisibly)
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' tasks <- data.frame(
-#'   stage = c("PREREQ", "PREREQ"),
-#'   name = c("Install System Dependencies", "Install R"),
-#'   type = c("sh", "sh")
-#' )
-#' register_tasks(tasks)
-#' }
-register_tasks <- function(tasks_df, conn = NULL) {
-  ensure_configured()
-  
-  close_on_exit <- FALSE
-  if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
-  }
-  
-  required <- c("stage", "name", "type")
-  missing <- setdiff(required, names(tasks_df))
-  if (length(missing) > 0) {
-    stop("Missing required columns: ", paste(missing, collapse = ", "))
-  }
-  
-  task_ids <- vector("integer", nrow(tasks_df))
-  
-  tryCatch({
-    for (i in seq_len(nrow(tasks_df))) {
-      row <- tasks_df[i, ]
-      
-      task_ids[i] <- register_task(
-        stage = row$stage,
-        name = row$name,
-        type = row$type,
-        description = if ("description" %in% names(row)) row$description else NULL,
-        script_path = if ("script_path" %in% names(row)) row$script_path else NULL,
-        script_filename = if ("script_filename" %in% names(row)) row$script_filename else NULL,
-        log_path = if ("log_path" %in% names(row)) row$log_path else NULL,
-        log_filename = if ("log_filename" %in% names(row)) row$log_filename else NULL,
-        stage_order = if ("stage_order" %in% names(row)) row$stage_order else NULL,
-        task_order = if ("task_order" %in% names(row)) row$task_order else NULL,
-        conn = conn
-      )
-    }
-    
-    invisible(task_ids)
-    
-  }, finally = {
-    if (close_on_exit) {
-      DBI::dbDisconnect(conn)
-    }
-  })
-}
-
-
-#' Get registered tasks
-#'
-#' @param stage Filter by stage (optional)
-#' @param name Filter by task name (optional)
-#' @param conn Database connection (optional)
-#' @return Data frame with task information
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' get_tasks()
-#' get_tasks(stage = "PREREQ")
-#' }
-get_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
-  ensure_configured()
-  
-  close_on_exit <- FALSE
-  if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
-  }
-  
-  stages_table <- get_table_name("stages", conn)
-  tasks_table <- get_table_name("tasks", conn)
-  
-  # Build WHERE clause
-  where_parts <- c()
-  
-  if (!is.null(stage)) {
-    where_parts <- c(where_parts, glue::glue("s.stage_name = {DBI::dbQuoteLiteral(conn, stage)}"))
-  }
-  
-  if (!is.null(name)) {
-    where_parts <- c(where_parts, glue::glue("t.task_name = {DBI::dbQuoteLiteral(conn, name)}"))
-  }
-  
-  where_sql <- if (length(where_parts) > 0) {
-    DBI::SQL(paste("WHERE", paste(where_parts, collapse = " AND ")))
-  } else {
-    DBI::SQL("")
-  }
-  
-  sql <- glue::glue_sql(
-    "SELECT s.stage_id, s.stage_name, s.stage_order,
-            t.task_id, t.task_name, t.task_type, t.task_order,
-            t.description, t.script_path, t.script_filename,
-            t.log_path, t.log_filename,
-            t.created_at, t.updated_at
-     FROM {tasks_table} t
-     JOIN {stages_table} s ON t.stage_id = s.stage_id
-     {where_sql*}
-     ORDER BY s.stage_order NULLS LAST, s.stage_name, 
-              t.task_order NULLS LAST, t.task_name",
-    .con = conn
-  )
-  
-  tryCatch({
-    result <- DBI::dbGetQuery(conn, sql)
-    
-    result
     
   }, finally = {
     if (close_on_exit) {
