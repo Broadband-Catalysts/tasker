@@ -76,6 +76,7 @@ ui <- fluidPage(
         flex: 0 0 auto;
       }
       .stage-badge.status-NOT_STARTED { background: #6c757d; color: white; }
+      .stage-badge.status-STARTED { background: #ffc107; color: black; }
       .stage-badge.status-RUNNING { background: #0d6efd; color: white; }
       .stage-badge.status-COMPLETED { background: #198754; color: white; }
       .stage-badge.status-FAILED { background: #dc3545; color: white; }
@@ -98,6 +99,7 @@ ui <- fluidPage(
         color: white;
       }
       .stage-progress-fill.status-NOT_STARTED { background: #adb5bd; }
+      .stage-progress-fill.status-STARTED { background: #ffc107; }
       .stage-progress-fill.status-RUNNING { background: #0dcaf0; }
       .stage-progress-fill.status-COMPLETED { background: #20c997; }
       .stage-progress-fill.status-FAILED { background: #dc3545; }
@@ -138,6 +140,7 @@ ui <- fluidPage(
         flex: 0 0 auto;
       }
       .task-status-badge.status-NOT_STARTED { background: #6c757d; color: white; }
+      .task-status-badge.status-STARTED { background: #ffc107; color: black; }
       .task-status-badge.status-RUNNING { background: #0d6efd; color: white; }
       .task-status-badge.status-COMPLETED { background: #198754; color: white; }
       .task-status-badge.status-FAILED { background: #dc3545; color: white; }
@@ -158,6 +161,7 @@ ui <- fluidPage(
         text-align: center;
         line-height: 16px;
       }
+      .task-progress-fill.status-STARTED { background: #ffc107; }
       .task-progress-fill.status-RUNNING { background: #0dcaf0; }
       .task-progress-fill.status-COMPLETED { background: #20c997; }
       .task-message {
@@ -173,13 +177,44 @@ ui <- fluidPage(
   
   tags$script(HTML("
     $(document).on('click', '.stage-header', function() {
-      $(this).next('.stage-body').toggleClass('expanded');
+      var stageBody = $(this).next('.stage-body');
+      stageBody.toggleClass('expanded');
+      
+      // Get all currently expanded stage names
+      var expanded = [];
+      $('.stage-body.expanded').each(function() {
+        var stageName = $(this).prev('.stage-header').find('.stage-name').text();
+        expanded.push(stageName);
+      });
+      
+      // Send to Shiny
+      Shiny.setInputValue('expanded_stages', expanded, {priority: 'event'});
+    });
+  ")),
+  
+  tags$script(HTML("
+    // After UI updates, restore expanded state
+    $(document).on('shiny:value', function(event) {
+      if (event.name === 'pipeline_status_ui') {
+        setTimeout(function() {
+          if (typeof Shiny !== 'undefined' && Shiny.inputBindings) {
+            var expanded = Shiny.shinyapp.$inputValues.expanded_stages;
+            if (expanded) {
+              expanded.forEach(function(stageName) {
+                $('.stage-name').filter(function() {
+                  return $(this).text() === stageName;
+                }).parent('.stage-header').next('.stage-body').addClass('expanded');
+              });
+            }
+          }
+        }, 50);
+      }
     });
   ")),
   
   sidebarLayout(
     sidebarPanel(
-      width = 3,
+      width = 2,
       selectInput("stage_filter", "Filter by Stage:", 
                   choices = c("All" = ""), multiple = TRUE),
       selectInput("status_filter", "Filter by Status:",
@@ -196,7 +231,7 @@ ui <- fluidPage(
     ),
     
     mainPanel(
-      width = 9,
+      width = 10,
       tabsetPanel(
         id = "main_tabs",
         tabPanel("Pipeline Status",
@@ -215,7 +250,7 @@ ui <- fluidPage(
                  DTOutput("stage_summary_table")
         ),
         tabPanel("Timeline",
-                 plotOutput("timeline_plot", height = "600px")
+                 plotOutput("timeline_plot", height = "900px")
         )
       )
     )
@@ -227,8 +262,14 @@ server <- function(input, output, session) {
   # Reactive values
   rv <- reactiveValues(
     selected_task_id = NULL,
-    last_update = NULL
+    last_update = NULL,
+    expanded_stages = c()  # Track which stage accordions are expanded
   )
+  
+  # Track expanded stages from client-side JavaScript
+  observeEvent(input$expanded_stages, {
+    rv$expanded_stages <- input$expanded_stages
+  }, ignoreNULL = FALSE)
   
   # Auto-refresh timer
   autoRefresh <- reactive({
@@ -270,7 +311,13 @@ server <- function(input, output, session) {
   # Update stage filter choices dynamically from stages table
   observe({
     stages_data <- tryCatch({
-      tasker::get_stages()
+      stages_data_raw <- tasker::get_stages()
+      # Exclude TEST stage
+      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
+        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
+      } else {
+        stages_data_raw
+      }
     }, error = function(e) NULL)
     
     if (!is.null(stages_data) && nrow(stages_data) > 0) {
@@ -293,7 +340,13 @@ server <- function(input, output, session) {
     
     # Get all stages and tasks
     stages_data <- tryCatch({
-      tasker::get_stages()
+      stages_data_raw <- tasker::get_stages()
+      # Exclude TEST stage
+      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
+        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
+      } else {
+        stages_data_raw
+      }
     }, error = function(e) NULL)
     
     if (is.null(stages_data) || nrow(stages_data) == 0) {
@@ -368,14 +421,23 @@ server <- function(input, output, session) {
       } else {
         completed_tasks <- sum(stage_tasks$status == "COMPLETED", na.rm = TRUE)
         running_tasks <- sum(stage_tasks$status == "RUNNING", na.rm = TRUE)
+        started_tasks <- sum(stage_tasks$status == "STARTED", na.rm = TRUE)
         failed_tasks <- sum(stage_tasks$status == "FAILED", na.rm = TRUE)
         
         progress_pct <- round(100 * completed_tasks / total_tasks)
         
+        # Stage status priority (highest to lowest):
+        # 1. FAILED - if any task has failed
+        # 2. RUNNING - if any task is currently running
+        # 3. STARTED - if any task has started but not running
+        # 4. COMPLETED - if all tasks are completed
+        # 5. NOT_STARTED - if no tasks have started
         if (failed_tasks > 0) {
           stage_status <- "FAILED"
         } else if (running_tasks > 0) {
           stage_status <- "RUNNING"
+        } else if (started_tasks > 0) {
+          stage_status <- "STARTED"
         } else if (completed_tasks == total_tasks) {
           stage_status <- "COMPLETED"
         } else {
@@ -436,7 +498,7 @@ server <- function(input, output, session) {
               div(class = "stage-count",
                   sprintf("%d/%d", completed_tasks, total_tasks))
           ),
-          div(class = "stage-body expanded",
+          div(class = paste("stage-body", if(stage_name %in% rv$expanded_stages) "expanded" else ""),
               task_rows
           )
       )
@@ -541,7 +603,18 @@ server <- function(input, output, session) {
       return(NULL)
     }
     
-    data <- task_data()
+    # Get fresh data from database, not filtered data
+    data <- tryCatch({
+      tasker::get_task_status()
+    }, error = function(e) {
+      showNotification(paste("Error fetching task details:", e$message), type = "error")
+      return(NULL)
+    })
+    
+    if (is.null(data) || nrow(data) == 0) {
+      return(div(class = "alert alert-warning", "No task data available"))
+    }
+    
     task <- data[data$run_id == rv$selected_task_id, ]
     
     if (nrow(task) == 0) {
@@ -620,9 +693,15 @@ server <- function(input, output, session) {
   
   # Stage summary table
   output$stage_summary_table <- renderDT({
-    # Get all stages from database
+    # Get all stages from database (exclude TEST)
     stages_data <- tryCatch({
-      tasker::get_stages()
+      stages_data_raw <- tasker::get_stages()
+      # Exclude TEST stage
+      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
+        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
+      } else {
+        stages_data_raw
+      }
     }, error = function(e) NULL)
     
     if (is.null(stages_data) || nrow(stages_data) == 0) {
@@ -678,9 +757,15 @@ server <- function(input, output, session) {
   
   # Stage progress plot
   output$stage_progress_plot <- renderPlot({
-    # Get all stages from database
+    # Get all stages from database (exclude TEST)
     stages_data <- tryCatch({
-      tasker::get_stages()
+      stages_data_raw <- tasker::get_stages()
+      # Exclude TEST stage
+      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
+        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
+      } else {
+        stages_data_raw
+      }
     }, error = function(e) NULL)
     
     if (is.null(stages_data) || nrow(stages_data) == 0) {
@@ -770,7 +855,13 @@ server <- function(input, output, session) {
            y = "Task",
            color = "Status") +
       theme_minimal() +
-      theme(axis.text.y = element_text(size = 8))
+      theme(
+        axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 11),
+        axis.title = element_text(size = 13, face = "bold"),
+        strip.text = element_text(size = 12, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold")
+      )
   })
   
   # Last update time
