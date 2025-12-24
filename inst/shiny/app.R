@@ -300,10 +300,41 @@ server <- function(input, output, session) {
       return(div(class = "alert alert-info", "No stages configured"))
     }
     
-    # Get all task status
-    all_tasks <- tryCatch({
+    # Get all registered tasks (shows everything that's been registered)
+    registered_tasks <- tryCatch({
+      tasker::get_registered_tasks()
+    }, error = function(e) NULL)
+    
+    if (is.null(registered_tasks) || nrow(registered_tasks) == 0) {
+      return(div(class = "alert alert-info", "No tasks registered"))
+    }
+    
+    # Get task execution status (only for tasks that have been run)
+    task_status <- tryCatch({
       tasker::get_task_status()
     }, error = function(e) NULL)
+    
+    # Merge registered tasks with their status
+    # Left join to keep all registered tasks even if they haven't run
+    if (!is.null(task_status) && nrow(task_status) > 0) {
+      all_tasks <- merge(
+        registered_tasks,
+        task_status,
+        by.x = c("stage_name", "task_name"),
+        by.y = c("stage_name", "task_name"),
+        all.x = TRUE
+      )
+      # Fill in missing status fields
+      all_tasks$status <- ifelse(is.na(all_tasks$status), "NOT_STARTED", all_tasks$status)
+      all_tasks$overall_percent_complete <- ifelse(is.na(all_tasks$overall_percent_complete), 0, all_tasks$overall_percent_complete)
+      all_tasks$overall_progress_message <- ifelse(is.na(all_tasks$overall_progress_message), "", all_tasks$overall_progress_message)
+    } else {
+      # No tasks have been run yet
+      all_tasks <- registered_tasks
+      all_tasks$status <- "NOT_STARTED"
+      all_tasks$overall_percent_complete <- 0
+      all_tasks$overall_progress_message <- ""
+    }
     
     # Create stage panels
     stage_panels <- lapply(seq_len(nrow(stages_data)), function(i) {

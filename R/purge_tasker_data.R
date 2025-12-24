@@ -112,7 +112,7 @@ purge_tasker_data <- function(conn = NULL, confirmation_string="DELETE ALL DATA"
       for (table in tables) {
         count_before <- DBI::dbGetQuery(
           conn,
-          sprintf("SELECT COUNT(*) as n FROM %s", table)
+          sprintf("SELECT COUNT(*)::INTEGER as n FROM %s", table)
         )$n
 
         DBI::dbExecute(conn, sprintf("DELETE FROM %s", table))
