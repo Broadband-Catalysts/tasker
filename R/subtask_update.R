@@ -1,16 +1,96 @@
+#' Atomically increment subtask item counter
+#'
+#' This function atomically increments the items_complete counter for a subtask.
+#' Unlike subtask_update() which sets the value, this function increments it,
+#' making it safe for use by parallel workers.
+#'
+#' @param run_id Run ID from task_start()
+#' @param subtask_number Subtask number
+#' @param increment Number of items to add to counter (default: 1)
+#' @param quiet Suppress console messages (default: TRUE for parallel workers)
+#' @param conn Database connection (optional)
+#' @return TRUE on success
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # In parallel worker function:
+#' process_item <- function(item) {
+#'   # ... do work ...
+#'   subtask_increment(run_id, subtask_num, increment = 1)
+#' }
+#' }
+subtask_increment <- function(run_id, subtask_number, increment = 1,
+                             quiet = TRUE, conn = NULL) {
+  ensure_configured()
+  
+  close_on_exit <- FALSE
+  if (is.null(conn)) {
+    conn <- get_db_connection()
+    close_on_exit <- TRUE
+  }
+  
+  config <- getOption("tasker.config")
+  subtask_progress_table <- get_table_name("subtask_progress", conn)
+  db_driver <- config$database$driver
+  time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
+  
+  tryCatch({
+    # Atomic increment using database-level operation
+    # COALESCE handles NULL case (first increment)
+    DBI::dbExecute(
+      conn,
+      glue::glue_sql(
+        "UPDATE {subtask_progress_table} 
+         SET items_complete = COALESCE(items_complete, 0) + {increment},
+             last_update = {time_func*}
+         WHERE run_id = {run_id} AND subtask_number = {subtask_number}",
+        .con = conn
+      )
+    )
+    
+    if (!quiet) {
+      # Get current count for display
+      current <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql(
+          "SELECT items_complete FROM {subtask_progress_table}
+           WHERE run_id = {run_id} AND subtask_number = {subtask_number}",
+          .con = conn
+        )
+      )$items_complete[1]
+      
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      message(sprintf("[%s] Subtask %d: incremented by %d (now %d)", 
+                     timestamp, subtask_number, increment, current))
+    }
+    
+    TRUE
+    
+  }, finally = {
+    if (close_on_exit) {
+      DBI::dbDisconnect(conn)
+    }
+  })
+}
+
+
 #' Update subtask progress
 #'
 #' @param run_id Run ID from task_start()
 #' @param subtask_number Subtask number
 #' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED
 #' @param percent Percent complete 0-100 (optional)
-#' @param items_complete Items completed (optional)
+#' @param items_complete Items completed - sets absolute value (optional)
 #' @param message Progress message (optional)
 #' @param error_message Error message if failed (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
 #' @export
+#'
+#' @note For parallel workers incrementing counters, use subtask_increment() instead
+#'   to avoid race conditions.
 #'
 #' @examples
 #' \dontrun{

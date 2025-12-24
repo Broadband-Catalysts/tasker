@@ -31,10 +31,15 @@ get_subtask_progress <- function(run_id, conn = NULL) {
   tryCatch({
     DBI::dbGetQuery(
       conn,
-      sprintf("SELECT * FROM %s 
-               WHERE run_id = ? 
-               ORDER BY subtask_number", table_ref),
-      params = list(run_id)
+      glue::glue_sql("SELECT progress_id, run_id, subtask_number, subtask_name,
+                             status, start_time, end_time, last_update,
+                             percent_complete, progress_message,
+                             items_total::INTEGER as items_total,
+                             items_complete::INTEGER as items_complete,
+                             error_message
+                      FROM {DBI::SQL(table_ref)} 
+                      WHERE run_id = {run_id} 
+                      ORDER BY subtask_number", .con = conn)
     )
   }, finally = {
     if (close_on_exit) {

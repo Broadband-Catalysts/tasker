@@ -25,7 +25,7 @@ subtask_update(
 
 \item{percent}{Percent complete 0-100 (optional)}
 
-\item{items_complete}{Items completed (optional)}
+\item{items_complete}{Items completed - sets absolute value (optional)}
 
 \item{message}{Progress message (optional)}
 
@@ -40,6 +40,10 @@ TRUE on success
 }
 \description{
 Update subtask progress
+}
+\note{
+For parallel workers incrementing counters, use subtask_increment() instead
+to avoid race conditions.
 }
 \examples{
 \dontrun{
