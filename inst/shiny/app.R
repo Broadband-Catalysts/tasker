@@ -336,6 +336,17 @@ server <- function(input, output, session) {
       all_tasks$overall_progress_message <- ""
     }
     
+    # Add stage_order from stages_data for proper ordering
+    all_tasks <- merge(
+      all_tasks,
+      stages_data[, c("stage_name", "stage_order")],
+      by = "stage_name",
+      all.x = TRUE
+    )
+    
+    # Ensure stages_data is ordered by stage_order
+    stages_data <- stages_data[order(stages_data$stage_order), ]
+    
     # Create stage panels
     stage_panels <- lapply(seq_len(nrow(stages_data)), function(i) {
       stage <- stages_data[i, ]
@@ -434,12 +445,67 @@ server <- function(input, output, session) {
     tagList(stage_panels)
   })
   
-  # Main task table
+  # Main task table - initial render
   output$task_table <- renderDT({
+    # Only render the initial table structure
+    empty_df <- data.frame(
+      Stage = character(0),
+      Task = character(0),
+      Status = character(0),
+      Progress = character(0),
+      `Overall Progress` = character(0),
+      Started = character(0),
+      Duration = character(0),
+      Host = character(0),
+      Details = character(0),
+      stage_order_hidden = numeric(0),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+    
+    datatable(empty_df,
+              escape = FALSE,
+              selection = 'none',
+              options = list(
+                pageLength = 25,
+                order = list(list(9, 'asc'), list(5, 'desc')),  # Order by hidden stage_order column (index 9), then start time
+                columnDefs = list(
+                  list(targets = 9, visible = FALSE)  # Hide the stage_order_hidden column
+                ),
+                rowCallback = JS(
+                  "function(row, data) {",
+                  "  var status = data[2];",
+                  "  $(row).addClass('status-' + status);",
+                  "}"
+                )
+              )) %>%
+      formatStyle('Status', fontWeight = 'bold')
+  })
+  
+  # Update task table data using proxy to avoid flickering
+  observe({
     data <- task_data()
     
-    if (is.null(data) || nrow(data) == 0) {
-      empty_df <- data.frame(
+    # Prepare display columns
+    if (!is.null(data) && nrow(data) > 0) {
+      display_data <- data.frame(
+        Stage    = paste(data$stage_order, ": ", data$stage_name, sep = ""),
+        Task     = data$task_name,
+        Status   = data$status,
+        Progress = ifelse(is.na(data$current_subtask), "--", 
+                         sprintf("%d/%d", data$current_subtask, data$total_subtasks)),
+        "Overall Progress" = sprintf("%.1f%%", data$overall_percent_complete),
+        Started  = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
+        Duration = format_duration(data$start_time, data$last_update),
+        Host     = data$hostname,
+        Details  = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
+                         data$run_id),
+        stage_order_hidden = data$stage_order,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+    } else {
+      display_data <- data.frame(
         Stage = character(0),
         Task = character(0),
         Status = character(0),
@@ -449,45 +515,15 @@ server <- function(input, output, session) {
         Duration = character(0),
         Host = character(0),
         Details = character(0),
+        stage_order_hidden = numeric(0),
         stringsAsFactors = FALSE,
         check.names = FALSE
       )
-      return(datatable(empty_df, options = list(
-        language = list(emptyTable = "No tasks found")
-      )))
     }
     
-    # Prepare display columns
-    display_data <- data.frame(
-      Stage    = paste(data$stage_order, ": ", data$stage_name, sep = ""),
-      Task     = data$task_name,
-      Status   = data$status,
-      Progress = ifelse(is.na(data$current_subtask), "--", 
-                       sprintf("%d/%d", data$current_subtask, data$total_subtasks)),
-      "Overall Progress" = sprintf("%.1f%%", data$overall_percent_complete),
-      Started  = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
-      Duration = format_duration(data$start_time, data$last_update),
-      Host     = data$hostname,
-      Details  = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
-                       data$run_id),
-      stringsAsFactors = FALSE,
-      check.names = FALSE
-    )
-    
-    datatable(display_data,
-              escape = FALSE,
-              selection = 'none',
-              options = list(
-                pageLength = 25,
-                order = list(list(0, 'asc'), list(5, 'desc')),
-                rowCallback = JS(
-                  "function(row, data) {",
-                  "  var status = data[2];",
-                  "  $(row).addClass('status-' + status);",
-                  "}"
-                )
-              )) %>%
-      formatStyle('Status', fontWeight = 'bold')
+    # Use proxy to update data without recreating the table
+    proxy <- dataTableProxy('task_table')
+    replaceData(proxy, display_data, resetPaging = FALSE, rownames = FALSE)
   })
   
   # Handle detail button clicks
@@ -584,37 +620,112 @@ server <- function(input, output, session) {
   
   # Stage summary table
   output$stage_summary_table <- renderDT({
-    data <- task_data()
+    # Get all stages from database
+    stages_data <- tryCatch({
+      tasker::get_stages()
+    }, error = function(e) NULL)
     
-    if (is.null(data) || nrow(data) == 0) {
-      return(datatable(data.frame(Message = "No data")))
+    if (is.null(stages_data) || nrow(stages_data) == 0) {
+      return(datatable(data.frame(Message = "No stages configured")))
     }
     
-    summary <- aggregate(cbind(Total = run_id) ~ stage_name + status, 
-                        data = data, 
-                        FUN = length)
+    # Get task data
+    data <- task_data()
+    
+    # If no task data, show all stages with zero counts
+    if (is.null(data) || nrow(data) == 0) {
+      summary_table <- stages_data[, c("stage_name", "stage_order")]
+      summary_table$Total <- 0
+      return(datatable(summary_table, options = list(
+        pageLength = 10,
+        order = list(list(1, 'asc'))  # Order by stage_order column
+      )))
+    }
+    
+    # Include stage_order in the aggregation
+    summary <- aggregate(
+      cbind(Total = run_id) ~ stage_name + stage_order + status, 
+      data = data, 
+      FUN = length)
     
     wide_summary <- reshape(summary, 
-                           idvar = "stage_name", 
+                           idvar = c("stage_name", "stage_order"), 
                            timevar = "status", 
                            direction = "wide")
     
-    datatable(wide_summary, options = list(pageLength = 10))
+    # Merge with all stages to include stages with no tasks
+    all_stages_summary <- merge(
+      stages_data[, c("stage_name", "stage_order")],
+      wide_summary,
+      by = c("stage_name", "stage_order"),
+      all.x = TRUE
+    )
+    
+    # Fill NA values with 0
+    status_cols <- grep("^Total\\.", names(all_stages_summary), value = TRUE)
+    for (col in status_cols) {
+      all_stages_summary[[col]] <- ifelse(is.na(all_stages_summary[[col]]), 0, all_stages_summary[[col]])
+    }
+    
+    # Order by stage_order
+    all_stages_summary <- all_stages_summary[order(all_stages_summary$stage_order), ]
+    
+    datatable(all_stages_summary, options = list(
+      pageLength = 10,
+      order = list(list(1, 'asc'))  # Order by stage_order column
+    ))
   })
   
   # Stage progress plot
   output$stage_progress_plot <- renderPlot({
-    data <- task_data()
+    # Get all stages from database
+    stages_data <- tryCatch({
+      tasker::get_stages()
+    }, error = function(e) NULL)
     
-    if (is.null(data) || nrow(data) == 0) {
+    if (is.null(stages_data) || nrow(stages_data) == 0) {
       return(NULL)
     }
     
+    # Get task data
+    data <- task_data()
+    
     library(ggplot2)
     
-    stage_progress <- aggregate(overall_percent_complete ~ stage_name, 
-                                data = data,
-                                FUN = mean)
+    # If no task data, show all stages with 0% progress
+    if (is.null(data) || nrow(data) == 0) {
+      stage_progress <- stages_data[, c("stage_name", "stage_order")]
+      stage_progress$overall_percent_complete <- 0
+    } else {
+      # Calculate progress for stages with data
+      stage_progress <- aggregate(
+        cbind(overall_percent_complete, stage_order) ~ stage_name, 
+        data = data,
+        FUN = function(x) if(length(x) > 0) mean(x, na.rm = TRUE) else NA
+      )
+      
+      # Merge with all stages to include stages with no tasks
+      stage_progress <- merge(
+        stages_data[, c("stage_name", "stage_order")],
+        stage_progress,
+        by = c("stage_name", "stage_order"),
+        all.x = TRUE
+      )
+      
+      # Fill NA with 0
+      stage_progress$overall_percent_complete <- ifelse(
+        is.na(stage_progress$overall_percent_complete), 
+        0, 
+        stage_progress$overall_percent_complete
+      )
+    }
+    
+    # Order by stage_order
+    stage_progress <- stage_progress[order(stage_progress$stage_order), ]
+    
+    # Convert stage_name to factor with levels in stage_order
+    stage_progress$stage_name <- factor(stage_progress$stage_name, 
+                                        levels = stage_progress$stage_name)
     
     ggplot(stage_progress, aes(x = stage_name, y = overall_percent_complete)) +
       geom_bar(stat = "identity", fill = "steelblue") +
@@ -643,6 +754,10 @@ server <- function(input, output, session) {
                            as.numeric(Sys.time()), 
                            as.numeric(data$end_time))
     data$start_display <- as.numeric(data$start_time)
+    
+    # Order by stage_order and convert stage_name to factor for proper facet ordering
+    data <- data[order(data$stage_order), ]
+    data$stage_name <- factor(data$stage_name, levels = unique(data$stage_name))
     
     ggplot(data, aes(y = task_name, color = status)) +
       geom_segment(aes(x = as.POSIXct(start_display, origin = "1970-01-01"),
