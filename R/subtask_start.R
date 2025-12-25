@@ -61,6 +61,15 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
                RETURNING progress_id", .con = conn)
     )$progress_id
     
+    # Automatically transition parent task to RUNNING status when subtask starts
+    # This ensures that tasks with active subtasks are properly marked as RUNNING
+    DBI::dbExecute(
+      conn,
+      glue::glue_sql("UPDATE {task_runs_table} 
+               SET status = 'RUNNING' 
+               WHERE run_id = {run_id} AND status = 'STARTED'", .con = conn)
+    )
+    
     if (!quiet) {
       timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
       subtask_label <- if (nrow(task_order_info) > 0 && !is.na(task_order_info$task_order[1])) {

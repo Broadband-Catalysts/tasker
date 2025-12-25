@@ -407,7 +407,12 @@ server <- function(input, output, session) {
       
       # Get tasks for this stage
       stage_tasks <- if (!is.null(all_tasks)) {
-        all_tasks[all_tasks$stage_name == stage_name, ]
+        tasks <- all_tasks[all_tasks$stage_name == stage_name, ]
+        # Sort by task_order for consistent display
+        if (nrow(tasks) > 0 && "task_order" %in% names(tasks)) {
+          tasks <- tasks[order(tasks$task_order), ]
+        }
+        tasks
       } else {
         data.frame()
       }
@@ -456,7 +461,7 @@ server <- function(input, output, session) {
               div(class = "task-name", task$task_name),
               tags$span(class = paste("task-status-badge", paste0("status-", task_status)),
                        task_status),
-              if (task_status == "RUNNING" && !is.na(task_progress) && task_progress > 0) {
+              if ((task_status == "RUNNING" || task_status == "STARTED") && !is.na(task_progress) && task_progress > 0) {
                 div(class = "task-progress",
                     div(class = paste("task-progress-fill", paste0("status-", task_status)),
                         style = sprintf("width: %.1f%%", task_progress),
