@@ -626,6 +626,13 @@ server <- function(input, output, session) {
       return(NULL)
     }
     
+    # Get subtask progress details
+    subtasks <- tryCatch({
+      tasker::get_subtask_progress(rv$selected_task_id)
+    }, error = function(e) {
+      NULL
+    })
+    
     div(class = "detail-box",
         h3("Task Details"),
         actionButton("close_detail", "Close", class = "btn-sm btn-secondary pull-right"),
@@ -668,6 +675,72 @@ server <- function(input, output, session) {
                  )
           )
         ),
+        if (!is.null(subtasks) && nrow(subtasks) > 0) {
+          fluidRow(
+            column(12,
+                   h4("Subtask Details"),
+                   tags$table(class = "table table-sm table-striped",
+                             tags$thead(
+                               tags$tr(
+                                 tags$th("#"),
+                                 tags$th("Subtask Name"),
+                                 tags$th("Status"),
+                                 tags$th("Progress"),
+                                 tags$th("Items"),
+                                 tags$th("Message"),
+                                 tags$th("Started"),
+                                 tags$th("Duration")
+                               )
+                             ),
+                             tags$tbody(
+                               lapply(seq_len(nrow(subtasks)), function(i) {
+                                 st <- subtasks[i, ]
+                                 progress_pct <- if (!is.na(st$percent_complete)) {
+                                   sprintf("%.1f%%", st$percent_complete)
+                                 } else if (!is.na(st$items_total) && st$items_total > 0 && !is.na(st$items_complete)) {
+                                   sprintf("%.1f%%", 100 * st$items_complete / st$items_total)
+                                 } else {
+                                   "--"
+                                 }
+                                 
+                                 items_str <- if (!is.na(st$items_total) && st$items_total > 0) {
+                                   complete <- if (!is.na(st$items_complete)) st$items_complete else 0
+                                   sprintf("%d / %d", complete, st$items_total)
+                                 } else {
+                                   "--"
+                                 }
+                                 
+                                 duration <- if (!is.na(st$start_time)) {
+                                   end_time <- if (!is.na(st$end_time)) st$end_time else st$last_update
+                                   if (!is.na(end_time)) {
+                                     format_duration(st$start_time, end_time)
+                                   } else {
+                                     "--"
+                                   }
+                                 } else {
+                                   "--"
+                                 }
+                                 
+                                 status_class <- paste0("status-", st$status)
+                                 
+                                 tags$tr(
+                                   tags$td(st$subtask_number),
+                                   tags$td(st$subtask_name),
+                                   tags$td(tags$span(class = paste("task-status-badge", status_class), st$status)),
+                                   tags$td(progress_pct),
+                                   tags$td(items_str),
+                                   tags$td(style = "max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+                                          title = if (!is.na(st$progress_message)) st$progress_message else "",
+                                          if (!is.na(st$progress_message)) st$progress_message else "--"),
+                                   tags$td(if (!is.na(st$start_time)) format(st$start_time, "%H:%M:%S") else "--"),
+                                   tags$td(duration)
+                                 )
+                               })
+                             )
+                   )
+            )
+          )
+        },
         fluidRow(
           column(12,
                  h4("Files"),
