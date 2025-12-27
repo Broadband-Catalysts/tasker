@@ -555,12 +555,57 @@ server <- function(input, output, session) {
     
     # Prepare display columns
     if (!is.null(data) && nrow(data) > 0) {
+      # Get subtask info for running tasks
+      subtask_info <- lapply(data$run_id, function(rid) {
+        if (data[data$run_id == rid, "status"] %in% c("RUNNING", "STARTED")) {
+          st <- tryCatch({
+            subs <- tasker::get_subtask_progress(rid)
+            if (!is.null(subs) && nrow(subs) > 0) {
+              # Find currently running subtask or last updated one
+              running <- subs[subs$status == "RUNNING", ]
+              if (nrow(running) > 0) {
+                running[1, ]
+              } else {
+                subs[order(subs$last_update, decreasing = TRUE), ][1, ]
+              }
+            } else {
+              NULL
+            }
+          }, error = function(e) NULL)
+          st
+        } else {
+          NULL
+        }
+      })
+      
+      # Build progress column with subtask info
+      progress_col <- sapply(seq_len(nrow(data)), function(i) {
+        st <- subtask_info[[i]]
+        base_prog <- if (is.na(data$current_subtask[i])) {
+          "--"
+        } else {
+          sprintf("%d/%d", data$current_subtask[i], data$total_subtasks[i])
+        }
+        
+        if (!is.null(st) && !is.na(st$subtask_name)) {
+          # Add subtask name and items if available
+          if (!is.na(st$items_total) && st$items_total > 0) {
+            items_complete <- if (!is.na(st$items_complete)) st$items_complete else 0
+            sprintf("%s<br/><small>%s (%d/%d)</small>", 
+                   base_prog, st$subtask_name, items_complete, st$items_total)
+          } else {
+            sprintf("%s<br/><small>%s</small>", base_prog, st$subtask_name)
+          }
+        } else {
+          base_prog
+        }
+      })
+      
       display_data <- data.frame(
         Stage    = paste(data$stage_order, ": ", data$stage_name, sep = ""),
         Task     = data$task_name,
         Status   = data$status,
-        Progress = ifelse(is.na(data$current_subtask), "--", 
-                         sprintf("%d/%d", data$current_subtask, data$total_subtasks)),
+        Progress = progress_col,
         "Overall Progress" = sprintf("%.1f%%", data$overall_percent_complete),
         Started  = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
         Duration = format_duration(data$start_time, data$last_update),
