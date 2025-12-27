@@ -535,7 +535,7 @@ server <- function(input, output, session) {
               selection = 'none',
               options = list(
                 pageLength = 25,
-                order = list(list(9, 'asc'), list(5, 'desc')),  # Order by hidden stage_order column (index 9), then start time
+                order = list(list(9, 'asc')),  # Order by hidden stage_order column (index 9) - task_order already included in SQL ORDER BY
                 columnDefs = list(
                   list(targets = 9, visible = FALSE)  # Hide the stage_order_hidden column
                 ),
