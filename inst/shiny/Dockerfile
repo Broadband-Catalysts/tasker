@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     r-cran-rsqlite \
     r-cran-rmariadb \
     r-cran-dplyr \
+    r-cran-dbplyr \
     r-cran-ggplot2 \
     r-cran-glue \
     r-cran-stringr \

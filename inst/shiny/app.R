@@ -209,6 +209,59 @@ ui <- fluidPage(
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      /* Item progress indicators */
+      .item-progress {
+        display: inline-block;
+        padding: 2px 8px;
+        background: #e3f2fd;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 11px;
+        color: #1976d2;
+        font-weight: 600;
+      }
+      .item-progress-pct {
+        color: #0d47a1;
+        margin-left: 4px;
+      }
+      /* Log viewer styles */
+      .log-viewer-container {
+        padding: 15px;
+      }
+      .log-header {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+      }
+      .log-output {
+        font-family: 'Courier New', monospace;
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        max-height: 600px;
+        min-height: 400px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        border-radius: 4px;
+        border: 1px solid #333;
+      }
+      .log-line {
+        margin: 2px 0;
+      }
+      .log-line-error {
+        color: #f48771;
+      }
+      .log-line-warning {
+        color: #dcdcaa;
+      }
+      .log-line-info {
+        color: #4ec9b0;
+      }
     "))
   ),
   
@@ -269,6 +322,15 @@ ui <- fluidPage(
     
     mainPanel(
       width = 10,
+      # Error message banner
+      conditionalPanel(
+        condition = "output.has_error",
+        div(class = "alert alert-danger", style = "margin: 10px;",
+            tags$strong("Error: "),
+            tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
+                    textOutput("error_display", inline = FALSE))
+        )
+      ),
       tabsetPanel(
         id = "main_tabs",
         tabPanel("Pipeline Status",
@@ -288,6 +350,11 @@ ui <- fluidPage(
         ),
         tabPanel("Timeline",
                  plotOutput("timeline_plot", height = "900px")
+        ),
+        tabPanel("Log Viewer",
+                 div(class = "log-viewer-container",
+                     uiOutput("log_viewer_ui")
+                 )
         )
       )
     )
@@ -300,7 +367,8 @@ server <- function(input, output, session) {
   rv <- reactiveValues(
     selected_task_id = NULL,
     last_update = NULL,
-    expanded_stages = c()  # Track which stage accordions are expanded
+    expanded_stages = c(),  # Track which stage accordions are expanded
+    error_message = NULL  # Track error messages for display
   )
   
   # Track expanded stages from client-side JavaScript
@@ -323,6 +391,7 @@ server <- function(input, output, session) {
     tryCatch({
       data <- tasker::get_task_status()
       rv$last_update <- Sys.time()
+      rv$error_message <- NULL  # Clear any previous errors
       
       # Apply filters
       if (!is.null(data) && nrow(data) > 0) {
@@ -347,7 +416,14 @@ server <- function(input, output, session) {
       
       data
     }, error = function(e) {
-      showNotification(paste("Error fetching data:", e$message), type = "error")
+      error_details <- paste0(
+        "Error fetching task data: ", e$message, "\n",
+        "\nFunction: get_task_status()",
+        "\nTime: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+        if (!is.null(e$call)) paste0("\nCall: ", deparse(e$call)[1]) else ""
+      )
+      rv$error_message <- error_details
+      showNotification(error_details, type = "error", duration = 10)
       NULL
     })
   })
@@ -362,7 +438,16 @@ server <- function(input, output, session) {
       } else {
         stages_data_raw
       }
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      error_details <- paste0(
+        "Error fetching stages: ", e$message, "\n",
+        "Function: get_stages()",
+        "\nTime: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      )
+      rv$error_message <- error_details
+      showNotification(error_details, type = "error", duration = 10)
+      NULL
+    })
     
     if (!is.null(stages_data) && nrow(stages_data) > 0) {
       stage_values <- stages_data$stage_name
@@ -385,13 +470,22 @@ server <- function(input, output, session) {
     # Get all stages and tasks
     stages_data <- tryCatch({
       stages_data_raw <- tasker::get_stages()
+      rv$error_message <- NULL  # Clear errors on success
       # Exclude TEST stage
       if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
         stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
       } else {
         stages_data_raw
       }
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      error_details <- paste0(
+        "Error loading pipeline stages: ", e$message, "\n",
+        "Function: get_stages()",
+        "\nCheck database connectivity and tasker configuration."
+      )
+      rv$error_message <- error_details
+      NULL
+    })
     
     if (is.null(stages_data) || nrow(stages_data) == 0) {
       return(div(class = "alert alert-info", "No stages configured"))
@@ -400,7 +494,14 @@ server <- function(input, output, session) {
     # Get all registered tasks (shows everything that's been registered)
     registered_tasks <- tryCatch({
       tasker::get_registered_tasks()
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      error_details <- paste0(
+        "Error loading registered tasks: ", e$message, "\n",
+        "Function: get_registered_tasks()"
+      )
+      rv$error_message <- error_details
+      NULL
+    })
     
     if (is.null(registered_tasks) || nrow(registered_tasks) == 0) {
       return(div(class = "alert alert-info", "No tasks registered"))
@@ -409,7 +510,14 @@ server <- function(input, output, session) {
     # Get task execution status (only for tasks that have been run)
     task_status <- tryCatch({
       tasker::get_task_status()
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      error_details <- paste0(
+        "Error loading task status: ", e$message, "\n",
+        "Function: get_task_status()"
+      )
+      rv$error_message <- error_details
+      NULL
+    })
     
     # Merge registered tasks with their status
     # Left join to keep all registered tasks even if they haven't run
@@ -526,10 +634,13 @@ server <- function(input, output, session) {
             st <- tryCatch({
               subs <- tasker::get_subtask_progress(task$run_id)
               if (!is.null(subs) && nrow(subs) > 0) {
+                # Prioritize: RUNNING subtasks, then most recent by subtask_number
                 running <- subs[subs$status == "RUNNING", ]
                 if (nrow(running) > 0) {
-                  running[1, ]
+                  # If multiple RUNNING, take the highest subtask_number (most recent)
+                  running[order(running$subtask_number, decreasing = TRUE), ][1, ]
                 } else {
+                  # No RUNNING subtasks, take the most recently updated one
                   subs[order(subs$last_update, decreasing = TRUE), ][1, ]
                 }
               } else {
@@ -540,7 +651,8 @@ server <- function(input, output, session) {
             if (!is.null(st) && !is.na(st$subtask_name)) {
               if (!is.na(st$items_total) && st$items_total > 0) {
                 items_complete <- if (!is.na(st$items_complete)) st$items_complete else 0
-                subtask_text <- sprintf("%s (%d/%d)", st$subtask_name, items_complete, st$items_total)
+                items_pct <- round(100 * items_complete / st$items_total, 1)
+                subtask_text <- sprintf("%s (%d/%d - %.1f%%)", st$subtask_name, items_complete, st$items_total, items_pct)
               } else {
                 subtask_text <- st$subtask_name
               }
@@ -685,8 +797,9 @@ server <- function(input, output, session) {
           # Add subtask name and items if available
           if (!is.na(st$items_total) && st$items_total > 0) {
             items_complete <- if (!is.na(st$items_complete)) st$items_complete else 0
-            sprintf("%s<br/><small>%s (%d/%d)</small>", 
-                   base_prog, st$subtask_name, items_complete, st$items_total)
+            items_pct <- round(100 * items_complete / st$items_total, 1)
+            sprintf("%s<br/><small>%s</small><br/><span class='item-progress'>%d / %d items<span class='item-progress-pct'>(%.1f%%)</span></span>", 
+                   base_prog, st$subtask_name, items_complete, st$items_total, items_pct)
           } else {
             sprintf("%s<br/><small>%s</small>", base_prog, st$subtask_name)
           }
@@ -1081,6 +1194,135 @@ server <- function(input, output, session) {
       )
   })
   
+  # Log Viewer Tab
+  output$log_viewer_ui <- renderUI({
+    data <- task_data()
+    
+    if (is.null(data) || nrow(data) == 0) {
+      return(div(class = "alert alert-info", "No tasks available. Please select a task with a log file."))
+    }
+    
+    # Get tasks that have log files
+    tasks_with_logs <- data[!is.na(data$log_path) & data$log_path != "" & !is.na(data$log_filename), ]
+    
+    if (nrow(tasks_with_logs) == 0) {
+      return(div(class = "alert alert-info", "No tasks with log files found."))
+    }
+    
+    # Create choices for selectInput
+    log_choices <- setNames(
+      tasks_with_logs$run_id,
+      paste0(tasks_with_logs$stage_name, " > ", tasks_with_logs$task_name, " (", tasks_with_logs$status, ")")
+    )
+    
+    tagList(
+      div(class = "log-header",
+          selectInput("log_task_select", "Select Task:", 
+                     choices = log_choices,
+                     width = "400px"),
+          numericInput("log_lines", "Lines to show:", 
+                      value = 100, min = 10, max = 5000, step = 50,
+                      width = "150px"),
+          checkboxInput("log_tail", "Tail mode (show last lines)", value = TRUE),
+          checkboxInput("log_auto_refresh", "Auto-refresh", value = TRUE),
+          actionButton("log_refresh", "Refresh", class = "btn-primary btn-sm")
+      ),
+      div(class = "log-output",
+          uiOutput("log_content")
+      )
+    )
+  })
+  
+  # Log content display
+  output$log_content <- renderUI({
+    # Trigger refresh
+    input$log_refresh
+    
+    if (input$log_auto_refresh) {
+      invalidateLater(3000)  # Refresh every 3 seconds
+    }
+    
+    if (is.null(input$log_task_select)) {
+      return(HTML("<div class='log-line'>No task selected</div>"))
+    }
+    
+    tryCatch({
+      # Get task info
+      data <- task_data()
+      task <- data[data$run_id == input$log_task_select, ]
+      
+      if (nrow(task) == 0) {
+        return(HTML("<div class='log-line log-line-error'>Task not found</div>"))
+      }
+      
+      # Construct log file path
+      log_file <- file.path(task$log_path, task$log_filename)
+      
+      if (!file.exists(log_file)) {
+        return(HTML(paste0(
+          "<div class='log-line log-line-warning'>Log file not found: ", 
+          htmltools::htmlEscape(log_file), "</div>"
+        )))
+      }
+      
+      # Read log file
+      num_lines <- if (!is.null(input$log_lines)) input$log_lines else 100
+      tail_mode <- if (!is.null(input$log_tail)) input$log_tail else TRUE
+      
+      if (tail_mode) {
+        # Read last N lines
+        all_lines <- readLines(log_file, warn = FALSE)
+        total_lines <- length(all_lines)
+        start_line <- max(1, total_lines - num_lines + 1)
+        lines <- all_lines[start_line:total_lines]
+      } else {
+        # Read first N lines
+        lines <- readLines(log_file, n = num_lines, warn = FALSE)
+      }
+      
+      if (length(lines) == 0) {
+        return(HTML("<div class='log-line'>Log file is empty</div>"))
+      }
+      
+      # Format lines with syntax highlighting
+      formatted_lines <- sapply(lines, function(line) {
+        # Escape HTML
+        line <- htmltools::htmlEscape(line)
+        
+        # Apply coloring based on content
+        class_attr <- ""
+        if (grepl("ERROR|Error|error|FAIL|Failed|failed", line, ignore.case = FALSE)) {
+          class_attr <- " log-line-error"
+        } else if (grepl("WARN|Warning|warning", line, ignore.case = FALSE)) {
+          class_attr <- " log-line-warning"
+        } else if (grepl("INFO|Info", line, ignore.case = FALSE)) {
+          class_attr <- " log-line-info"
+        }
+        
+        paste0("<div class='log-line", class_attr, "'>", line, "</div>")
+      })
+      
+      # Add header info
+      header <- paste0(
+        "<div class='log-line log-line-info'>",
+        "File: ", htmltools::htmlEscape(log_file), 
+        " | Lines: ", length(lines),
+        if (tail_mode) paste0(" (last ", num_lines, ")") else paste0(" (first ", num_lines, ")"),
+        " | Updated: ", format(Sys.time(), "%H:%M:%S"),
+        "</div><div class='log-line'>─────────────────────────────────────────────────────────────────────</div>"
+      )
+      
+      HTML(paste0(header, paste(formatted_lines, collapse = "")))
+      
+    }, error = function(e) {
+      HTML(paste0(
+        "<div class='log-line log-line-error'>Error reading log file: ",
+        htmltools::htmlEscape(e$message),
+        "</div>"
+      ))
+    })
+  })
+  
   # Last update time
   output$last_update <- renderText({
     if (!is.null(rv$last_update)) {
@@ -1089,6 +1331,20 @@ server <- function(input, output, session) {
       paste("Last update:", format(eastern_time, "%H:%M:%S %Z"))
     } else {
       "No data loaded"
+    }
+  })
+  
+  # Error display
+  output$has_error <- reactive({
+    !is.null(rv$error_message)
+  })
+  outputOptions(output, "has_error", suspendWhenHidden = FALSE)
+  
+  output$error_display <- renderText({
+    if (!is.null(rv$error_message)) {
+      rv$error_message
+    } else {
+      ""
     }
   })
 }
