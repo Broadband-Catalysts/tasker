@@ -150,7 +150,7 @@ ui <- fluidPage(
         font-size: 14px;
       }
       .task-name {
-        flex: 0 0 200px;
+        flex: 0 0 300px;
         font-weight: 500;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -163,7 +163,7 @@ ui <- fluidPage(
         font-weight: bold;
         text-transform: uppercase;
         flex: 0 0 auto;
-        min-width: 90px;
+        width: 100px;
         text-align: center;
       }
       .task-status-badge.status-NOT_STARTED { background: #e0e0e0; color: #666; }
@@ -192,15 +192,15 @@ ui <- fluidPage(
       .task-progress-fill.status-RUNNING { 
         background: repeating-linear-gradient(
           45deg,
-          #667eea,
-          #667eea 10px,
-          #7a8ef0 10px,
-          #7a8ef0 20px
+          #ffd54f,
+          #ffd54f 10px,
+          #ffe082 10px,
+          #ffe082 20px
         );
         background-size: 28.28px 28.28px;
         animation: progress-stripes 1s linear infinite;
       }
-      .task-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
+      .task-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #81c784 0%, #66bb6a 100%); }
       .task-message {
         flex: 1;
         font-size: 12px;
