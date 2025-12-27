@@ -28,55 +28,39 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
   driver <- config$database$driver
   schema <- if (driver == "postgresql") config$database$schema else ""
   
-  where_clauses <- c()
-  params <- list()
-  
-  if (!is.null(stage)) {
-    where_clauses <- c(where_clauses, "stage_name = ?")
-    params <- c(params, list(stage))
-  }
-  
-  if (!is.null(task)) {
-    where_clauses <- c(where_clauses, "task_name = ?")
-    params <- c(params, list(task))
-  }
-  
-  if (!is.null(status)) {
-    where_clauses <- c(where_clauses, "status = ?")
-    params <- c(params, list(status))
-  }
-  
-  where_sql <- if (length(where_clauses) > 0) {
-    paste("WHERE", paste(where_clauses, collapse = " AND "))
-  } else {
-    ""
-  }
-  
-  limit_sql <- if (!is.null(limit)) {
-    sprintf("LIMIT %d", as.integer(limit))
-  } else {
-    ""
-  }
-  
   table_ref <- if (nchar(schema) > 0) {
-    paste0(schema, ".current_task_status")
+    DBI::Id(schema = schema, table = "current_task_status")
   } else {
     "current_task_status"
   }
   
-  sql <- sprintf(
-    "SELECT * FROM %s %s
-     ORDER BY stage_order, task_order, start_time DESC
-     %s",
-    table_ref, where_sql, limit_sql
-  )
-  
   tryCatch({
-    result <- if (length(params) > 0) {
-      DBI::dbGetQuery(conn, sql, params = params)
-    } else {
-      DBI::dbGetQuery(conn, sql)
+    # Use dplyr to build query
+    query <- dplyr::tbl(conn, table_ref)
+    
+    # Apply filters
+    if (!is.null(stage)) {
+      query <- dplyr::filter(query, .data$stage_name == !!stage)
     }
+    
+    if (!is.null(task)) {
+      query <- dplyr::filter(query, .data$task_name == !!task)
+    }
+    
+    if (!is.null(status)) {
+      query <- dplyr::filter(query, .data$status == !!status)
+    }
+    
+    # Order by stage_order, task_order, then most recent first
+    query <- dplyr::arrange(query, .data$stage_order, .data$task_order, dplyr::desc(.data$start_time))
+    
+    # Apply limit if specified
+    if (!is.null(limit)) {
+      query <- dplyr::slice_head(query, n = as.integer(limit))
+    }
+    
+    # Collect results
+    result <- dplyr::collect(query)
     
     result
     

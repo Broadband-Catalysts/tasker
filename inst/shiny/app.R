@@ -326,15 +326,22 @@ server <- function(input, output, session) {
       
       # Apply filters
       if (!is.null(data) && nrow(data) > 0) {
-        # Filter by stage (exclude empty string which means "All")
-        stage_filters <- input$stage_filter[input$stage_filter != ""]
-        if (length(stage_filters) > 0) {
-          data <- data |> filter(stage_name %in% stage_filters)
+        # Filter by stage (if specific stages selected - empty string or NULL means "All")
+        stage_input <- input$stage_filter
+        if (!is.null(stage_input) && length(stage_input) > 0) {
+          stage_filters <- stage_input[stage_input != ""]
+          if (length(stage_filters) > 0) {
+            data <- data |> filter(stage_name %in% stage_filters)
+          }
         }
-        # Filter by status (exclude empty string which means "All")
-        status_filters <- input$status_filter[input$status_filter != ""]
-        if (length(status_filters) > 0) {
-          data <- data |> filter(status %in% status_filters)
+        
+        # Filter by status (if specific statuses selected - empty string or NULL means "All")
+        status_input <- input$status_filter
+        if (!is.null(status_input) && length(status_input) > 0) {
+          status_filters <- status_input[status_input != ""]
+          if (length(status_filters) > 0) {
+            data <- data |> filter(status %in% status_filters)
+          }
         }
       }
       
@@ -412,27 +419,46 @@ server <- function(input, output, session) {
         task_status,
         by.x = c("stage_name", "task_name"),
         by.y = c("stage_name", "task_name"),
-        all.x = TRUE
+        all.x = TRUE,
+        suffixes = c(".reg", ".run")
       )
+      # Use task_order from registered_tasks (ends with .reg)
+      if ("task_order.reg" %in% names(all_tasks)) {
+        all_tasks$task_order <- all_tasks$task_order.reg
+      }
       # Fill in missing status fields
       all_tasks$status <- ifelse(is.na(all_tasks$status), "NOT_STARTED", all_tasks$status)
       all_tasks$overall_percent_complete <- ifelse(is.na(all_tasks$overall_percent_complete), 0, all_tasks$overall_percent_complete)
       all_tasks$overall_progress_message <- ifelse(is.na(all_tasks$overall_progress_message), "", all_tasks$overall_progress_message)
+      all_tasks$current_subtask <- ifelse(is.na(all_tasks$current_subtask), NA, all_tasks$current_subtask)
+      all_tasks$total_subtasks <- ifelse(is.na(all_tasks$total_subtasks), NA, all_tasks$total_subtasks)
+      all_tasks$run_id <- ifelse(is.na(all_tasks$run_id), NA, all_tasks$run_id)
     } else {
       # No tasks have been run yet
       all_tasks <- registered_tasks
       all_tasks$status <- "NOT_STARTED"
       all_tasks$overall_percent_complete <- 0
       all_tasks$overall_progress_message <- ""
+      all_tasks$current_subtask <- NA
+      all_tasks$total_subtasks <- NA
+      all_tasks$run_id <- NA
     }
     
     # Add stage_order from stages_data for proper ordering
-    all_tasks <- merge(
-      all_tasks,
-      stages_data[, c("stage_name", "stage_order")],
-      by = "stage_name",
-      all.x = TRUE
-    )
+    # Make sure we don't duplicate task_order
+    stage_merge_cols <- c("stage_name", "stage_order")
+    # Only include columns that don't already exist in all_tasks
+    if ("stage_order" %in% names(all_tasks)) {
+      stage_merge_cols <- "stage_name"  # Don't re-merge stage_order
+    }
+    if (length(stage_merge_cols) > 1) {
+      all_tasks <- merge(
+        all_tasks,
+        stages_data[, stage_merge_cols, drop = FALSE],
+        by = "stage_name",
+        all.x = TRUE
+      )
+    }
     
     # Ensure stages_data is ordered by stage_order
     stages_data <- stages_data[order(stages_data$stage_order), ]
@@ -494,6 +520,33 @@ server <- function(input, output, session) {
           task_status <- task$status
           task_progress <- task$overall_percent_complete
           
+          # Get subtask info for running/started tasks
+          subtask_text <- ""
+          if ((task_status == "RUNNING" || task_status == "STARTED") && !is.na(task$run_id)) {
+            st <- tryCatch({
+              subs <- tasker::get_subtask_progress(task$run_id)
+              if (!is.null(subs) && nrow(subs) > 0) {
+                running <- subs[subs$status == "RUNNING", ]
+                if (nrow(running) > 0) {
+                  running[1, ]
+                } else {
+                  subs[order(subs$last_update, decreasing = TRUE), ][1, ]
+                }
+              } else {
+                NULL
+              }
+            }, error = function(e) NULL)
+            
+            if (!is.null(st) && !is.na(st$subtask_name)) {
+              if (!is.na(st$items_total) && st$items_total > 0) {
+                items_complete <- if (!is.na(st$items_complete)) st$items_complete else 0
+                subtask_text <- sprintf("%s (%d/%d)", st$subtask_name, items_complete, st$items_total)
+              } else {
+                subtask_text <- st$subtask_name
+              }
+            }
+          }
+          
           div(class = "task-row",
               div(class = "task-name", task$task_name),
               tags$span(class = paste("task-status-badge", paste0("status-", task_status)),
@@ -513,7 +566,11 @@ server <- function(input, output, session) {
               } else {
                 div(class = "task-progress")
               },
-              if (!is.na(task$overall_progress_message) && task$overall_progress_message != "") {
+              if (subtask_text != "") {
+                div(class = "task-message", 
+                    title = subtask_text,
+                    subtask_text)
+              } else if (!is.na(task$overall_progress_message) && task$overall_progress_message != "") {
                 div(class = "task-message", 
                     title = task$overall_progress_message,
                     task$overall_progress_message)
@@ -1027,7 +1084,9 @@ server <- function(input, output, session) {
   # Last update time
   output$last_update <- renderText({
     if (!is.null(rv$last_update)) {
-      paste("Last update:", format(rv$last_update, "%H:%M:%S"))
+      # Convert to US Eastern timezone
+      eastern_time <- lubridate::with_tz(rv$last_update, "America/New_York")
+      paste("Last update:", format(eastern_time, "%H:%M:%S %Z"))
     } else {
       "No data loaded"
     }

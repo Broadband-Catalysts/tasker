@@ -62,12 +62,23 @@ subtask_start <- function(run_id, subtask_number, subtask_name,
     )$progress_id
     
     # Automatically transition parent task to RUNNING status when subtask starts
+    # and update current_subtask to reflect which subtask is being worked on
     # This ensures that tasks with active subtasks are properly marked as RUNNING
+    # and the progress (current_subtask/total_subtasks) is accurately displayed
     DBI::dbExecute(
       conn,
       glue::glue_sql("UPDATE {task_runs_table} 
-               SET status = 'RUNNING' 
+               SET status = 'RUNNING',
+                   current_subtask = {subtask_number}
                WHERE run_id = {run_id} AND status = 'STARTED'", .con = conn)
+    )
+    
+    # Also update current_subtask if already RUNNING (for subsequent subtasks)
+    DBI::dbExecute(
+      conn,
+      glue::glue_sql("UPDATE {task_runs_table} 
+               SET current_subtask = {subtask_number}
+               WHERE run_id = {run_id} AND status = 'RUNNING'", .con = conn)
     )
     
     if (!quiet) {
