@@ -43,6 +43,6 @@ cleanup_test_db <- function() {
 
 #' Get test database connection
 get_test_db_connection <- function() {
-  ensure_configured()
-  get_db_connection()
+  tasker:::ensure_configured()
+  tasker::get_db_connection()
 }
