@@ -30,23 +30,17 @@ RUN apt-get update && apt-get install -y \
     r-cran-tictoc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy local package sources for installation
-COPY bbcDB /tmp/bbcDB
-COPY tasker /tmp/tasker
+# Copy tasker and BBC folder to the same path as on host
+RUN mkdir -p /home/warnes/src
+COPY tasker /home/warnes/src/tasker
+COPY bbcDB /home/warnes/src/bbcDB
 
 # Install bbcDB first, then tasker (with dependencies=TRUE to handle missing deps)
-RUN R -e "remotes::install_local('/tmp/bbcDB', dependencies=TRUE, upgrade='never')" && \
-    R -e "remotes::install_local('/tmp/tasker', dependencies=TRUE, upgrade='never')" && \
-    rm -rf /tmp/bbcDB /tmp/tasker
+RUN R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE, upgrade='never')" && \
+    R -e "remotes::install_local('/home/warnes/src/tasker', dependencies=TRUE, upgrade='never')" 
 
-# Create directory structure
-RUN mkdir -p /srv/shiny-server/tasker-monitor
-
-# Copy Shiny app from installed package
-RUN cp /usr/local/lib/R/site-library/tasker/shiny/app.R /srv/shiny-server/tasker-monitor/
-
-# Set working directory
-WORKDIR /srv/shiny-server/tasker-monitor
+# Set working directory to host-like path
+WORKDIR /home/warnes/src/tasker/inst/shiny
 
 # Set environment variable to indicate container environment
 ENV SHINYPROXY_USERNAME=docker
@@ -54,5 +48,6 @@ ENV SHINYPROXY_USERNAME=docker
 # Expose port
 EXPOSE 3838
 
-# Run app with tasker::run_monitor() with proper host and port settings
-CMD ["R", "-e", "library(tasker); run_monitor(host='0.0.0.0', port=3838, launch.browser=FALSE)"]
+# Run app from host-like path
+# Note: Config file is mounted at /srv/shiny-server/.tasker.yml by ShinyProxy
+CMD ["R", "-e", "shiny::runApp('/home/warnes/src/tasker/inst/shiny', host='0.0.0.0', port=3838)"]

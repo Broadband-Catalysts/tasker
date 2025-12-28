@@ -230,7 +230,7 @@ Defines individual tasks within stages.
 | `task_id`         | SERIAL/INTEGER   | PRIMARY KEY              | Auto-incrementing identifier          |
 | `stage_id`        | INTEGER          | FOREIGN KEY → stages     | Parent stage                          |
 | `task_name`       | VARCHAR(255)     | NOT NULL                 | Task name                             |
-| `task_type`       | VARCHAR(20)      |                          | Type: "R", "python", "sh", etc.      |
+| `task_type`       | VARCHAR(20)      |                          | Type: "R", "python", "sh", etc.       |
 | `task_order`      | INTEGER          |                          | Execution order within stage          |
 | `description`     | TEXT             |                          | Task description                      |
 | `script_path`     | TEXT             |                          | Path to script directory              |
@@ -1093,43 +1093,30 @@ run_monitor()    # Launch dashboard
 
 #### 5.1.2 Dashboard Features
 
-**Pipeline Status Tab:**
-- Collapsible stage panels
-- Visual progress bars
-- Status badges (color-coded)
-- Real-time updates (configurable interval)
-- Task completion statistics
+**Pipeline Status Tab (Primary Interface):**
+- **Hierarchical stage panels**: Collapsible stage sections with progress summaries
+- **Task rows with dual progress bars**:
+  - Primary progress bar: Overall task completion percentage
+  - Secondary item progress bar: Displays "X / Y items (Z%)" when items_total > 0
+  - Both progress bars update in real-time during task execution
+- **Expandable task details**: Click any task row to expand and view:
+  - Complete task metadata (run_id, hostname, PID, timing, status)
+  - Subtask progress table with item counts
+  - **Live log viewer**: Real-time log file display with auto-scroll
+  - Log controls: Toggle auto-refresh, adjust number of lines, manual refresh
+  - Syntax highlighting: Color-coded ERROR (red), WARNING (yellow), INFO (cyan)
+- **Status badges**: Color-coded task and stage status indicators
+- **Real-time updates**: Configurable auto-refresh interval (default: 5 seconds)
+- **Stage statistics**: Task completion counts (e.g., "6/6", "2/3")
+- **Filtering**: Filter by stage and status
 
-**Task Details Tab:**
-- Searchable/filterable data table
-- All task metadata
-- Error messages displayed inline
-- Export capabilities
-
-**Subtask Progress Tab:**
-- Select task by run_id
-- Detailed progress for each subtask
-- **Item-level progress bars**: "X / Y items (Z%)" display
-- **Nested progress indicators**: Shows both subtask and item progress
-- Real-time item counter updates from parallel workers
-- Timing information and completion estimates
-
-**Active Tasks Tab:**
-- Currently running tasks only
-- Live progress updates
-- Quick status overview
-
-**Task History Tab:**
-- Historical execution records
-- Filter by stage/task/status/date range
-- Execution time analysis
-- Success/failure trends
-
-**Logs Tab:**
-- View task log files
-- Real-time log tailing
-- Search and filter capabilities
-- Error highlighting
+**Log File Integration:**
+- Uses correct log file path from database: `file.path(log_path, log_filename)`
+- Tail mode: Shows last N lines with automatic scrolling as new entries appear
+- Auto-refresh: Updates every 3 seconds when enabled for active tasks
+- Maximizable view: Expand log panel for detailed inspection
+- Line number configuration: Adjustable from 10 to 5000 lines
+- File status: Shows file path, line count, and last update time
 
 #### 5.1.3 UI Components
 
@@ -1143,12 +1130,17 @@ run_monitor()    # Launch dashboard
 - `CANCELLED`: Orange (#ffb74d)
 
 **Progress Bars:**
-- Animated stripes for active tasks
-- Smooth transitions
-- Percentage labels
-- Color-coded by status
-- **Nested item progress**: Subtask progress bars show "X / Y items" below percentage
-- **Real-time updates**: Item counters update as parallel workers complete work
+- **Dual progress display for tasks**:
+  - Primary bar: Overall task completion percentage with smooth transitions
+  - Secondary item bar: Shows "X / Y items (Z%)" when processing items
+  - Both bars animate with stripes for running tasks
+- **Stage-level progress**: Aggregate completion across all tasks
+- Animated stripes for active tasks (running status)
+- Smooth transitions on updates
+- Percentage labels centered in bars
+- Color-coded by status (matching status badges)
+- **Real-time updates**: Item counters increment as parallel workers complete items
+- **Nested display**: Item progress bar positioned directly below task progress bar
 
 **Resource Monitoring Display:**
 - Current resources: `N processes | X% CPU | Y.Y GB RAM (Z%)`

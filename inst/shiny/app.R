@@ -3,10 +3,35 @@ library(DT)
 library(tasker)
 library(dplyr)
 
-# Configuration should already be loaded by run_monitor()
-# Just verify it's available
+# Configuration handling - load if not already loaded
 if (is.null(getOption("tasker.config"))) {
-  stop("Tasker configuration not loaded. Please run this app via tasker::run_monitor()")
+  # Try to load configuration from common locations
+  config_paths <- c(
+    "/srv/shiny-server/.tasker.yml",  # ShinyProxy mount point
+    ".tasker.yml",                     # Working directory
+    file.path(Sys.getenv("HOME"), "src", "fccData", ".tasker.yml")  # Default location
+  )
+  
+  config_loaded <- FALSE
+  for (path in config_paths) {
+    if (file.exists(path)) {
+      tryCatch({
+        # Set working directory for configuration loading
+        if (dir.exists("/home/warnes/src/fccData")) {
+          setwd("/home/warnes/src/fccData")
+        }
+        tasker::tasker_config(config_file = path)
+        config_loaded <- TRUE
+        break
+      }, error = function(e) {
+        message("Failed to load config from ", path, ": ", e$message)
+      })
+    }
+  }
+  
+  if (!config_loaded) {
+    stop("Could not load tasker configuration. Checked paths: ", paste(config_paths, collapse=", "))
+  }
 }
 
 ui <- fluidPage(
@@ -224,16 +249,117 @@ ui <- fluidPage(
         color: #0d47a1;
         margin-left: 4px;
       }
-      /* Log viewer styles */
-      .log-viewer-container {
-        padding: 15px;
+      /* Task row container with progress bars */
+      .task-container {
+        margin: 8px 0;
+        background: #fafafa;
+        border-radius: 5px;
+        border: 1px solid #e0e0e0;
       }
-      .log-header {
+      .task-container.expanded {
+        background: #f5f5f5;
+        border-color: #1976d2;
+      }
+      .task-row {
+        padding: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .task-row:hover {
+        background: #f0f0f0;
+      }
+      .task-row-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .task-progress-bars {
+        flex: 1;
+        min-width: 0;
+      }
+      .progress-bar-row {
+        margin-bottom: 4px;
+      }
+      .progress-bar-row:last-child {
+        margin-bottom: 0;
+      }
+      .progress-label {
+        font-size: 10px;
+        color: #666;
+        margin-bottom: 2px;
+      }
+      .task-progress {
+        height: 18px;
+        background: #e0e0e0;
+        border-radius: 9px;
+        overflow: hidden;
+        position: relative;
+      }
+      .item-progress-bar {
+        height: 14px;
+        background: #e8f5e9;
+        border-radius: 7px;
+        overflow: hidden;
+        position: relative;
+      }
+      .task-progress-fill, .item-progress-fill {
+        height: 100%;
+        transition: width 0.5s ease;
+        font-size: 10px;
+        font-weight: bold;
+        color: white;
+        text-align: center;
+        line-height: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .item-progress-fill {
+        background: linear-gradient(90deg, #4caf50 0%, #66bb6a 100%);
+        color: white;
+      }
+      /* Task details panel */
+      .task-details-panel {
+        display: none;
+        padding: 15px;
+        background: #fff;
+        border-top: 1px solid #ddd;
+        margin-top: 8px;
+      }
+      .task-details-panel.expanded {
+        display: block;
+      }
+      .details-section {
+        margin-bottom: 20px;
+      }
+      .details-section h4 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        font-size: 14px;
+        color: #333;
+        border-bottom: 1px solid #e0e0e0;
+        padding-bottom: 5px;
+      }
+      .details-table {
+        width: 100%;
+        font-size: 12px;
+      }
+      .details-table td {
+        padding: 4px 8px;
+      }
+      .details-table td:first-child {
+        font-weight: 600;
+        color: #666;
+        width: 150px;
+      }
+      /* Log viewer in task details */
+      .log-viewer-controls {
         display: flex;
         gap: 10px;
         align-items: center;
         margin-bottom: 10px;
-        padding: 10px;
+        padding: 8px;
         background: #f8f9fa;
         border-radius: 4px;
       }
@@ -242,16 +368,20 @@ ui <- fluidPage(
         background-color: #1e1e1e;
         color: #d4d4d4;
         padding: 15px;
-        max-height: 600px;
-        min-height: 400px;
+        height: 400px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
         border-radius: 4px;
         border: 1px solid #333;
+        font-size: 12px;
+      }
+      .log-output.maximized {
+        height: 600px;
       }
       .log-line {
         margin: 2px 0;
+        line-height: 1.4;
       }
       .log-line-error {
         color: #f48771;
@@ -262,10 +392,52 @@ ui <- fluidPage(
       .log-line-info {
         color: #4ec9b0;
       }
+      .subtasks-table {
+        width: 100%;
+        font-size: 12px;
+        border-collapse: collapse;
+      }
+      .subtasks-table th {
+        background: #f5f5f5;
+        padding: 8px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid #ddd;
+      }
+      .subtasks-table td {
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
+      }
+      .expand-icon {
+        font-size: 12px;
+        color: #666;
+        margin-right: 5px;
+        transition: transform 0.2s;
+      }
+      .task-container.expanded .expand-icon {
+        transform: rotate(90deg);
+      }
     "))
   ),
   
   tags$script(HTML("
+    $(document).on('click', '.task-row', function(e) {
+      // Don't toggle if clicking on a button or input
+      if ($(e.target).is('button, input, select, a')) return;
+      
+      var container = $(this).closest('.task-container');
+      var taskId = container.data('task-id');
+      var isExpanded = container.hasClass('expanded');
+      
+      // Toggle expanded class
+      container.toggleClass('expanded');
+      container.find('.task-details-panel').toggleClass('expanded');
+      
+      // Send to Shiny
+      Shiny.setInputValue('selected_task_id', isExpanded ? null : taskId, {priority: 'event'});
+    });
+    
+    // Handle stage header clicks
     $(document).on('click', '.stage-header', function() {
       var stageBody = $(this).next('.stage-body');
       stageBody.toggleClass('expanded');
@@ -336,24 +508,6 @@ ui <- fluidPage(
         tabPanel("Pipeline Status",
                  div(class = "pipeline-status-container",
                      uiOutput("pipeline_status_ui")
-                 )
-        ),
-        tabPanel("Task Details",
-                 DTOutput("task_table"),
-                 hr(),
-                 uiOutput("detail_panel")
-        ),
-        tabPanel("Stage Summary",
-                 plotOutput("stage_progress_plot"),
-                 hr(),
-                 DTOutput("stage_summary_table")
-        ),
-        tabPanel("Timeline",
-                 plotOutput("timeline_plot", height = "900px")
-        ),
-        tabPanel("Log Viewer",
-                 div(class = "log-viewer-container",
-                     uiOutput("log_viewer_ui")
                  )
         )
       )
@@ -621,15 +775,20 @@ server <- function(input, output, session) {
         }
       }
       
-      # Create task rows
+      # Create task rows with item progress bars and clickable details
       task_rows <- if (total_tasks > 0) {
         lapply(seq_len(nrow(stage_tasks)), function(j) {
           task <- stage_tasks[j, ]
           task_status <- task$status
           task_progress <- task$overall_percent_complete
+          run_id <- task$run_id
           
-          # Get subtask info for running/started tasks
-          subtask_text <- ""
+          # Get subtask info and item progress for this task
+          subtask_info <- NULL
+          items_complete <- 0
+          items_total <- 0
+          items_pct <- 0
+          subtask_text <- ""  # Initialize to empty string
           if ((task_status == "RUNNING" || task_status == "STARTED") && !is.na(task$run_id)) {
             st <- tryCatch({
               subs <- tasker::get_subtask_progress(task$run_id)
