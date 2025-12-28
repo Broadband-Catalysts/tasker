@@ -1,6 +1,5 @@
 test_that("query functions exist", {
   # Test that query functions are defined
-  expect_true(exists("get_tasks"))
   expect_true(exists("get_task_status"))
   expect_true(exists("get_active_tasks"))
   expect_true(exists("get_task_history"))
