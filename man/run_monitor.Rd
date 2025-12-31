@@ -8,7 +8,8 @@ run_monitor(
   port = NULL,
   host = "127.0.0.1",
   launch.browser = TRUE,
-  config_file = NULL
+  config_file = NULL,
+  command = NULL
 )
 }
 \arguments{
@@ -19,9 +20,11 @@ run_monitor(
 \item{launch.browser}{Logical whether to launch browser automatically (default: TRUE)}
 
 \item{config_file}{Optional path to .tasker.yml config file}
+
+\item{command}{Optional command to run instead of launching Shiny app (e.g., "bash" for interactive shell)}
 }
 \value{
-No return value, called for side effect of launching Shiny app
+No return value, called for side effect of launching Shiny app or running specified command
 }
 \description{
 Launches the Shiny application for monitoring task progress.
@@ -36,5 +39,8 @@ Launches the Shiny application for monitoring task progress.
   
   # Use specific config file
   run_monitor(config_file = "/path/to/.tasker.yml")
+  
+  # Launch bash shell instead of app (useful for Docker debugging)
+  run_monitor(command = "bash")
 }
 }

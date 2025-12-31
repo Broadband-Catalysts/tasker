@@ -1,0 +1,176 @@
+#!/bin/bash
+
+# Script to run the fcc-pipeline-monitor Docker image manually 
+# with the same mount settings as used in ShinyProxy
+#
+# Usage: 
+#   ./run-docker-app.sh [PORT] [COMMAND]
+#   
+#   PORT    - Host port to expose (default: 3939)
+#   COMMAND - Command to run in container (default: none, uses image CMD)
+#             Examples: /bin/bash, R, etc.
+
+set -euo pipefail
+
+IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor:latest"
+CONTAINER_NAME="fcc-pipeline-monitor-manual"
+PORT_HOST=${1:-3939}  # Default to port 3939, but allow override as first argument
+STARTUP_COMMAND=${2:-}  # Optional startup command override
+
+echo "=================================================================================="
+echo "FCC Pipeline Monitor Docker Container Manager"
+echo "=================================================================================="
+echo "Image: $IMAGE"
+echo "Container name: $CONTAINER_NAME"
+echo "Host port: $PORT_HOST"
+echo
+
+# Check if container is already running
+if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "^${CONTAINER_NAME}"; then
+    echo "🔍 Found running container: $CONTAINER_NAME"
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep "$CONTAINER_NAME"
+    echo
+    echo "🌐 App should be accessible at: http://localhost:$PORT_HOST"
+    echo
+    echo "What would you like to do?"
+    echo "  1) Connect to running container (bash shell)"
+    echo "  2) Stop and restart with new container"
+    echo "  3) View container logs"
+    echo "  4) Exit"
+    echo
+    read -p "Enter choice [1-4]: " choice
+    
+    case $choice in
+        1)
+            echo "🚀 Connecting to bash shell..."
+            docker exec -it "$CONTAINER_NAME" bash
+            exit 0
+            ;;
+        2)
+            echo "🛑 Stopping existing container..."
+            docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+            echo "🗑️  Removing container..."
+            docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
+            
+            # Wait a moment for cleanup to complete
+            sleep 2
+            
+            # Verify container is really gone
+            if docker ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+                echo "❌ Failed to remove container. Forcing removal..."
+                docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+                sleep 1
+            fi
+            
+            echo "✅ Container stopped and removed"
+            echo
+            ;;
+        3)
+            echo "📋 Showing container logs (Ctrl+C to exit)..."
+            docker logs -f "$CONTAINER_NAME"
+            exit 0
+            ;;
+        4)
+            echo "👋 Exiting..."
+            exit 0
+            ;;
+        *)
+            echo "❌ Invalid choice. Exiting..."
+            exit 1
+            ;;
+    esac
+elif docker ps -a --format "table {{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
+    echo "🔍 Found stopped container: $CONTAINER_NAME"
+    echo "�️  Removing stopped container..."
+    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    sleep 1
+    echo "✅ Removed stopped container"
+    echo
+fi
+
+# Check if image exists locally
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "⚠️  Image not found locally. Pulling from registry..."
+    docker pull "$IMAGE"
+    echo "✅ Image pulled successfully"
+    echo
+fi
+
+echo "🚀 Starting new container with ShinyProxy-equivalent mounts..."
+echo "Container port: 3838 → Host port: $PORT_HOST"
+if [ -n "$STARTUP_COMMAND" ]; then
+    echo "Startup command: $STARTUP_COMMAND"
+fi
+echo
+
+# Check if we're running an interactive shell command
+RUN_INTERACTIVE=false
+if [ -n "$STARTUP_COMMAND" ] && [[ "$STARTUP_COMMAND" =~ (bash|sh|zsh)$ ]]; then
+    RUN_INTERACTIVE=true
+fi
+
+# Build docker run command
+if [ "$RUN_INTERACTIVE" = true ]; then
+    # For interactive shells, run in foreground with -it
+    echo "🔗 Starting interactive container..."
+    docker run --rm -it \
+        --name "$CONTAINER_NAME" \
+        -p "$PORT_HOST:3838" \
+        -v "/home/warnes/src/fccData:/home/warnes/src/fccData:ro" \
+        -v "/home/warnes/src/tasker:/home/warnes/src/tasker:ro" \
+        -v "/home/warnes/src/bbcDB:/home/warnes/src/bbcDB:ro" \
+        -e SHINYPROXY_USERNAME=manual \
+        -e TASKER_MONITOR_HOST=0.0.0.0 \
+        -e TASKER_MONITOR_PORT=3838 \
+        "$IMAGE" $STARTUP_COMMAND
+    
+    echo "✅ Interactive session ended"
+    exit 0
+else
+    # For background services, run detached
+    RUN_CMD=(docker run --rm -d 
+        --name "$CONTAINER_NAME" 
+        -p "$PORT_HOST:3838" 
+        -v "/home/warnes/src/fccData:/home/warnes/src/fccData:ro" 
+        -v "/home/warnes/src/tasker:/home/warnes/src/tasker:ro" 
+        -v "/home/warnes/src/bbcDB:/home/warnes/src/bbcDB:ro" 
+        -e SHINYPROXY_USERNAME=manual 
+        -e TASKER_MONITOR_HOST=0.0.0.0 
+        -e TASKER_MONITOR_PORT=3838)
+    
+    # Add command override if specified
+    if [ -n "$STARTUP_COMMAND" ]; then
+        RUN_CMD+=("$IMAGE" $STARTUP_COMMAND)
+    else
+        RUN_CMD+=("$IMAGE")
+    fi
+    
+    # Run container with same mounts as ShinyProxy
+    "${RUN_CMD[@]}"
+fi
+
+# Wait a moment for startup
+sleep 3
+
+# Check if container is running
+if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "^${CONTAINER_NAME}"; then
+    echo "✅ Container started successfully!"
+    echo
+    echo "📊 Container status:"
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep "$CONTAINER_NAME"
+    echo
+    echo "🌐 Access the app at: http://localhost:$PORT_HOST"
+    echo "🐳 Container name: $CONTAINER_NAME"
+    echo
+    echo "📱 Opening interactive bash session..."
+    echo "   (Type 'exit' to leave the container shell)"
+    echo
+    docker exec -it "$CONTAINER_NAME" bash
+else
+    echo "❌ Failed to start container!"
+    echo "📋 Check what went wrong:"
+    echo "   docker logs $CONTAINER_NAME"
+    exit 1
+fi
+
+echo "=================================================================================="

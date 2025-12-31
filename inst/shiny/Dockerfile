@@ -35,6 +35,7 @@ RUN mkdir -p /home/warnes/src
 COPY tasker /home/warnes/src/tasker
 COPY bbcDB /home/warnes/src/bbcDB
 
+
 # Install bbcDB first, then tasker (with dependencies=TRUE to handle missing deps)
 RUN R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE, upgrade='never')" && \
     R -e "remotes::install_local('/home/warnes/src/tasker', dependencies=TRUE, upgrade='never')" 
@@ -42,12 +43,14 @@ RUN R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE, up
 # Set working directory to host-like path
 WORKDIR /home/warnes/src/tasker/inst/shiny
 
-# Set environment variable to indicate container environment
+# Set environment variables
 ENV SHINYPROXY_USERNAME=docker
+ENV TASKER_MONITOR_HOST=0.0.0.0
+ENV TASKER_MONITOR_PORT=3838
 
 # Expose port
 EXPOSE 3838
 
 # Run app from host-like path
-# Note: Config file is mounted at /srv/shiny-server/.tasker.yml by ShinyProxy
-CMD ["R", "-e", "shiny::runApp('/home/warnes/src/tasker/inst/shiny', host='0.0.0.0', port=3838)"]
+# Note: Config file is mounted at /home/warnes/src/fccData/.tasker.yml by ShinyProxy
+CMD ["Rscript", "app.R"]
