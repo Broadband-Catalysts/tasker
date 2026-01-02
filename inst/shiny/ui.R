@@ -1,135 +1,471 @@
-# Enhanced UI for FCC Pipeline Monitor
-# Features: Single-page layout, dual progress bars, responsive design
-
-library(shiny)
-library(DT)
-
-# Get configuration for title
-config <- getOption("tasker.config")
-pipeline_name <- if (!is.null(config$pipeline$name)) config$pipeline$name else "Pipeline"
-
-ui <- fluidPage(
-  title = paste(pipeline_name, "- Tasker Monitor"),
+ui <- page_fluid(
+  theme = bs_theme(version = 5),
+  titlePanel(
+    div(
+      style = "display: flex; justify-content: space-between; align-items: center;",
+      div({
+        config <- getOption("tasker.config")
+        pipeline_name <- if (!is.null(config$pipeline$name)) config$pipeline$name else "Pipeline"
+        paste(pipeline_name, "- Tasker Monitor")
+      }),
+      div(
+        style = "font-size: 12px; color: #666; text-align: right; font-weight: normal;",
+        div(sprintf("Build: %s", BUILD_TIME)),
+        div(sprintf("Commit: %s", GIT_COMMIT))
+      )
+    )
+  ),
   
-  # External CSS
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "styles.css"),
-    tags$script(HTML("
-      // Enhanced task row click handler
-      $(document).on('click', '.task-row', function() {
-        var taskName = $(this).find('.task-name').text();
-        var taskId = $(this).data('task-id');
-        var runId = $(this).data('run-id');
-        
-        // Show detailed view
-        if (taskId) {
-          $('#task-details-panel').show();
-          $('#task-details-title').text('Details for: ' + taskName);
-          
-          // Trigger server to load task details
-          Shiny.setInputValue('selected_task_id', taskId, {priority: 'event'});
-          Shiny.setInputValue('selected_run_id', runId, {priority: 'event'});
-        }
-      });
+    tags$style(HTML("
+      /* Animations */
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      @keyframes progress-stripes {
+        0% { background-position: 0 0; }
+        100% { background-position: 28.28px 0; }
+      }
       
-      // Stage accordion handler
-      $(document).on('click', '.stage-header', function() {
-        $(this).next('.stage-tasks').slideToggle();
-        $(this).find('.stage-toggle').text(function(i, text) {
-          return text === '▼' ? '▶' : '▼';
-        });
-      });
+      .status-NOT_STARTED { background-color: #e0e0e0; }
+      .status-STARTED { background-color: #fff3cd; }
+      .status-RUNNING { background-color: #ffd54f; animation: pulse 2s infinite; }
+      .status-COMPLETED { background-color: #81c784; }
+      .status-FAILED { background-color: #e57373; }
+      .status-SKIPPED { background-color: #e2e3e5; }
+      .detail-box { 
+        border: 1px solid #ddd; 
+        padding: 10px; 
+        margin: 10px 0; 
+        background-color: #f9f9f9; 
+      }
+      .log-output {
+        font-family: monospace;
+        background-color: #000;
+        color: #0f0;
+        padding: 10px;
+        max-height: 400px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+      /* Pipeline Status Tab Styles */
+      .pipeline-status-container {
+        padding: 15px;
+      }
+      .stage-panel {
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fff;
+      }
+      .stage-header {
+        padding: 12px 15px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #ddd;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .stage-header:hover {
+        background: #e9ecef;
+      }
+      .stage-name {
+        font-weight: 600;
+        font-size: 16px;
+        flex: 0 0 auto;
+        min-width: 120px;
+      }
+      .stage-badge {
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+        flex: 0 0 auto;
+        min-width: 120px;
+        text-align: center;
+      }
+      .stage-badge.status-NOT_STARTED { background: #e0e0e0; color: #666; }
+      .stage-badge.status-STARTED { background: #ffd54f; color: #f57f17; }
+      .stage-badge.status-RUNNING { background: #ffd54f; color: #f57f17; animation: pulse 2s infinite; }
+      .stage-badge.status-COMPLETED { background: #81c784; color: #2e7d32; }
+      .stage-badge.status-FAILED { background: #e57373; color: #c62828; }
+      .stage-progress {
+        flex: 1;
+        height: 20px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+      }
+      /* Target the Shiny output spans for stage progress */
+      span[id^=\"stage_progress_\"] {
+        flex: 1;
+        display: block;
+      }
+      .stage-progress-fill {
+        height: 100%;
+        transition: width 0.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: bold;
+        color: white;
+      }
+      .stage-progress-fill.status-NOT_STARTED { background: linear-gradient(90deg, #bdbdbd 0%, #9e9e9e 100%); }
+      .stage-progress-fill.status-STARTED { background: linear-gradient(90deg, #ffd54f 0%, #ffb300 100%); }
+      .stage-progress-fill.status-RUNNING { 
+        background: repeating-linear-gradient(
+          45deg,
+          #ffd54f,
+          #ffd54f 10px,
+          #ffe082 10px,
+          #ffe082 20px
+        );
+        background-size: 28.28px 28.28px;
+        animation: progress-stripes 1s linear infinite;
+      }
+      .stage-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #81c784 0%, #66bb6a 100%); }
+      .stage-progress-fill.status-FAILED { background: linear-gradient(90deg, #e57373 0%, #ef5350 100%); }
+      .stage-count {
+        font-size: 13px;
+        color: #666;
+        flex: 0 0 auto;
+        min-width: 60px;
+        text-align: right;
+      }
+      .stage-body {
+        padding: 10px 15px;
+        display: none;
+      }
+      .stage-body.expanded {
+        display: block;
+      }
+      .task-row {
+        padding: 8px 10px;
+        margin: 5px 0;
+        background: #fafafa;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+      }
+      .task-name {
+        flex: 0 0 300px;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .task-status-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+        flex: 0 0 auto;
+        width: 100px;
+        text-align: center;
+      }
+      .task-status-badge.status-NOT_STARTED { background: #e0e0e0; color: #666; }
+      .task-status-badge.status-STARTED { background: #ffd54f; color: #f57f17; }
+      .task-status-badge.status-RUNNING { background: #ffd54f; color: #f57f17; animation: pulse 2s infinite; }
+      .task-status-badge.status-COMPLETED { background: #81c784; color: #2e7d32; }
+      .task-status-badge.status-FAILED { background: #e57373; color: #c62828; }
+      /* Dual progress bars container */
+      .task-progress-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 200px;
+      }
+      .task-progress {
+        height: 20px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+      }
+      .task-progress-fill {
+        position: absolute;
+        height: 100%;
+        transition: width 0.5s ease;
+        left: 0;
+        top: 0;
+      }
+      .task-progress-label {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: bold;
+        color: white;
+        text-shadow: 0 0 3px rgba(0,0,0,0.5);
+        z-index: 1;
+      }
+      .task-progress-fill.status-STARTED { background: linear-gradient(90deg, #ffd54f 0%, #ffb300 100%); }
+      .task-progress-fill.status-RUNNING { 
+        background: repeating-linear-gradient(
+          45deg,
+          #ffd54f,
+          #ffd54f 10px,
+          #ffe082 10px,
+          #ffe082 20px
+        );
+        background-size: 28.28px 28.28px;
+        animation: progress-stripes 1s linear infinite;
+      }
+      .task-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #81c784 0%, #66bb6a 100%); }
+      /* Item-level progress bar */
+      .item-progress-bar {
+        height: 16px;
+        background: #e0e0e0;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+      }
+      .item-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #64b5f6 0%, #42a5f5 100%);
+        transition: width 0.5s ease;
+        font-size: 10px;
+        font-weight: bold;
+        color: white;
+        text-align: center;
+        line-height: 16px;
+      }
+      .progress-label {
+        font-size: 10px;
+        color: #666;
+        font-weight: 500;
+      }
+      .task-message {
+        flex: 0 0 200px;
+        font-size: 12px;
+        color: #666;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* Reset button styling */
+      .task-reset-btn {
+        margin-left: auto;
+        padding: 4px 10px;
+        font-size: 11px;
+        flex: 0 0 auto;
+      }
+      .task-reset-btn:hover {
+        background-color: #ff9800;
+        border-color: #f57c00;
+      }
+      /* Footer styling */
+      footer {
+        margin-top: 20px;
+        padding: 10px;
+        border-top: 1px solid #ddd;
+        background: #f8f9fa;
+        font-size: 11px;
+        color: #666;
+      }
+      footer .build-label {
+        font-weight: 600;
+        color: #555;
+      }
+      /* Item progress indicators */
+      .item-progress {
+        display: inline-block;
+        padding: 2px 8px;
+        background: #e3f2fd;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 11px;
+        color: #1976d2;
+        font-weight: 600;
+      }
+      .item-progress-pct {
+        color: #0d47a1;
+        margin-left: 4px;
+      }
+      /* Log viewer styles */
+      .log-viewer-container {
+        padding: 15px;
+      }
+      .log-header {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+      }
+      .log-output {
+        font-family: 'Courier New', monospace;
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        max-height: 600px;
+        min-height: 400px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        border-radius: 4px;
+        border: 1px solid #333;
+      }
+      .log-line {
+        margin: 2px 0;
+      }
+      .log-line-error {
+        color: #f48771;
+      }
+      .log-line-warning {
+        color: #dcdcaa;
+      }
+      .log-line-info {
+        color: #4ec9b0;
+      }
       
-      // Close task details panel
-      $(document).on('click', '.close-panel', function() {
-        $('#task-details-panel').hide();
-      });
+      /* Accordion styling to match previous stage design */
+      .accordion {
+        width: 100%;
+        margin: 0;
+      }
+      .accordion-item {
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .accordion-header {
+        margin: 0;
+      }
+      .accordion-button {
+        padding: 0 !important;
+        background: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        text-align: left !important;
+      }
+      .accordion-button:not(.collapsed) {
+        background: none !important;
+        box-shadow: none !important;
+        color: inherit !important;
+      }
+      .accordion-button:focus {
+        box-shadow: none !important;
+        border: none !important;
+        background: none !important;
+      }
+      .accordion-button::after {
+        display: none !important;
+      }
+      .accordion-body {
+        padding: 10px 15px;
+        background: #f9f9f9;
+      }
+      /* Make stage header inside accordion look like before */
+      .accordion-button .stage-header {
+        width: 100%;
+        flex: 1;
+        display: flex;
+        pointer-events: none;
+      }
+      .accordion-title, .stage-header {
+        width:100%
+      }
     "))
   ),
   
-  # Main title
-  titlePanel(paste(pipeline_name, "- Tasker Monitor")),
+  # Stop event bubbling from accordion that causes datatables error
+  tags$script(HTML("
+    $(document).ready(function() {
+      // Prevent accordion clicks from triggering DataTables handlers
+      $(document).on('click', '.accordion-button, .accordion-header', function(e) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      });
+      
+      // Prevent DataTables from trying to access tables that don't exist on current tab
+      var originalDataTable = $.fn.dataTable;
+      if (originalDataTable) {
+        $.fn.dataTable = function() {
+          if ($(this).length === 0) {
+            console.warn('DataTable called on non-existent element, ignoring');
+            return this;
+          }
+          return originalDataTable.apply(this, arguments);
+        };
+        // Copy over static properties
+        $.extend($.fn.dataTable, originalDataTable);
+      }
+    });
+  ")),
   
-  # Main layout with sidebar and content
   sidebarLayout(
-    # Sidebar with filters and controls
     sidebarPanel(
-      width = 3,
-      
-      # Stage filter
-      selectInput("stage_filter", "Filter by Stage:",
-                  choices = c("All" = "all"), 
-                  selected = "all"),
-      
-      # Status filter  
+      width = 2,
+      selectInput("stage_filter", "Filter by Stage:", 
+                  choices = c("All" = ""), multiple = TRUE),
       selectInput("status_filter", "Filter by Status:",
-                  choices = c("All" = "all", "RUNNING" = "RUNNING", 
-                             "COMPLETED" = "COMPLETED", "FAILED" = "FAILED",
-                             "NOT_STARTED" = "NOT_STARTED", "STARTED" = "STARTED"),
-                  selected = "all"),
-      
-      # Auto-refresh controls
-      h4("Auto-refresh"),
-      numericInput("refresh_seconds", "Interval (seconds):", 
-                   value = 5, min = 1, max = 60, step = 1),
+                  choices = c("All" = "", "NOT_STARTED", "STARTED", "RUNNING", 
+                             "COMPLETED", "FAILED", "SKIPPED"),
+                  multiple = TRUE),
+      numericInput("refresh_interval", "Auto-refresh (seconds):", 
+                   value = 5, min = 1, max = 60),
       checkboxInput("auto_refresh", "Auto-refresh", value = TRUE),
-      
-      # Manual refresh button
-      actionButton("refresh_now", "Refresh Now", 
-                   class = "btn-primary", style = "width: 100%; margin-top: 10px;"),
-      
-      # Last update display
       hr(),
-      h5("Last update:"),
+      actionButton("refresh", "Refresh Now", class = "btn-primary"),
+      hr(),
       textOutput("last_update")
     ),
     
-    # Main content area
     mainPanel(
-      width = 9,
-      
-      # Error display area
+      width = 10,
+      # Error message banner
       conditionalPanel(
-        condition = "output.error_display != ''",
-        div(class = "error-panel",
-            icon("exclamation-triangle"),
-            textOutput("error_display")
+        condition = "output.has_error",
+        div(class = "alert alert-danger", style = "margin: 10px;",
+            tags$strong("Error: "),
+            tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
+                    textOutput("error_display", inline = FALSE))
         )
       ),
-      
-      # Pipeline status content
-      uiOutput("pipeline_status_ui"),
-      
-      # Task details panel (initially hidden)
-      div(id = "task-details-panel", class = "task-details-panel", style = "display: none;",
-        div(class = "panel-header",
-          h4(id = "task-details-title", "Task Details"),
-          tags$button(class = "close-panel btn btn-sm btn-default", "×")
-        ),
-        
-        # Task info tabs
-        tabsetPanel(
-          tabPanel("Subtask Progress",
-            br(),
-            DT::dataTableOutput("subtask_table")
-          ),
-          
-          tabPanel("Live Logs",
-            br(),
-            div(class = "log-controls",
-              checkboxInput("auto_refresh_logs", "Auto-refresh logs", value = TRUE),
-              actionButton("refresh_logs", "Refresh Now", class = "btn-sm")
-            ),
-            div(class = "log-viewer",
-              verbatimTextOutput("task_logs")
-            )
-          ),
-          
-          tabPanel("Task Summary",
-            br(),
-            verbatimTextOutput("task_summary")
-          )
-        )
+      tabsetPanel(
+        id = "main_tabs",
+        tabPanel("Pipeline Status",
+                 div(class = "pipeline-status-container",
+                     uiOutput("pipeline_status_ui")
+                 )
+        )#,
+        # tabPanel("Task Details",
+        #          DTOutput("task_table"),
+        #          hr(),
+        #          uiOutput("detail_panel")
+        # ),
+        # tabPanel("Stage Summary",
+        #          plotOutput("stage_progress_plot"),
+        #          hr(),
+        #          DTOutput("stage_summary_table")
+        # ),
+        # tabPanel("Timeline",
+        #          plotOutput("timeline_plot", height = "900px")
+        # ),
+        # tabPanel("Log Viewer",
+        #          div(class = "log-viewer-container",
+        #              uiOutput("log_viewer_ui")
+        #          )
+        # )
       )
     )
   )

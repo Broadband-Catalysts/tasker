@@ -1,7 +1,10 @@
 library(shiny)
+library(bslib)
 library(DT)
 library(tasker)
 library(dplyr)
+library(lubridate)
+library(shinyWidgets)
 
 # Load configuration from .tasker.yml file
 # Try several locations in order of preference
@@ -32,401 +35,133 @@ if (is.null(config_file)) {
 # Load and set configuration
 config <- tasker::tasker_config(config_file = config_file)
 
-ui <- fluidPage(
-  titlePanel({
-    config <- getOption("tasker.config")
-    pipeline_name <- if (!is.null(config$pipeline$name)) config$pipeline$name else "Pipeline"
-    paste(pipeline_name, "- Tasker Monitor")
-  }),
+# Read build information once at startup
+# Assign to global environment so ui.R can access them
+build_info_file <- "/app/build_info.txt"
+if (file.exists(build_info_file)) {
+  build_info_lines <- tryCatch({
+    readLines(build_info_file, warn = FALSE)
+  }, error = function(e) character(0))
   
-  tags$head(
-    tags$style(HTML("
-      /* Animations */
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-      }
-      @keyframes progress-stripes {
-        0% { background-position: 0 0; }
-        100% { background-position: 28.28px 0; }
-      }
-      
-      .status-NOT_STARTED { background-color: #e0e0e0; }
-      .status-STARTED { background-color: #fff3cd; }
-      .status-RUNNING { background-color: #ffd54f; animation: pulse 2s infinite; }
-      .status-COMPLETED { background-color: #81c784; }
-      .status-FAILED { background-color: #e57373; }
-      .status-SKIPPED { background-color: #e2e3e5; }
-      .detail-box { 
-        border: 1px solid #ddd; 
-        padding: 10px; 
-        margin: 10px 0; 
-        background-color: #f9f9f9; 
-      }
-      .log-output {
-        font-family: monospace;
-        background-color: #000;
-        color: #0f0;
-        padding: 10px;
-        max-height: 400px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-      }
-      /* Pipeline Status Tab Styles */
-      .pipeline-status-container {
-        padding: 15px;
-      }
-      .stage-panel {
-        margin-bottom: 15px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        background: #fff;
-      }
-      .stage-header {
-        padding: 12px 15px;
-        background: #f8f9fa;
-        border-bottom: 1px solid #ddd;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .stage-header:hover {
-        background: #e9ecef;
-      }
-      .stage-name {
-        font-weight: 600;
-        font-size: 16px;
-        flex: 0 0 auto;
-        min-width: 120px;
-      }
-      .stage-badge {
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase;
-        flex: 0 0 auto;
-        min-width: 90px;
-        text-align: center;
-      }
-      .stage-badge.status-NOT_STARTED { background: #e0e0e0; color: #666; }
-      .stage-badge.status-STARTED { background: #ffd54f; color: #f57f17; }
-      .stage-badge.status-RUNNING { background: #ffd54f; color: #f57f17; animation: pulse 2s infinite; }
-      .stage-badge.status-COMPLETED { background: #81c784; color: #2e7d32; }
-      .stage-badge.status-FAILED { background: #e57373; color: #c62828; }
-      .stage-progress {
-        flex: 1;
-        height: 20px;
-        background: #e0e0e0;
-        border-radius: 10px;
-        overflow: hidden;
-        position: relative;
-      }
-      .stage-progress-fill {
-        height: 100%;
-        transition: width 0.5s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: bold;
-        color: white;
-      }
-      .stage-progress-fill.status-NOT_STARTED { background: linear-gradient(90deg, #bdbdbd 0%, #9e9e9e 100%); }
-      .stage-progress-fill.status-STARTED { background: linear-gradient(90deg, #ffd54f 0%, #ffb300 100%); }
-      .stage-progress-fill.status-RUNNING { 
-        background: repeating-linear-gradient(
-          45deg,
-          #ffd54f,
-          #ffd54f 10px,
-          #ffe082 10px,
-          #ffe082 20px
-        );
-        background-size: 28.28px 28.28px;
-        animation: progress-stripes 1s linear infinite;
-      }
-      .stage-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #81c784 0%, #66bb6a 100%); }
-      .stage-progress-fill.status-FAILED { background: linear-gradient(90deg, #e57373 0%, #ef5350 100%); }
-      .stage-count {
-        font-size: 13px;
-        color: #666;
-        flex: 0 0 auto;
-        min-width: 60px;
-        text-align: right;
-      }
-      .stage-body {
-        padding: 10px 15px;
-        display: none;
-      }
-      .stage-body.expanded {
-        display: block;
-      }
-      .task-row {
-        padding: 8px 10px;
-        margin: 5px 0;
-        background: #fafafa;
-        border-radius: 5px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-      }
-      .task-name {
-        flex: 0 0 300px;
-        font-weight: 500;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .task-status-badge {
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase;
-        flex: 0 0 auto;
-        width: 100px;
-        text-align: center;
-      }
-      .task-status-badge.status-NOT_STARTED { background: #e0e0e0; color: #666; }
-      .task-status-badge.status-STARTED { background: #ffd54f; color: #f57f17; }
-      .task-status-badge.status-RUNNING { background: #ffd54f; color: #f57f17; animation: pulse 2s infinite; }
-      .task-status-badge.status-COMPLETED { background: #81c784; color: #2e7d32; }
-      .task-status-badge.status-FAILED { background: #e57373; color: #c62828; }
-      /* Dual progress bars container */
-      .task-progress-container {
-        flex: 0 0 300px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .task-progress {
-        height: 20px;
-        background: #e0e0e0;
-        border-radius: 10px;
-        overflow: hidden;
-        position: relative;
-      }
-      .task-progress-fill {
-        height: 100%;
-        transition: width 0.5s ease;
-        font-size: 11px;
-        font-weight: bold;
-        color: white;
-        text-align: center;
-        line-height: 20px;
-      }
-      .task-progress-fill.status-STARTED { background: linear-gradient(90deg, #ffd54f 0%, #ffb300 100%); }
-      .task-progress-fill.status-RUNNING { 
-        background: repeating-linear-gradient(
-          45deg,
-          #ffd54f,
-          #ffd54f 10px,
-          #ffe082 10px,
-          #ffe082 20px
-        );
-        background-size: 28.28px 28.28px;
-        animation: progress-stripes 1s linear infinite;
-      }
-      .task-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #81c784 0%, #66bb6a 100%); }
-      /* Item-level progress bar */
-      .item-progress-bar {
-        height: 16px;
-        background: #e0e0e0;
-        border-radius: 8px;
-        overflow: hidden;
-        position: relative;
-      }
-      .item-progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #64b5f6 0%, #42a5f5 100%);
-        transition: width 0.5s ease;
-        font-size: 10px;
-        font-weight: bold;
-        color: white;
-        text-align: center;
-        line-height: 16px;
-      }
-      .progress-label {
-        font-size: 10px;
-        color: #666;
-        font-weight: 500;
-      }
-      .task-message {
-        flex: 1;
-        font-size: 12px;
-        color: #666;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      /* Item progress indicators */
-      .item-progress {
-        display: inline-block;
-        padding: 2px 8px;
-        background: #e3f2fd;
-        border-radius: 4px;
-        font-family: monospace;
-        font-size: 11px;
-        color: #1976d2;
-        font-weight: 600;
-      }
-      .item-progress-pct {
-        color: #0d47a1;
-        margin-left: 4px;
-      }
-      /* Log viewer styles */
-      .log-viewer-container {
-        padding: 15px;
-      }
-      .log-header {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 10px;
-        padding: 10px;
-        background: #f8f9fa;
-        border-radius: 4px;
-      }
-      .log-output {
-        font-family: 'Courier New', monospace;
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        padding: 15px;
-        max-height: 600px;
-        min-height: 400px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        border-radius: 4px;
-        border: 1px solid #333;
-      }
-      .log-line {
-        margin: 2px 0;
-      }
-      .log-line-error {
-        color: #f48771;
-      }
-      .log-line-warning {
-        color: #dcdcaa;
-      }
-      .log-line-info {
-        color: #4ec9b0;
-      }
-    "))
-  ),
+  BUILD_TIME <<- if (length(build_info_lines) >= 1) {
+    sub("BUILD_TIME=", "", build_info_lines[1])
+  } else {
+    "Unknown"
+  }
   
-  tags$script(HTML("
-    $(document).on('click', '.stage-header', function() {
-      var stageBody = $(this).next('.stage-body');
-      stageBody.toggleClass('expanded');
-      
-      // Get all currently expanded stage names
-      var expanded = [];
-      $('.stage-body.expanded').each(function() {
-        var stageName = $(this).prev('.stage-header').find('.stage-name').text();
-        expanded.push(stageName);
-      });
-      
-      // Send to Shiny
-      Shiny.setInputValue('expanded_stages', expanded, {priority: 'event'});
-    });
-  ")),
-  
-  tags$script(HTML("
-    // After UI updates, restore expanded state
-    $(document).on('shiny:value', function(event) {
-      if (event.name === 'pipeline_status_ui') {
-        setTimeout(function() {
-          if (typeof Shiny !== 'undefined' && Shiny.inputBindings) {
-            var expanded = Shiny.shinyapp.$inputValues.expanded_stages;
-            if (expanded) {
-              expanded.forEach(function(stageName) {
-                $('.stage-name').filter(function() {
-                  return $(this).text() === stageName;
-                }).parent('.stage-header').next('.stage-body').addClass('expanded');
-              });
-            }
-          }
-        }, 50);
-      }
-    });
-  ")),
-  
-  sidebarLayout(
-    sidebarPanel(
-      width = 2,
-      selectInput("stage_filter", "Filter by Stage:", 
-                  choices = c("All" = ""), multiple = TRUE),
-      selectInput("status_filter", "Filter by Status:",
-                  choices = c("All" = "", "NOT_STARTED", "STARTED", "RUNNING", 
-                             "COMPLETED", "FAILED", "SKIPPED"),
-                  multiple = TRUE),
-      numericInput("refresh_interval", "Auto-refresh (seconds):", 
-                   value = 5, min = 1, max = 60),
-      checkboxInput("auto_refresh", "Auto-refresh", value = TRUE),
-      hr(),
-      actionButton("refresh", "Refresh Now", class = "btn-primary"),
-      hr(),
-      textOutput("last_update")
-    ),
-    
-    mainPanel(
-      width = 10,
-      # Error message banner
-      conditionalPanel(
-        condition = "output.has_error",
-        div(class = "alert alert-danger", style = "margin: 10px;",
-            tags$strong("Error: "),
-            tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
-                    textOutput("error_display", inline = FALSE))
-        )
-      ),
-      tabsetPanel(
-        id = "main_tabs",
-        tabPanel("Pipeline Status",
-                 div(class = "pipeline-status-container",
-                     uiOutput("pipeline_status_ui")
-                 )
-        ),
-        tabPanel("Task Details",
-                 DTOutput("task_table"),
-                 hr(),
-                 uiOutput("detail_panel")
-        ),
-        tabPanel("Stage Summary",
-                 plotOutput("stage_progress_plot"),
-                 hr(),
-                 DTOutput("stage_summary_table")
-        ),
-        tabPanel("Timeline",
-                 plotOutput("timeline_plot", height = "900px")
-        ),
-        tabPanel("Log Viewer",
-                 div(class = "log-viewer-container",
-                     uiOutput("log_viewer_ui")
-                 )
-        )
-      )
-    )
-  )
-)
+  GIT_COMMIT <<- if (length(build_info_lines) >= 2) {
+    sub("GIT_COMMIT=", "", build_info_lines[2])
+  } else {
+    "Unknown"
+  }
+} else {
+  BUILD_TIME <<- "Unknown"
+  GIT_COMMIT <<- "Unknown"
+}
+
+# Load UI
+source("ui.R", local = TRUE)
 
 server <- function(input, output, session) {
   
-  # Reactive values
+  # ============================================================================
+  # INITIALIZATION: Get structure once at startup
+  # ============================================================================
+  
+  # Reactive values for general app state
   rv <- reactiveValues(
     selected_task_id = NULL,
     last_update = NULL,
-    expanded_stages = c(),  # Track which stage accordions are expanded
-    error_message = NULL  # Track error messages for display
+    expanded_stages = c(),
+    error_message = NULL,
+    force_refresh = 0,
+    reset_pending_stage = NULL,
+    reset_pending_task = NULL
   )
   
-  # Track expanded stages from client-side JavaScript
-  observeEvent(input$expanded_stages, {
-    rv$expanded_stages <- input$expanded_stages
-  }, ignoreNULL = FALSE)
+  # Get pipeline structure (stages + registered tasks) - this rarely changes
+  pipeline_structure <- reactiveVal(NULL)
+  
+  # Initialize structure
+  observe({
+    structure <- tryCatch({
+      stages <- tasker::get_stages()
+      if (!is.null(stages) && nrow(stages) > 0) {
+        stages <- stages[stages$stage_name != "TEST" & stages$stage_order != 999, ]
+      }
+      
+      registered_tasks <- tasker::get_registered_tasks()
+      
+      list(stages = stages, tasks = registered_tasks)
+    }, error = function(e) {
+      showNotification(paste("Error loading structure:", e$message), type = "error")
+      NULL
+    })
+    
+    pipeline_structure(structure)
+  })
+  
+  # ============================================================================
+  # REACTIVE DATA: One reactiveVal per task for status
+  # ============================================================================
+  
+  # Storage for task reactiveVals - created dynamically
+  task_reactives <- reactiveValues()
+  
+  # Storage for stage aggregate data - computed from tasks
+  stage_reactives <- reactiveValues()
+  
+  # Initialize task reactiveVals when structure is loaded
+  observe({
+    struct <- pipeline_structure()
+    if (is.null(struct)) return()
+    
+    tasks <- struct$tasks
+    stages <- struct$stages
+    if (is.null(tasks) || nrow(tasks) == 0) return()
+    
+    # Create a reactiveVal for each task
+    for (i in seq_len(nrow(tasks))) {
+      task <- tasks[i, ]
+      task_key <- paste(task$stage_name, task$task_name, sep = "||")
+      
+      # Initialize with NOT_STARTED status if not already exists
+      if (is.null(task_reactives[[task_key]])) {
+        task_reactives[[task_key]] <- list(
+          stage_name = task$stage_name,
+          task_name = task$task_name,
+          task_order = task$task_order,
+          status = "NOT_STARTED",
+          overall_percent_complete = 0,
+          overall_progress_message = "",
+          run_id = NA,
+          current_subtask = 0,
+          total_subtasks = 0,
+          items_total = 0,
+          items_complete = 0
+        )
+      }
+    }
+    
+    # Initialize stage reactives
+    if (!is.null(stages) && nrow(stages) > 0) {
+      for (i in seq_len(nrow(stages))) {
+        stage_name <- stages[i, ]$stage_name
+        if (is.null(stage_reactives[[stage_name]])) {
+          stage_reactives[[stage_name]] <- list(
+            completed = 0,
+            total = 0,
+            progress_pct = 0,
+            status = "NOT_STARTED"
+          )
+        }
+      }
+    }
+  })
+  
+  # ============================================================================
+  # POLLING OBSERVER: Update only changed task statuses
+  # ============================================================================
   
   # Auto-refresh timer
   autoRefresh <- reactive({
@@ -436,48 +171,139 @@ server <- function(input, output, session) {
     input$refresh
   })
   
-  # Fetch task data
+  # Task data reactive - fetches current task status
   task_data <- reactive({
-    autoRefresh()
+    autoRefresh()  # Depend on auto-refresh
     
     tryCatch({
-      data <- tasker::get_task_status()
-      rv$last_update <- Sys.time()
-      rv$error_message <- NULL  # Clear any previous errors
+      tasker::get_task_status()
+    }, error = function(e) {
+      message("Error getting task data: ", e$message)
+      NULL
+    })
+  })
+  
+  # Observer: Poll database and update only changed values
+  observe({
+    # Use the task_data reactive instead of duplicating the call
+    current_status <- task_data()
+    rv$force_refresh  # Also depend on force_refresh
+    
+    if (is.null(current_status) || nrow(current_status) == 0) return()
+    
+    # Update each task's reactive ONLY if it changed
+    for (i in seq_len(nrow(current_status))) {
+      task_status <- current_status[i, ]
+      task_key <- paste(task_status$stage_name, task_status$task_name, sep = "||")
       
-      # Apply filters
-      if (!is.null(data) && nrow(data) > 0) {
-        # Filter by stage (if specific stages selected - empty string or NULL means "All")
-        stage_input <- input$stage_filter
-        if (!is.null(stage_input) && length(stage_input) > 0) {
-          stage_filters <- stage_input[stage_input != ""]
-          if (length(stage_filters) > 0) {
-            data <- data |> filter(stage_name %in% stage_filters)
+      current_val <- task_reactives[[task_key]]
+      
+      # Get subtask info for items progress - only for RUNNING/STARTED tasks
+      items_total <- 0
+      items_complete <- 0
+      if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
+        subtask_info <- tryCatch({
+          subs <- tasker::get_subtask_progress(task_status$run_id)
+          if (!is.null(subs) && nrow(subs) > 0) {
+            # Get most recently updated active subtask (RUNNING or STARTED)
+            active <- subs[subs$status %in% c("RUNNING", "STARTED"), ]
+            if (nrow(active) > 0) {
+              # Use last_update to get the most recently updated active subtask
+              active[order(active$last_update, decreasing = TRUE), ][1, ]
+            } else {
+              # Fallback to most recent subtask overall
+              subs[order(subs$last_update, decreasing = TRUE), ][1, ]
+            }
+          } else {
+            NULL
           }
-        }
+        }, error = function(e) NULL)
         
-        # Filter by status (if specific statuses selected - empty string or NULL means "All")
-        status_input <- input$status_filter
-        if (!is.null(status_input) && length(status_input) > 0) {
-          status_filters <- status_input[status_input != ""]
-          if (length(status_filters) > 0) {
-            data <- data |> filter(status %in% status_filters)
-          }
+        if (!is.null(subtask_info) && !is.na(subtask_info$items_total) && subtask_info$items_total > 0) {
+          items_total <- subtask_info$items_total
+          items_complete <- if (!is.na(subtask_info$items_complete)) subtask_info$items_complete else 0
         }
       }
       
-      data
-    }, error = function(e) {
-      error_details <- paste0(
-        "Error fetching task data: ", e$message, "\n",
-        "\nFunction: get_task_status()",
-        "\nTime: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-        if (!is.null(e$call)) paste0("\nCall: ", deparse(e$call)[1]) else ""
+      new_val <- list(
+        stage_name = task_status$stage_name,
+        task_name = task_status$task_name,
+        task_order = if (!is.null(current_val)) current_val$task_order else NA,
+        status = task_status$status,
+        overall_percent_complete = if (!is.na(task_status$overall_percent_complete)) task_status$overall_percent_complete else 0,
+        overall_progress_message = if (!is.na(task_status$overall_progress_message)) task_status$overall_progress_message else "",
+        run_id = task_status$run_id,
+        current_subtask = if (!is.na(task_status$current_subtask)) task_status$current_subtask else 0,
+        total_subtasks = if (!is.na(task_status$total_subtasks)) task_status$total_subtasks else 0,
+        items_total = items_total,
+        items_complete = items_complete
       )
-      rv$error_message <- error_details
-      showNotification(error_details, type = "error", duration = 10)
-      NULL
-    })
+      
+      # Only update if something changed
+      if (is.null(current_val) || !identical(current_val, new_val)) {
+        task_reactives[[task_key]] <- new_val
+      }
+    }
+    
+    rv$last_update <- Sys.time()
+  })
+  
+  # ============================================================================
+  # OBSERVER: Update stage aggregates from task reactives
+  # ============================================================================
+  
+  observe({
+    struct <- pipeline_structure()
+    if (is.null(struct)) return()
+    
+    stages <- struct$stages
+    tasks <- struct$tasks
+    if (is.null(stages) || nrow(stages) == 0 || is.null(tasks) || nrow(tasks) == 0) return()
+    
+    # Trigger on any task_reactives change
+    reactiveValuesToList(task_reactives)
+    
+    # Update each stage's aggregate stats
+    for (i in seq_len(nrow(stages))) {
+      stage_name <- stages[i, ]$stage_name
+      stage_tasks <- tasks[tasks$stage_name == stage_name, ]
+      
+      if (nrow(stage_tasks) == 0) next
+      
+      # Get all task data for this stage
+      task_keys <- paste(stage_tasks$stage_name, stage_tasks$task_name, sep = "||")
+      task_data_list <- lapply(task_keys, function(key) task_reactives[[key]])
+      
+      total_tasks <- length(task_data_list)
+      statuses <- sapply(task_data_list, function(td) if(!is.null(td)) td$status else "NOT_STARTED")
+      
+      completed <- sum(statuses == "COMPLETED", na.rm = TRUE)
+      running <- sum(statuses == "RUNNING", na.rm = TRUE)
+      started <- sum(statuses == "STARTED", na.rm = TRUE)
+      failed <- sum(statuses == "FAILED", na.rm = TRUE)
+      
+      progress_pct <- if (total_tasks > 0) round(100 * completed / total_tasks) else 0
+      
+      stage_status <- if (failed > 0) {
+        "FAILED"
+      } else if (running > 0) {
+        "RUNNING"
+      } else if (started > 0) {
+        "STARTED"
+      } else if (completed == total_tasks) {
+        "COMPLETED"
+      } else {
+        "NOT_STARTED"
+      }
+      
+      # Update stage reactive
+      stage_reactives[[stage_name]] <- list(
+        completed = completed,
+        total = total_tasks,
+        progress_pct = progress_pct,
+        status = stage_status
+      )
+    }
   })
   
   # Update stage filter choices dynamically from stages table
@@ -515,294 +341,364 @@ server <- function(input, output, session) {
     }
   })
   
-  # Pipeline Status Tab - shows all stages and tasks
-  output$pipeline_status_ui <- renderUI({
-    autoRefresh()  # Trigger on refresh
+  # Note: Stage expansion state is now managed by bslib::accordion()
+  
+  # Handle task reset button clicks - show confirmation modal
+  observeEvent(input$task_reset_clicked, {
+    req(input$task_reset_clicked)
     
-    # Get all stages and tasks
-    stages_data <- tryCatch({
-      stages_data_raw <- tasker::get_stages()
-      rv$error_message <- NULL  # Clear errors on success
-      # Exclude TEST stage
-      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
-        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
-      } else {
-        stages_data_raw
-      }
-    }, error = function(e) {
-      error_details <- paste0(
-        "Error loading pipeline stages: ", e$message, "\n",
-        "Function: get_stages()",
-        "\nCheck database connectivity and tasker configuration."
+    stage <- input$task_reset_clicked$stage
+    task <- input$task_reset_clicked$task
+    
+    # Store the task info for the confirm handler
+    rv$reset_pending_stage <- stage
+    rv$reset_pending_task <- task
+    
+    # Show confirmation modal
+    showModal(modalDialog(
+      title = tags$span(
+        icon("exclamation-triangle"),
+        " Confirm Task Reset"
+      ),
+      div(
+        style = "font-size: 14px;",
+        tags$p(
+          style = "font-weight: bold; color: #d9534f;",
+          "WARNING: This action is irreversible and cannot be undone!"
+        ),
+        tags$p(
+          "You are about to reset the following task:"
+        ),
+        tags$div(
+          style = "background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace;",
+          tags$div(sprintf("Stage: %s", stage)),
+          tags$div(sprintf("Task: %s", task))
+        ),
+        tags$p(
+          "This will delete all execution history, progress data, and subtask information for this task."
+        ),
+        tags$p(
+          style = "margin-bottom: 0;",
+          "The task status will be set back to NOT_STARTED."
+        )
+      ),
+      footer = tagList(
+        actionButton("confirm_reset", "Reset Task", 
+                    class = "btn-danger",
+                    icon = icon("trash")),
+        modalButton("Cancel")
+      ),
+      easyClose = FALSE,
+      size = "m"
+    ))
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  
+  # Handle confirmed reset
+  observeEvent(input$confirm_reset, {
+    stage <- rv$reset_pending_stage
+    task <- rv$reset_pending_task
+    
+    req(stage, task)
+    
+    # Close the modal
+    removeModal()
+    
+    # Perform the reset
+    tryCatch({
+      tasker::task_reset(stage = stage, task = task, quiet = FALSE)
+      
+      showNotification(
+        sprintf("Task '%s' in stage '%s' has been reset", task, stage),
+        type = "message",
+        duration = 3
       )
-      rv$error_message <- error_details
-      NULL
+      
+      # Force refresh of task data
+      rv$force_refresh <- rv$force_refresh + 1
+      
+      # Clear pending task info
+      rv$reset_pending_stage <- NULL
+      rv$reset_pending_task <- NULL
+      
+    }, error = function(e) {
+      showNotification(
+        sprintf("Error resetting task: %s", e$message),
+        type = "error",
+        duration = 5
+      )
     })
+  })
+  
+  # ============================================================================
+  # PIPELINE STATUS UI: Static structure with reactive components
+  # ============================================================================
+  
+  # Build the entire UI structure once using bslib::accordion
+  output$pipeline_status_ui <- renderUI({
+    struct <- pipeline_structure()
+    if (is.null(struct)) {
+      return(div(class = "alert alert-info", "Loading pipeline structure..."))
+    }
     
-    if (is.null(stages_data) || nrow(stages_data) == 0) {
+    stages <- struct$stages
+    tasks <- struct$tasks
+    
+    if (is.null(stages) || nrow(stages) == 0) {
       return(div(class = "alert alert-info", "No stages configured"))
     }
     
-    # Get all registered tasks (shows everything that's been registered)
-    registered_tasks <- tryCatch({
-      tasker::get_registered_tasks()
-    }, error = function(e) {
-      error_details <- paste0(
-        "Error loading registered tasks: ", e$message, "\n",
-        "Function: get_registered_tasks()"
-      )
-      rv$error_message <- error_details
-      NULL
-    })
-    
-    if (is.null(registered_tasks) || nrow(registered_tasks) == 0) {
+    if (is.null(tasks) || nrow(tasks) == 0) {
       return(div(class = "alert alert-info", "No tasks registered"))
     }
     
-    # Get task execution status (only for tasks that have been run)
-    task_status <- tryCatch({
-      tasker::get_task_status()
-    }, error = function(e) {
-      error_details <- paste0(
-        "Error loading task status: ", e$message, "\n",
-        "Function: get_task_status()"
-      )
-      rv$error_message <- error_details
-      NULL
-    })
+    # Order stages
+    stages <- stages[order(stages$stage_order), ]
     
-    # Merge registered tasks with their status
-    # Left join to keep all registered tasks even if they haven't run
-    if (!is.null(task_status) && nrow(task_status) > 0) {
-      all_tasks <- merge(
-        registered_tasks,
-        task_status,
-        by.x = c("stage_name", "task_name"),
-        by.y = c("stage_name", "task_name"),
-        all.x = TRUE,
-        suffixes = c(".reg", ".run")
-      )
-      # Use task_order from registered_tasks (ends with .reg)
-      if ("task_order.reg" %in% names(all_tasks)) {
-        all_tasks$task_order <- all_tasks$task_order.reg
-      }
-      # Fill in missing status fields
-      all_tasks$status <- ifelse(is.na(all_tasks$status), "NOT_STARTED", all_tasks$status)
-      all_tasks$overall_percent_complete <- ifelse(is.na(all_tasks$overall_percent_complete), 0, all_tasks$overall_percent_complete)
-      all_tasks$overall_progress_message <- ifelse(is.na(all_tasks$overall_progress_message), "", all_tasks$overall_progress_message)
-      all_tasks$current_subtask <- ifelse(is.na(all_tasks$current_subtask), NA, all_tasks$current_subtask)
-      all_tasks$total_subtasks <- ifelse(is.na(all_tasks$total_subtasks), NA, all_tasks$total_subtasks)
-      all_tasks$run_id <- ifelse(is.na(all_tasks$run_id), NA, all_tasks$run_id)
-    } else {
-      # No tasks have been run yet
-      all_tasks <- registered_tasks
-      all_tasks$status <- "NOT_STARTED"
-      all_tasks$overall_percent_complete <- 0
-      all_tasks$overall_progress_message <- ""
-      all_tasks$current_subtask <- NA
-      all_tasks$total_subtasks <- NA
-      all_tasks$run_id <- NA
-    }
-    
-    # Add stage_order from stages_data for proper ordering
-    # Make sure we don't duplicate task_order
-    stage_merge_cols <- c("stage_name", "stage_order")
-    # Only include columns that don't already exist in all_tasks
-    if ("stage_order" %in% names(all_tasks)) {
-      stage_merge_cols <- "stage_name"  # Don't re-merge stage_order
-    }
-    if (length(stage_merge_cols) > 1) {
-      all_tasks <- merge(
-        all_tasks,
-        stages_data[, stage_merge_cols, drop = FALSE],
-        by = "stage_name",
-        all.x = TRUE
-      )
-    }
-    
-    # Ensure stages_data is ordered by stage_order
-    stages_data <- stages_data[order(stages_data$stage_order), ]
-    
-    # Create stage panels
-    stage_panels <- lapply(seq_len(nrow(stages_data)), function(i) {
-      stage <- stages_data[i, ]
+    # Build accordion panels for each stage
+    accordion_panels <- lapply(seq_len(nrow(stages)), function(i) {
+      stage <- stages[i, ]
       stage_name <- stage$stage_name
+      stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
       
       # Get tasks for this stage
-      stage_tasks <- if (!is.null(all_tasks)) {
-        tasks <- all_tasks[all_tasks$stage_name == stage_name, ]
-        # Sort by task_order for consistent display
-        if (nrow(tasks) > 0 && "task_order" %in% names(tasks)) {
-          tasks <- tasks[order(tasks$task_order), ]
-        }
-        tasks
-      } else {
-        data.frame()
+      stage_tasks <- tasks[tasks$stage_name == stage_name, ]
+      if (nrow(stage_tasks) > 0) {
+        stage_tasks <- stage_tasks[order(stage_tasks$task_order), ]
       }
       
-      # Calculate stage stats
-      total_tasks <- nrow(stage_tasks)
-      if (total_tasks == 0) {
-        stage_status <- "NOT_STARTED"
-        completed_tasks <- 0
-        progress_pct <- 0
-      } else {
-        completed_tasks <- sum(stage_tasks$status == "COMPLETED", na.rm = TRUE)
-        running_tasks <- sum(stage_tasks$status == "RUNNING", na.rm = TRUE)
-        started_tasks <- sum(stage_tasks$status == "STARTED", na.rm = TRUE)
-        failed_tasks <- sum(stage_tasks$status == "FAILED", na.rm = TRUE)
+      # Build task rows - structure is static, content is reactive
+      task_rows <- lapply(seq_len(nrow(stage_tasks)), function(j) {
+        task <- stage_tasks[j, ]
+        task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
         
-        progress_pct <- round(100 * completed_tasks / total_tasks)
-        
-        # Stage status priority (highest to lowest):
-        # 1. FAILED - if any task has failed
-        # 2. RUNNING - if any task is currently running
-        # 3. STARTED - if any task has started but not running
-        # 4. COMPLETED - if all tasks are completed
-        # 5. NOT_STARTED - if no tasks have started
-        if (failed_tasks > 0) {
-          stage_status <- "FAILED"
-        } else if (running_tasks > 0) {
-          stage_status <- "RUNNING"
-        } else if (started_tasks > 0) {
-          stage_status <- "STARTED"
-        } else if (completed_tasks == total_tasks) {
-          stage_status <- "COMPLETED"
-        } else {
-          stage_status <- "NOT_STARTED"
-        }
-      }
+        div(class = "task-row",
+            div(class = "task-name", task$task_name),
+            uiOutput(paste0("task_status_", task_id)),
+            uiOutput(paste0("task_progress_", task_id)),
+            uiOutput(paste0("task_message_", task_id)),
+            uiOutput(paste0("task_reset_", task_id))
+        )
+      })
       
-      # Create task rows with dual progress bars (task + items)
-      task_rows <- if (total_tasks > 0) {
-        lapply(seq_len(nrow(stage_tasks)), function(j) {
-          task <- stage_tasks[j, ]
-          task_status <- task$status
-          task_progress <- task$overall_percent_complete
-          
-          # Get subtask info for items progress
-          items_total <- 0
-          items_complete <- 0
-          items_pct <- 0
-          subtask_text <- ""
-          
-          if (!is.na(task$run_id)) {
-            st <- tryCatch({
-              subs <- tasker::get_subtask_progress(task$run_id)
-              if (!is.null(subs) && nrow(subs) > 0) {
-                # Find currently running subtask or most recent
-                running <- subs[subs$status == "RUNNING", ]
-                if (nrow(running) > 0) {
-                  running[order(running$subtask_number, decreasing = TRUE), ][1, ]
-                } else {
-                  subs[order(subs$last_update, decreasing = TRUE), ][1, ]
-                }
-              } else {
-                NULL
-              }
-            }, error = function(e) NULL)
-            
-            if (!is.null(st)) {
-              # Get items progress for dual progress bar
-              if (!is.na(st$items_total) && st$items_total > 0) {
-                items_total <- st$items_total
-                items_complete <- if (!is.na(st$items_complete)) st$items_complete else 0
-                items_pct <- round(100 * items_complete / items_total, 1)
-                
-                # Build subtask text for message area
-                if (!is.na(st$subtask_name)) {
-                  subtask_text <- sprintf("%s (%d/%d - %.1f%%)", st$subtask_name, items_complete, items_total, items_pct)
-                }
-              } else if (!is.na(st$subtask_name)) {
-                subtask_text <- st$subtask_name
-              }
-            }
-          }
-          
-          # Build dual progress bars
-          progress_section <- if (items_total > 0) {
-            # Dual progress bars: task progress + item progress
-            div(class = "task-progress-container",
-                # Task progress bar
-                div(class = "task-progress",
-                    if ((task_status == "RUNNING" || task_status == "STARTED") && !is.na(task_progress) && task_progress > 0) {
-                      div(class = paste("task-progress-fill", paste0("status-", task_status)),
-                          style = sprintf("width: %.1f%%", task_progress),
-                          sprintf("Task: %.1f%%", task_progress))
-                    } else if (task_status == "COMPLETED") {
-                      div(class = "task-progress-fill status-COMPLETED",
-                          style = "width: 100%",
-                          "Task: 100%")
-                    }
-                ),
-                # Item progress bar
-                div(class = "item-progress-bar",
-                    div(class = "item-progress-fill",
-                        style = sprintf("width: %.1f%%", items_pct),
-                        sprintf("Items: %d/%d", items_complete, items_total))
-                )
-            )
-          } else {
-            # Single progress bar for task without items
-            div(class = "task-progress-container",
-                div(class = "task-progress",
-                    if ((task_status == "RUNNING" || task_status == "STARTED") && !is.na(task_progress) && task_progress > 0) {
-                      div(class = paste("task-progress-fill", paste0("status-", task_status)),
-                          style = sprintf("width: %.1f%%", task_progress),
-                          sprintf("%.1f%%", task_progress))
-                    } else if (task_status == "COMPLETED") {
-                      div(class = "task-progress-fill status-COMPLETED",
-                          style = "width: 100%",
-                          "100%")
-                    }
-                )
-            )
-          }
-          
-          div(class = "task-row",
-              div(class = "task-name", task$task_name),
-              tags$span(class = paste("task-status-badge", paste0("status-", task_status)),
-                       task_status),
-              progress_section,
-              if (subtask_text != "") {
-                div(class = "task-message", 
-                    title = subtask_text,
-                    subtask_text)
-              } else if (!is.na(task$overall_progress_message) && task$overall_progress_message != "") {
-                div(class = "task-message", 
-                    title = task$overall_progress_message,
-                    task$overall_progress_message)
-              } else {
-                div(class = "task-message")
-              }
-          )
-        })
-      } else {
-        list(div(class = "alert alert-sm alert-secondary", "No tasks registered for this stage"))
-      }
-      
-      # Create stage panel
-      div(class = "stage-panel",
-          div(class = "stage-header",
-              div(class = "stage-name", stage_name),
-              tags$span(class = paste("stage-badge", paste0("status-", stage_status)),
-                       stage_status),
-              div(class = "stage-progress",
-                  div(class = paste("stage-progress-fill", paste0("status-", stage_status)),
-                      style = sprintf("width: %d%%", progress_pct),
-                      sprintf("%d%%", progress_pct))
-              ),
-              div(class = "stage-count",
-                  sprintf("%d/%d", completed_tasks, total_tasks))
-          ),
-          div(class = paste("stage-body", if(stage_name %in% rv$expanded_stages) "expanded" else ""),
-              task_rows
-          )
+      # Create accordion panel with static header structure and reactive components
+      accordion_panel(
+        title = div(class = "stage-header",
+                   div(class = "stage-name", stage_name),
+                   uiOutput(paste0("stage_badge_", stage_id), inline = TRUE),
+                   uiOutput(paste0("stage_progress_", stage_id), inline = TRUE),
+                   textOutput(paste0("stage_count_", stage_id), inline = TRUE)
+        ),
+        value = paste0("stage_panel_", stage_id),
+        task_rows
       )
     })
     
-    tagList(stage_panels)
+    # Build accordion with all stage panels (none open by default)
+    do.call(accordion, c(
+      list(id = "pipeline_stages_accordion", multiple = TRUE),
+      accordion_panels
+    ))
   })
+  
+  # Create individual reactive outputs for stage header components
+  observe({
+    struct <- pipeline_structure()
+    if (is.null(struct)) return()
+    
+    stages <- struct$stages
+    if (is.null(stages) || nrow(stages) == 0) return()
+    
+    stages <- stages[order(stages$stage_order), ]
+    
+    lapply(seq_len(nrow(stages)), function(i) {
+      stage <- stages[i, ]
+      stage_name <- stage$stage_name
+      stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
+      
+      # Badge - only re-renders when status changes
+      output[[paste0("stage_badge_", stage_id)]] <- renderUI({
+        stage_data <- stage_reactives[[stage_name]]
+        if (is.null(stage_data)) return(NULL)
+        badge(stage_data$status)
+      })
+      
+      # Progress bar - only re-renders when progress or status changes
+      output[[paste0("stage_progress_", stage_id)]] <- renderUI({
+        stage_data <- stage_reactives[[stage_name]]
+        if (is.null(stage_data)) return(NULL)
+        
+        div(class = "stage-progress",
+            div(class = paste("stage-progress-fill", paste0("status-", stage_data$status)),
+                style = sprintf("width: %d%%", stage_data$progress_pct),
+                sprintf("%d%%", stage_data$progress_pct))
+        )
+      })
+      
+      # Count - only re-renders when task counts change
+      output[[paste0("stage_count_", stage_id)]] <- renderText({
+        stage_data <- stage_reactives[[stage_name]]
+        if (is.null(stage_data)) return("")
+        sprintf("%d/%d", stage_data$completed, stage_data$total)
+      })
+    })
+  })
+  
+  # Create reactive outputs for individual task components
+  observe({
+    struct <- pipeline_structure()
+    if (is.null(struct)) return()
+    
+    stages <- struct$stages
+    tasks <- struct$tasks
+    
+    if (is.null(stages) || nrow(stages) == 0 || is.null(tasks) || nrow(tasks) == 0) return()
+    
+    # For each task, create individual reactive outputs
+    lapply(seq_len(nrow(tasks)), function(i) {
+      task <- tasks[i, ]
+      stage_name <- task$stage_name
+      task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
+      task_key <- paste(stage_name, task$task_name, sep = "||")
+      
+      # Status badge
+      output[[paste0("task_status_", task_id)]] <- renderUI({
+        task_data <- task_reactives[[task_key]]
+        task_status <- if (!is.null(task_data)) task_data$status else "NOT_STARTED"
+        badge(task_status)
+      })
+      
+      # Progress bars
+      output[[paste0("task_progress_", task_id)]] <- renderUI({
+        task_data <- task_reactives[[task_key]]
+        
+        if (is.null(task_data)) {
+          task_data <- list(
+            status = "NOT_STARTED",
+            overall_percent_complete = 0,
+            current_subtask = 0,
+            total_subtasks = 0,
+            items_total = 0,
+            items_complete = 0
+          )
+        }
+        
+        task_status <- task_data$status
+        task_progress <- task_data$overall_percent_complete
+        current_subtask <- task_data$current_subtask
+        total_subtasks <- task_data$total_subtasks
+        items_total <- task_data$items_total
+        items_complete <- task_data$items_complete
+        
+        show_dual <- (items_total > 1 && task_status != "COMPLETED")
+        
+        # Calculate effective progress
+        effective_progress <- if (!is.na(task_progress) && task_progress > 0) {
+          task_progress
+        } else if (total_subtasks > 0 && current_subtask > 0) {
+          round(100 * current_subtask / total_subtasks, 1)
+        } else if (!is.na(task_progress)) {
+          task_progress
+        } else {
+          0
+        }
+        
+        # Build progress bar labels
+        task_label <- if (task_status == "COMPLETED") {
+          if (total_subtasks > 0) {
+            sprintf("Task: %d/%d (100%%)", total_subtasks, total_subtasks)
+          } else {
+            "Task: 100%"
+          }
+        } else if (task_status == "FAILED") {
+          task_pct <- if (!is.na(task_progress)) task_progress else 100
+          if (total_subtasks > 0) {
+            sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, task_pct)
+          } else {
+            sprintf("Task: %.1f%%", task_pct)
+          }
+        } else if (task_status %in% c("RUNNING", "STARTED")) {
+          if (total_subtasks > 0) {
+            sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, effective_progress)
+          } else {
+            sprintf("Task: %.1f%%", effective_progress)
+          }
+        } else {
+          "Task:"
+        }
+        
+        task_width <- if (task_status == "COMPLETED") {
+          100
+        } else if (task_status == "FAILED") {
+          if (!is.na(task_progress)) task_progress else 100
+        } else if (task_status %in% c("RUNNING", "STARTED")) {
+          max(effective_progress, 1)
+        } else {
+          0
+        }
+        
+        # Determine progress bar style
+        bar_status <- switch(task_status,
+          "COMPLETED" = "success",
+          "RUNNING" = "warning",
+          "FAILED" = "danger",
+          "STARTED" = "info",
+          "primary"
+        )
+        
+        div(class = "task-progress-container", style = "width: 300px;",
+            # Primary: Task progress using shinyWidgets
+            shinyWidgets::progressBar(
+              id = paste0("progress_", task_id),
+              value = task_width,
+              total = 100,
+              title = task_label,
+              status = bar_status,
+              striped = task_status == "RUNNING",
+              display_pct = FALSE
+            ),
+            # Secondary: Items progress
+            if (show_dual) {
+              items_complete_safe <- if (is.na(items_complete)) 0 else items_complete
+              items_total_safe <- if (is.na(items_total) || items_total == 0) 1 else items_total
+              items_pct <- round(100 * items_complete_safe / items_total_safe, 1)
+              tagList(
+                tags$div(style = "height: 4px;"),
+                shinyWidgets::progressBar(
+                  id = paste0("progress_items_", task_id),
+                  value = items_pct,
+                  total = 100,
+                  title = sprintf("Items: %d/%d (%.1f%%)", items_complete_safe, items_total, items_pct),
+                  status = "info",
+                  size = "sm",
+                  display_pct = FALSE
+                )
+              )
+            }
+        )
+      })
+      
+      # Message
+      output[[paste0("task_message_", task_id)]] <- renderUI({
+        task_data <- task_reactives[[task_key]]
+        message_text <- if (!is.null(task_data)) task_data$overall_progress_message else ""
+        
+        div(class = "task-message", 
+            title = message_text,
+            message_text)
+      })
+      
+      # Reset button
+      output[[paste0("task_reset_", task_id)]] <- renderUI({
+        actionButton(paste0("reset_btn_", task_id), "Reset", 
+                    class = "btn-sm btn-warning task-reset-btn",
+                    title = "Reset this task to NOT_STARTED",
+                    onclick = sprintf("Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})", 
+                                    stage_name, task$task_name))
+      })
+    })
+  })
+  
+  # Remove the old pipeline_data reactive and related code below this point
   
   # Main task table - initial render
   output$task_table <- renderDT({
@@ -899,10 +795,10 @@ server <- function(input, output, session) {
         Task     = data$task_name,
         Status   = data$status,
         Progress = progress_col,
-        "Overall Progress" = sprintf("%.1f%%", data$overall_percent_complete),
+        "Overall Progress" = sprintf("%.1f%%", ifelse(is.na(data$overall_percent_complete), 0, data$overall_percent_complete)),
         Started  = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
         Duration = format_duration(data$start_time, data$last_update),
-        Host     = data$hostname,
+        Host     = ifelse(is.na(data$hostname), "-", data$hostname),
         Details  = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
                          data$run_id),
         stage_order_hidden = data$stage_order,
@@ -1084,9 +980,7 @@ server <- function(input, output, session) {
                  h4("Files"),
                  tags$table(class = "table table-sm",
                            tags$tr(tags$th("Script Path:"), tags$td(ifelse(is.na(task$script_path), "N/A", task$script_path))),
-                           tags$tr(tags$th("Script File:"), tags$td(task$script_filename)),
-                           tags$tr(tags$th("Log Path:"),    tags$td(task$log_path)),
-                           tags$tr(tags$th("Script:"),      tags$td(ifelse(is.na(task$script_filename), "N/A", task$script_filename))),
+                           tags$tr(tags$th("Script File:"), tags$td(ifelse(is.na(task$script_filename), "N/A", task$script_filename))),
                            tags$tr(tags$th("Log Path:"),    tags$td(ifelse(is.na(task$log_path), "N/A", task$log_path))),
                            tags$tr(tags$th("Log File:"),    tags$td(ifelse(is.na(task$log_filename), "N/A", task$log_filename)))
                  )
@@ -1328,13 +1222,18 @@ server <- function(input, output, session) {
       invalidateLater(3000)  # Refresh every 3 seconds
     }
     
-    if (is.null(input$log_task_select)) {
+    if (is.null(input$log_task_select) || input$log_task_select == "") {
       return(HTML("<div class='log-line'>No task selected</div>"))
     }
     
     tryCatch({
       # Get task info
       data <- task_data()
+      
+      if (is.null(data) || nrow(data) == 0) {
+        return(HTML("<div class='log-line log-line-error'>No task data available</div>"))
+      }
+      
       task <- data[data$run_id == input$log_task_select, ]
       
       if (nrow(task) == 0) {
@@ -1435,30 +1334,40 @@ server <- function(input, output, session) {
   })
 }
 
-# Helper function
+# Helper functions
+badge <- function(status) {
+  bg_class <- switch(status,
+    "COMPLETED" = "success",
+    "RUNNING" = "warning",
+    "FAILED" = "danger",
+    "STARTED" = "info",
+    "SKIPPED" = "secondary",
+    "primary"
+  )
+  tags$span(class = paste("badge", paste0("bg-", bg_class)), status)
+}
+
 format_duration <- function(start, end) {
   sapply(seq_along(start), function(i) {
     s <- start[i]
     e <- end[i]
     
     if (is.na(s)) return("-")
+    if (is.na(e)) e <- Sys.time()
     
-    if (is.na(e)) {
-      e <- Sys.time()
-    }
+    dur <- as.duration(interval(s, e))
+    period <- seconds_to_period(as.numeric(dur, "seconds"))
     
-    duration <- as.numeric(difftime(e, s, units = "secs"))
+    h <- hour(period)
+    m <- minute(period)
+    sec <- round(second(period))
     
-    hours <- floor(duration / 3600)
-    minutes <- floor((duration %% 3600) / 60)
-    seconds <- round(duration %% 60)
-    
-    if (hours > 0) {
-      sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-    } else if (minutes > 0) {
-      sprintf("%02d:%02d", minutes, seconds)
+    if (h > 0) {
+      sprintf("%02d:%02d:%02d", h, m, sec)
+    } else if (m > 0) {
+      sprintf("%02d:%02d", m, sec)
     } else {
-      sprintf("%ds", seconds)
+      sprintf("%ds", sec)
     }
   })
 }
@@ -1466,8 +1375,7 @@ format_duration <- function(start, end) {
 shinyApp(
   ui = ui, 
   server = server, 
-  options=
-  list(
+  options= list(
     host=TASKER_MONITOR_HOST,
     port=TASKER_MONITOR_PORT
   )

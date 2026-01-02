@@ -1,47 +1,70 @@
 FROM rocker/r2u:jammy
 
 # Install system dependencies and R packages from r2u
-RUN apt-get update && apt-get install -y \
+# Use --mount=type=cache for apt to cache package downloads
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
     libpq-dev \
     libssl-dev \
     libxml2-dev \
     libcurl4-openssl-dev \
     procps \
-    r-cran-shiny \
-    r-cran-dt \
     r-cran-bslib \
+    r-cran-cli \
+    r-cran-crayon \
     r-cran-dbi \
+    r-cran-dbplyr \
+    r-cran-devtools \
+    r-cran-dplyr \
+    r-cran-dt \
+    r-cran-ggplot2 \
+    r-cran-ggrepel \
+    r-cran-glue \
+    r-cran-httr \
+    r-cran-jsonlite \
+    r-cran-lifecycle \
+    r-cran-lubridate \
+    r-cran-pillar \
+    r-cran-purrr \
+    r-cran-readr \
+    r-cran-remotes \
+    r-cran-rlang \
+    r-cran-rmariadb \
     r-cran-rpostgres \
     r-cran-rsqlite \
-    r-cran-rmariadb \
-    r-cran-dplyr \
-    r-cran-dbplyr \
-    r-cran-ggplot2 \
-    r-cran-glue \
+    r-cran-rstudioapi \
+    r-cran-scales \
+    r-cran-shiny \
+    r-cran-shinywidgets \
     r-cran-stringr \
-    r-cran-lubridate \
-    r-cran-purrr \
     r-cran-tibble \
-    r-cran-yaml \
-    r-cran-rlang \
-    r-cran-remotes \
-    r-cran-devtools \
-    r-cran-httr \
     r-cran-tictoc \
-    && rm -rf /var/lib/apt/lists/*
+    r-cran-tidyr \
+    r-cran-vctrs \
+    r-cran-withr \
+    r-cran-yaml
 
-# Copy tasker and BBC folder to the same path as on host
+# Create directory structure
 RUN mkdir -p /home/warnes/src
+
+# Now copy full source code (this layer changes more frequently)
 COPY tasker /home/warnes/src/tasker
 COPY bbcDB /home/warnes/src/bbcDB
 
-
-# Install bbcDB first, then tasker (with dependencies=TRUE to handle missing deps)
-RUN R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE, upgrade='never')" && \
-    R -e "remotes::install_local('/home/warnes/src/tasker', dependencies=TRUE, upgrade='never')" 
+# Install packages and unmet dependencies
+RUN  \
+   R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE)" && \
+   R -e "remotes::install_local('/home/warnes/src/tasker', dependencies=TRUE)" 
 
 # Set working directory to host-like path
 WORKDIR /home/warnes/src/tasker/inst/shiny
+
+# Capture build metadata
+RUN mkdir -p /app && \
+    cd /home/warnes/src/tasker && \
+    echo "BUILD_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")" > /app/build_info.txt && \
+    echo "GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")" >> /app/build_info.txt
 
 # Set environment variables
 ENV SHINYPROXY_USERNAME=docker
