@@ -101,6 +101,8 @@ format_duration <- function(start, end) {
   })
 }
 
+shiny::addResourcePath("www", normalizePath("www"))
+
 shinyApp(
   ui = ui, 
   server = server, 
