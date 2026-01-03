@@ -310,6 +310,13 @@ span[id^="stage_progress_"] {
   background: linear-gradient(90deg, #e57373 0%, #ef5350 100%);
 }
 
+.progress-bar {
+  border-radius: 10px;
+  animation: pulse 2s infinite;
+}
+
+
+
 /* Item-level progress bar */
 
 .item-progress-bar {
