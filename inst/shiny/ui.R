@@ -5,10 +5,12 @@ library(tasker)
 library(dplyr)
 library(lubridate)
 library(shinyWidgets)
+library(shinyjs)
 
 
 ui <- page_fluid(
   theme = bs_theme(version = 5),
+  useShinyjs(),
   tags$head(
     title = "Tasker Monitor",
     tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css"),

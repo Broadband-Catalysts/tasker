@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor:latest"
-CONTAINER_NAME="fcc-pipeline-monitor-manual"
+IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-dev:latest"
+CONTAINER_NAME="fcc-pipeline-monitor-dev-manual"
 PORT_HOST=${1:-3939}  # Default to port 3939, but allow override as first argument
 STARTUP_COMMAND=${2:-}  # Optional startup command override
 
@@ -115,9 +115,11 @@ if [ "$RUN_INTERACTIVE" = true ]; then
     echo "🔗 Starting interactive container..."
     docker run --rm -it \
         --name "$CONTAINER_NAME" \
+        --network=broadband-network \
+        --add-host=manager.broadbandcatalysts.com:192.168.77.4 \
         -p "$PORT_HOST:3838" \
         -v "/home/warnes/src/fccData:/home/warnes/src/fccData:ro" \
-        -v "/home/warnes/src/tasker:/home/warnes/src/tasker:ro" \
+        -v "/home/warnes/src/tasker-dev:/home/warnes/src/tasker-dev:ro" \
         -v "/home/warnes/src/bbcDB:/home/warnes/src/bbcDB:ro" \
         -e SHINYPROXY_USERNAME=manual \
         -e TASKER_MONITOR_HOST=0.0.0.0 \
@@ -130,9 +132,11 @@ else
     # For background services, run detached
     RUN_CMD=(docker run --rm -d 
         --name "$CONTAINER_NAME" 
+        --network=broadband-network 
+        --add-host=manager.broadbandcatalysts.com:192.168.77.4 
         -p "$PORT_HOST:3838" 
         -v "/home/warnes/src/fccData:/home/warnes/src/fccData:ro" 
-        -v "/home/warnes/src/tasker:/home/warnes/src/tasker:ro" 
+        -v "/home/warnes/src/tasker-dev:/home/warnes/src/tasker-dev:ro" 
         -v "/home/warnes/src/bbcDB:/home/warnes/src/bbcDB:ro" 
         -e SHINYPROXY_USERNAME=manual 
         -e TASKER_MONITOR_HOST=0.0.0.0 

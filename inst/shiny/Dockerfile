@@ -49,20 +49,20 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN mkdir -p /home/warnes/src
 
 # Now copy full source code (this layer changes more frequently)
-COPY tasker /home/warnes/src/tasker
+COPY tasker-dev /home/warnes/src/tasker-dev
 COPY bbcDB /home/warnes/src/bbcDB
 
 # Install packages and unmet dependencies
 RUN  \
    R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE)" && \
-   R -e "remotes::install_local('/home/warnes/src/tasker', dependencies=TRUE)" 
+   R -e "remotes::install_local('/home/warnes/src/tasker-dev', dependencies=TRUE)" 
 
 # Set working directory to host-like path
-WORKDIR /home/warnes/src/tasker/inst/shiny
+WORKDIR /home/warnes/src/tasker-dev/inst/shiny
 
 # Capture build metadata
 RUN mkdir -p /app && \
-    cd /home/warnes/src/tasker && \
+    cd /home/warnes/src/tasker-dev && \
     echo "BUILD_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")" > /app/build_info.txt && \
     echo "GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")" >> /app/build_info.txt
 
