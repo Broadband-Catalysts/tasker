@@ -34,21 +34,6 @@ ui <- page_fluid(
       .status-COMPLETED { background-color: #81c784; }
       .status-FAILED { background-color: #e57373; }
       .status-SKIPPED { background-color: #e2e3e5; }
-      .detail-box { 
-        border: 1px solid #ddd; 
-        padding: 10px; 
-        margin: 10px 0; 
-        background-color: #f9f9f9; 
-      }
-      .log-output {
-        font-family: monospace;
-        background-color: #000;
-        color: #0f0;
-        padding: 10px;
-        max-height: 400px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-      }
       /* Pipeline Status Tab Styles */
       .pipeline-status-container {
         padding: 15px;
@@ -77,7 +62,7 @@ ui <- page_fluid(
         flex: 0 0 auto;
         min-width: 120px;
       }
-      .stage-badge {
+      .stage-badge, .badge {
         padding: 4px 10px;
         border-radius: 12px;
         font-size: 12px;
@@ -162,13 +147,13 @@ ui <- page_fluid(
         white-space: nowrap;
       }
       .task-status-badge {
-        padding: 4px 12px;
+        padding: 4px 10px;
         border-radius: 12px;
         font-size: 12px;
         font-weight: bold;
         text-transform: uppercase;
         flex: 0 0 auto;
-        width: 100px;
+        min-width: 120px;
         text-align: center;
       }
       .task-status-badge.status-NOT_STARTED { background: #e0e0e0; color: #666; }
@@ -211,6 +196,7 @@ ui <- page_fluid(
         text-shadow: 0 0 3px rgba(0,0,0,0.5);
         z-index: 1;
       }
+      .task-progress-fill.status-NOT_STARTED { background: linear-gradient(90deg, #bdbdbd 0%, #9e9e9e 100%); }
       .task-progress-fill.status-STARTED { background: linear-gradient(90deg, #ffd54f 0%, #ffb300 100%); }
       .task-progress-fill.status-RUNNING { 
         background: repeating-linear-gradient(
@@ -224,6 +210,7 @@ ui <- page_fluid(
         animation: progress-stripes 1s linear infinite;
       }
       .task-progress-fill.status-COMPLETED { background: linear-gradient(90deg, #81c784 0%, #66bb6a 100%); }
+      .task-progress-fill.status-FAILED { background: linear-gradient(90deg, #e57373 0%, #ef5350 100%); }
       /* Item-level progress bar */
       .item-progress-bar {
         height: 16px;
@@ -255,83 +242,10 @@ ui <- page_fluid(
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      /* Reset button styling */
-      .task-reset-btn {
-        margin-left: auto;
-        padding: 4px 10px;
-        font-size: 11px;
-        flex: 0 0 auto;
-      }
-      .task-reset-btn:hover {
-        background-color: #ff9800;
-        border-color: #f57c00;
-      }
-      /* Footer styling */
-      footer {
-        margin-top: 20px;
-        padding: 10px;
-        border-top: 1px solid #ddd;
-        background: #f8f9fa;
-        font-size: 11px;
-        color: #666;
-      }
-      footer .build-label {
-        font-weight: 600;
-        color: #555;
-      }
-      /* Item progress indicators */
-      .item-progress {
-        display: inline-block;
-        padding: 2px 8px;
-        background: #e3f2fd;
-        border-radius: 4px;
-        font-family: monospace;
-        font-size: 11px;
-        color: #1976d2;
-        font-weight: 600;
-      }
-      .item-progress-pct {
-        color: #0d47a1;
-        margin-left: 4px;
-      }
-      /* Log viewer styles */
-      .log-viewer-container {
-        padding: 15px;
-      }
-      .log-header {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 10px;
-        padding: 10px;
-        background: #f8f9fa;
-        border-radius: 4px;
-      }
-      .log-output {
-        font-family: 'Courier New', monospace;
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        padding: 15px;
-        max-height: 600px;
-        min-height: 400px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        border-radius: 4px;
-        border: 1px solid #333;
-      }
-      .log-line {
-        margin: 2px 0;
-      }
-      .log-line-error {
-        color: #f48771;
-      }
-      .log-line-warning {
-        color: #dcdcaa;
-      }
-      .log-line-info {
-        color: #4ec9b0;
-      }
+
+
+
+
       
       /* Accordion styling to match previous stage design */
       .accordion {
@@ -387,31 +301,6 @@ ui <- page_fluid(
     "))
   ),
   
-  # Stop event bubbling from accordion that causes datatables error
-  tags$script(HTML("
-    $(document).ready(function() {
-      // Prevent accordion clicks from triggering DataTables handlers
-      $(document).on('click', '.accordion-button, .accordion-header', function(e) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      });
-      
-      // Prevent DataTables from trying to access tables that don't exist on current tab
-      var originalDataTable = $.fn.dataTable;
-      if (originalDataTable) {
-        $.fn.dataTable = function() {
-          if ($(this).length === 0) {
-            console.warn('DataTable called on non-existent element, ignoring');
-            return this;
-          }
-          return originalDataTable.apply(this, arguments);
-        };
-        // Copy over static properties
-        $.extend($.fn.dataTable, originalDataTable);
-      }
-    });
-  ")),
-  
   sidebarLayout(
     sidebarPanel(
       width = 2,
@@ -447,25 +336,7 @@ ui <- page_fluid(
                  div(class = "pipeline-status-container",
                      uiOutput("pipeline_status_ui")
                  )
-        )#,
-        # tabPanel("Task Details",
-        #          DTOutput("task_table"),
-        #          hr(),
-        #          uiOutput("detail_panel")
-        # ),
-        # tabPanel("Stage Summary",
-        #          plotOutput("stage_progress_plot"),
-        #          hr(),
-        #          DTOutput("stage_summary_table")
-        # ),
-        # tabPanel("Timeline",
-        #          plotOutput("timeline_plot", height = "900px")
-        # ),
-        # tabPanel("Log Viewer",
-        #          div(class = "log-viewer-container",
-        #              uiOutput("log_viewer_ui")
-        #          )
-        # )
+        )
       )
     )
   )

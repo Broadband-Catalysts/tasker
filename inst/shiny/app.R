@@ -435,6 +435,11 @@ server <- function(input, output, session) {
   
   # Build the entire UI structure once using bslib::accordion
   output$pipeline_status_ui <- renderUI({
+    # Depend on filter inputs and task data for filtering
+    stage_filter <- input$stage_filter
+    status_filter <- input$status_filter
+    # autoRefresh()  # Ensure UI rebuilds when data refreshes
+    
     struct <- pipeline_structure()
     if (is.null(struct)) {
       return(div(class = "alert alert-info", "Loading pipeline structure..."))
@@ -582,13 +587,15 @@ server <- function(input, output, session) {
           )
         }
         
-        task_status <- task_data$status
-        task_progress <- task_data$overall_percent_complete
-        current_subtask <- task_data$current_subtask
-        total_subtasks <- task_data$total_subtasks
-        items_total <- task_data$items_total
-        items_complete <- task_data$items_complete
+        task_status     <- task_data$status[1]
+        task_progress   <- task_data$overall_percent_complete[1]
+        current_subtask <- task_data$current_subtask[1]
+        total_subtasks  <- task_data$total_subtasks[1]
+        items_total     <- task_data$items_total[1]
+        items_complete  <- task_data$items_complete[1]
         
+        # if (task_data$task_name == "DAILY_04_Federal_Funding.R") browser()
+
         show_dual <- (items_total > 1 && task_status != "COMPLETED")
         
         # Calculate effective progress
@@ -602,7 +609,7 @@ server <- function(input, output, session) {
           0
         }
         
-        # Build progress bar labels
+        # Build progress bar labels with subtask name for running tasks
         task_label <- if (task_status == "COMPLETED") {
           if (total_subtasks > 0) {
             sprintf("Task: %d/%d (100%%)", total_subtasks, total_subtasks)
@@ -618,7 +625,33 @@ server <- function(input, output, session) {
           }
         } else if (task_status %in% c("RUNNING", "STARTED")) {
           if (total_subtasks > 0) {
-            sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, effective_progress)
+            base_label <- sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, effective_progress)
+            
+            # Get subtask name if running
+            if (task_status == "RUNNING" && !is.null(task_data$run_id)) {
+              subtask_label <- tryCatch({
+                subtask_info <- tasker::get_subtask_progress(task_data$run_id)
+                if (!is.null(subtask_info) && nrow(subtask_info) > 0) {
+                  # Filter for subtasks with names and get the most recent one
+                  recent_subtask <- subtask_info %>%
+                    filter(!is.na(subtask_name) & subtask_name != "") %>%
+                    arrange(desc(last_update)) %>%
+                    slice(1)
+                  
+                  if (nrow(recent_subtask) > 0) {
+                    paste(base_label, " - ", recent_subtask$subtask_name)
+                  } else {
+                    base_label
+                  }
+                } else {
+                  base_label
+                }
+              }, error = function(e) base_label)
+              
+              subtask_label
+            } else {
+              base_label
+            }
           } else {
             sprintf("Task: %.1f%%", effective_progress)
           }

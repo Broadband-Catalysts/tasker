@@ -2,7 +2,23 @@
 #'
 #' @param run_id Run ID
 #' @param conn Database connection (optional)
-#' @return Data frame with subtask progress
+#' 
+#' @return Data frame with subtask progress containing the following columns:
+#' \describe{
+#'   \item{progress_id}{Unique identifier for the subtask progress record}
+#'   \item{run_id}{Task run ID}
+#'   \item{subtask_number}{Subtask sequence number (1-based)}
+#'   \item{subtask_name}{Name/description of the subtask}
+#'   \item{status}{Current status (STARTED, RUNNING, COMPLETED, FAILED)}
+#'   \item{start_time}{Timestamp when subtask started}
+#'   \item{end_time}{Timestamp when subtask ended (NULL if still running)}
+#'   \item{last_update}{Timestamp of last progress update}
+#'   \item{overall_percent_complete}{Completion percentage (0-100)}
+#'   \item{overall_progress_message}{Current progress message}
+#'   \item{items_total}{Total number of items to process}
+#'   \item{items_complete}{Number of items completed}
+#'   \item{error_message}{Error message if status is FAILED}
+#' }
 #' @export
 #'
 #' @examples
