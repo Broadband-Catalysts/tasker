@@ -39,15 +39,18 @@ format_duration <- function(start_time, end_time) {
 
 # Generate badge HTML
 badge_html <- function(status) {
-  status_class <- switch(status,
-    "COMPLETED" = "bg-success",
-    "RUNNING" = "bg-warning text-dark", 
-    "FAILED" = "bg-danger",
-    "STARTED" = "bg-info text-dark",
-    "NOT_STARTED" = "bg-secondary",
-    "bg-primary"  # default
-  )
-  sprintf('<span class="badge %s">%s</span>', status_class, htmltools::htmlEscape(status))
+  if (status == "NOT_STARTED") {
+    sprintf('<span class="badge" style="background-color: #dee2e6; color: #495057;">%s</span>', htmltools::htmlEscape(status))
+  } else {
+    status_class <- switch(status,
+      "COMPLETED" = "bg-success text-white",
+      "RUNNING" = "bg-warning text-dark", 
+      "FAILED" = "bg-danger text-white",
+      "STARTED" = "bg-info text-dark",
+      "bg-secondary text-white"  # default
+    )
+    sprintf('<span class="badge %s">%s</span>', status_class, htmltools::htmlEscape(status))
+  }
 }
 
 # Generate progress bar HTML
@@ -58,8 +61,8 @@ stage_progress_html <- function(progress_pct, status) {
   
   sprintf('
     <div class="stage-progress">
-      <div class="stage-progress-fill status-%s" style="width: %d%%">
-        %d%%
+      <div class="stage-progress-fill status-%s" style="width: %.0f%%">
+        %.0f%%
       </div>
     </div>',
     htmltools::htmlEscape(status), progress_pct, progress_pct
@@ -90,10 +93,8 @@ task_progress_html <- function(task_data) {
   
   show_dual <- (items_total > 1 && task_status != "COMPLETED")
   
-  # Calculate effective progress
-  effective_progress <- if (!is.na(task_progress) && task_progress > 0) {
-    task_progress
-  } else if (total_subtasks > 0 && current_subtask > 0) {
+  # Calculate effective progress - prioritize subtask-based calculation when available
+  effective_progress <- if (total_subtasks > 0 && current_subtask >= 0) {
     round(100 * current_subtask / total_subtasks, 1)
   } else if (!is.na(task_progress)) {
     task_progress
@@ -109,19 +110,18 @@ task_progress_html <- function(task_data) {
       "Task: 100%"
     }
   } else if (task_status == "FAILED") {
-    task_pct <- if (!is.na(task_progress)) task_progress else 100
     if (total_subtasks > 0) {
       if (!is.null(task_data$current_subtask_name) && task_data$current_subtask_name != "") {
         sprintf("Task: %d/%d (%.1f%%) - Subtask %d.%d | %s", 
-               current_subtask, total_subtasks, task_pct,
+               current_subtask, total_subtasks, effective_progress,
                current_subtask, 
                if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1,
                task_data$current_subtask_name)
       } else {
-        sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, task_pct)
+        sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, effective_progress)
       }
     } else {
-      sprintf("Task: %.1f%%", task_pct)
+      sprintf("Task: %.1f%%", effective_progress)
     }
   } else if (task_status %in% c("RUNNING", "STARTED")) {
     if (total_subtasks > 0) {
@@ -144,9 +144,13 @@ task_progress_html <- function(task_data) {
   task_width <- if (task_status == "COMPLETED") {
     100
   } else if (task_status == "FAILED") {
-    if (!is.na(task_progress)) task_progress else 100
-  } else if (task_status %in% c("RUNNING", "STARTED")) {
+    effective_progress
+  } else if (task_status == "RUNNING") {
     max(effective_progress, 1)
+  } else if (task_status == "STARTED") {
+    max(effective_progress, 1)
+  } else if (task_status == "NOT_STARTED") {
+    0
   } else {
     0
   }
@@ -162,10 +166,10 @@ task_progress_html <- function(task_data) {
   
   # Build primary progress bar HTML
   progress_html <- sprintf('
-    <div class="task-progress-container" style="width: 300px;">
-      <div class="progress" style="height: 20px;">
+    <div class="task-progress-container">
+      <div class="progress" style="height: 20px; overflow: visible;">
         <div class="progress-bar progress-bar-%s%s" role="progressbar" 
-             style="width: %d%%" aria-valuenow="%d" aria-valuemin="0" aria-valuemax="100">
+             style="width: %.0f%%; overflow: visible;" aria-valuenow="%.0f" aria-valuemin="0" aria-valuemax="100">
           %s
         </div>
       </div>',
@@ -182,10 +186,10 @@ task_progress_html <- function(task_data) {
     
     progress_html <- paste0(progress_html, sprintf('
       <div style="height: 4px;"></div>
-      <div class="progress" style="height: 15px;">
+      <div class="progress" style="height: 15px; overflow: visible;">
         <div class="progress-bar progress-bar-info" role="progressbar" 
-             style="width: %d%%" aria-valuenow="%d" aria-valuemin="0" aria-valuemax="100">
-          <small>Items: %d/%d (%.1f%%)</small>
+             style="width: %.1f%%; overflow: visible;" aria-valuenow="%.1f" aria-valuemin="0" aria-valuemax="100">
+          <small>Items: %.0f/%.0f (%.1f%%)</small>
         </div>
       </div>',
       items_pct, items_pct, items_complete_safe, items_total, items_pct
@@ -335,6 +339,7 @@ server <- function(input, output, session) {
       # Get subtask info for items progress - only for RUNNING/STARTED tasks
       items_total <- 0
       items_complete <- 0
+      subtask_info <- NULL
       if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
         subtask_info <- tryCatch({
           subs <- tasker::get_subtask_progress(task_status$run_id)
@@ -425,10 +430,10 @@ server <- function(input, output, session) {
         "FAILED"
       } else if (running > 0) {
         "RUNNING"
-      } else if (started > 0) {
-        "STARTED"
       } else if (completed == total_tasks) {
         "COMPLETED"
+      } else if (started > 0 || completed > 0) {
+        "STARTED"
       } else {
         "NOT_STARTED"
       }
@@ -650,7 +655,7 @@ server <- function(input, output, session) {
             </button>
           </h2>
           <div id="collapse_%s" class="accordion-collapse collapse" 
-               aria-labelledby="heading_%s" data-bs-parent="#pipeline_stages_accordion">
+               aria-labelledby="heading_%s">
             <div class="accordion-body">
               %s
             </div>
@@ -715,7 +720,7 @@ server <- function(input, output, session) {
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
             tryCatch({
-              shinyjs::text(paste0("stage_count_", stage_id_local),
+              shinyjs::html(paste0("stage_count_", stage_id_local),
                            sprintf("%d/%d", stage_data$completed, stage_data$total))
             }, error = function(e) {
               message("Error updating stage count: ", e$message)
