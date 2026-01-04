@@ -104,7 +104,7 @@
 
 .stage-badge.status-RUNNING {
   background: #ffd54f;
-  color: #f57f17;
+  color: #666;
   animation: pulse 2s infinite;
 }
 
@@ -118,7 +118,7 @@
   color: #c62828;
 }
 
-.stage-progress {
+.stage-progress, .progress {
   flex: 1;
   height: 20px;
   background: #e0e0e0;
@@ -142,7 +142,7 @@ span[id^="stage_progress_"] {
   justify-content: center;
   font-size: 11px;
   font-weight: bold;
-  color: white;
+  color: #666;
 }
 
 .stage-progress-fill.status-NOT_STARTED {
@@ -230,7 +230,7 @@ span[id^="stage_progress_"] {
 
 .task-status-badge.status-RUNNING {
   background: #ffd54f;
-  color: #f57f17;
+  color: #666;
   animation: pulse 2s infinite;
 }
 
@@ -263,25 +263,10 @@ span[id^="stage_progress_"] {
 }
 
 .task-progress-fill {
-  position: absolute;
   height: 100%;
   transition: width 0.5s ease;
-  left: 0;
-  top: 0;
-}
-
-.task-progress-label {
-  position: absolute;
-  width: 100%;
-  height: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: bold;
-  color: white;
-  text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
-  z-index: 1;
 }
 
 .task-progress-fill.status-NOT_STARTED {
@@ -289,7 +274,13 @@ span[id^="stage_progress_"] {
 }
 
 .task-progress-fill.status-STARTED {
-  background: linear-gradient(90deg, #ffd54f 0%, #ffb300 100%);
+  background: repeating-linear-gradient(45deg,
+      #0dcaf0,
+      #0dcaf0 10px,
+      #7dd3fc 10px,
+      #7dd3fc 20px);
+  background-size: 28.28px 28.28px;
+  animation: progress-stripes 1s linear infinite;
 }
 
 .task-progress-fill.status-RUNNING {
@@ -310,12 +301,51 @@ span[id^="stage_progress_"] {
   background: linear-gradient(90deg, #e57373 0%, #ef5350 100%);
 }
 
-div.progress-bar {
-  border-radius: 10px;
-  animation: pulse 2s infinite;
-  overflow: visible;
-  text-align: left;
+.task-progress-text {
+  font-size: 11px;
+  font-weight: bold;
+  color: #666;
   padding-left: 10px;
+  white-space: nowrap;
+}
+
+/* Item progress bars */
+.item-progress-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+}
+
+.item-progress-fill.status-RUNNING {
+  background: repeating-linear-gradient(45deg,
+      #ffd54f,
+      #ffd54f 10px,
+      #ffe082 10px,
+      #ffe082 20px);
+  background-size: 28.28px 28.28px;
+  animation: progress-stripes 1s linear infinite;
+}
+
+.item-progress-fill.status-STARTED {
+  background: repeating-linear-gradient(45deg,
+      #0dcaf0,
+      #0dcaf0 10px,
+      #7dd3fc 10px,
+      #7dd3fc 20px);
+  background-size: 28.28px 28.28px;
+  animation: progress-stripes 1s linear infinite;
+}
+
+.item-progress-fill.status-COMPLETED {
+  background: linear-gradient(90deg, #0dcaf0 0%, #0aa2c0 100%);
+}
+
+.item-progress-text {
+  font-size: 10px;
+  font-weight: bold;
+  color: #666;
+  padding-left: 8px;
 }
 
 

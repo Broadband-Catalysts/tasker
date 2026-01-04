@@ -168,21 +168,19 @@ task_progress_html <- function(task_data) {
   if (task_width > 0) {
     progress_html <- sprintf('
       <div class="task-progress-container">
-        <div class="progress" style="height: 20px; overflow: visible;">
-          <div class="progress-bar progress-bar-%s%s" role="progressbar" 
-               style="width: %.0f%%; overflow: visible;" aria-valuenow="%.0f" aria-valuemin="0" aria-valuemax="100">
-            %s
+        <div class="task-progress" style="height: 20px;">
+          <div class="task-progress-fill status-%s" style="width: %.0f%%">
+            <span class="task-progress-text">%s</span>
           </div>
         </div>',
-      bar_status,
-      if (task_status == "RUNNING") " progress-bar-striped progress-bar-animated" else "",
-      task_width, task_width, task_label
+      task_status,
+      task_width, task_label
     )
   } else {
     # For NOT_STARTED tasks, render empty progress bar container
     progress_html <- '
       <div class="task-progress-container">
-        <div class="progress" style="height: 20px; overflow: visible;">
+        <div class="task-progress" style="height: 20px;">
         </div>'
   }
   
@@ -194,13 +192,13 @@ task_progress_html <- function(task_data) {
     
     progress_html <- paste0(progress_html, sprintf('
       <div style="height: 4px;"></div>
-      <div class="progress" style="height: 15px; overflow: visible;">
-        <div class="progress-bar progress-bar-info" role="progressbar" 
-             style="width: %.1f%%; overflow: visible;" aria-valuenow="%.1f" aria-valuemin="0" aria-valuemax="100">
-          <small>Items: %.0f/%.0f (%.1f%%)</small>
+      <div class="task-progress" style="height: 15px;">
+        <div class="item-progress-fill status-%s" style="width: %.1f%%">
+          <span class="item-progress-text">Items: %.0f/%.0f (%.1f%%)</span>
         </div>
       </div>',
-      items_pct, items_pct, items_complete_safe, items_total, items_pct
+      task_status,
+      items_pct, items_complete_safe, items_total, items_pct
     ))
   }
   
