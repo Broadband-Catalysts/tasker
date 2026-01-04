@@ -5,6 +5,197 @@ library(tasker)
 library(dplyr)
 library(lubridate)
 library(shinyWidgets)
+library(shinyjs)
+
+# ============================================================================
+# UTILITY FUNCTIONS for Static UI Updates  
+# ============================================================================
+
+# Safe NULL operator
+`%||%` <- function(x, y) if (is.null(x) || is.na(x)) y else x
+
+# Format duration helper function
+format_duration <- function(start_time, end_time) {
+  if (is.null(start_time) || is.na(start_time)) return("-")
+  if (is.null(end_time) || is.na(end_time)) end_time <- Sys.time()
+  
+  tryCatch({
+    dur <- as.duration(interval(start_time, end_time))
+    period <- seconds_to_period(as.numeric(dur, "seconds"))
+    
+    h <- hour(period)
+    m <- minute(period)
+    sec <- round(second(period))
+    
+    if (h > 0) {
+      sprintf("%02d:%02d:%02d", h, m, sec)
+    } else if (m > 0) {
+      sprintf("%02d:%02d", m, sec)
+    } else {
+      sprintf("%ds", sec)
+    }
+  }, error = function(e) "-")
+}
+
+# Generate badge HTML
+badge_html <- function(status) {
+  status_class <- switch(status,
+    "COMPLETED" = "bg-success",
+    "RUNNING" = "bg-warning text-dark", 
+    "FAILED" = "bg-danger",
+    "STARTED" = "bg-info text-dark",
+    "NOT_STARTED" = "bg-secondary",
+    "bg-primary"  # default
+  )
+  sprintf('<span class="badge %s">%s</span>', status_class, htmltools::htmlEscape(status))
+}
+
+# Generate progress bar HTML
+stage_progress_html <- function(progress_pct, status) {
+  # Ensure progress_pct is numeric and within bounds
+  progress_pct <- max(0, min(100, as.numeric(progress_pct %||% 0)))
+  status <- as.character(status %||% "unknown")
+  
+  sprintf('
+    <div class="stage-progress">
+      <div class="stage-progress-fill status-%s" style="width: %d%%">
+        %d%%
+      </div>
+    </div>',
+    htmltools::htmlEscape(status), progress_pct, progress_pct
+  )
+}
+
+# Generate task progress bars HTML with subtask information
+task_progress_html <- function(task_data) {
+  if (is.null(task_data)) {
+    task_data <- list(
+      status = "NOT_STARTED",
+      overall_percent_complete = 0,
+      current_subtask = 0,
+      total_subtasks = 0,
+      current_subtask_name = "",
+      current_subtask_number = 0,
+      items_total = 0,
+      items_complete = 0
+    )
+  }
+  
+  task_status <- task_data$status
+  task_progress <- if (!is.na(task_data$overall_percent_complete)) task_data$overall_percent_complete else 0
+  current_subtask <- if (!is.na(task_data$current_subtask)) task_data$current_subtask else 0
+  total_subtasks <- if (!is.na(task_data$total_subtasks)) task_data$total_subtasks else 0
+  items_total <- if (!is.na(task_data$items_total)) task_data$items_total else 0
+  items_complete <- if (!is.na(task_data$items_complete)) task_data$items_complete else 0
+  
+  show_dual <- (items_total > 1 && task_status != "COMPLETED")
+  
+  # Calculate effective progress
+  effective_progress <- if (!is.na(task_progress) && task_progress > 0) {
+    task_progress
+  } else if (total_subtasks > 0 && current_subtask > 0) {
+    round(100 * current_subtask / total_subtasks, 1)
+  } else if (!is.na(task_progress)) {
+    task_progress
+  } else {
+    0
+  }
+  
+  # Build enhanced progress bar labels with subtask information
+  task_label <- if (task_status == "COMPLETED") {
+    if (total_subtasks > 0) {
+      sprintf("Task: %d/%d (100%%)", total_subtasks, total_subtasks)
+    } else {
+      "Task: 100%"
+    }
+  } else if (task_status == "FAILED") {
+    task_pct <- if (!is.na(task_progress)) task_progress else 100
+    if (total_subtasks > 0) {
+      if (!is.null(task_data$current_subtask_name) && task_data$current_subtask_name != "") {
+        sprintf("Task: %d/%d (%.1f%%) - Subtask %d.%d | %s", 
+               current_subtask, total_subtasks, task_pct,
+               current_subtask, 
+               if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1,
+               task_data$current_subtask_name)
+      } else {
+        sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, task_pct)
+      }
+    } else {
+      sprintf("Task: %.1f%%", task_pct)
+    }
+  } else if (task_status %in% c("RUNNING", "STARTED")) {
+    if (total_subtasks > 0) {
+      if (!is.null(task_data$current_subtask_name) && task_data$current_subtask_name != "") {
+        sprintf("Task: %d/%d (%.1f%%) - Subtask %d.%d | %s", 
+               current_subtask, total_subtasks, effective_progress,
+               current_subtask,
+               if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1,
+               task_data$current_subtask_name)
+      } else {
+        sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, effective_progress)
+      }
+    } else {
+      sprintf("Task: %.1f%%", effective_progress)
+    }
+  } else {
+    "Task:"
+  }
+  
+  task_width <- if (task_status == "COMPLETED") {
+    100
+  } else if (task_status == "FAILED") {
+    if (!is.na(task_progress)) task_progress else 100
+  } else if (task_status %in% c("RUNNING", "STARTED")) {
+    max(effective_progress, 1)
+  } else {
+    0
+  }
+  
+  # Determine progress bar style
+  bar_status <- switch(task_status,
+    "COMPLETED" = "success",
+    "RUNNING" = "warning", 
+    "FAILED" = "danger",
+    "STARTED" = "info",
+    "primary"
+  )
+  
+  # Build primary progress bar HTML
+  progress_html <- sprintf('
+    <div class="task-progress-container" style="width: 300px;">
+      <div class="progress" style="height: 20px;">
+        <div class="progress-bar progress-bar-%s%s" role="progressbar" 
+             style="width: %d%%" aria-valuenow="%d" aria-valuemin="0" aria-valuemax="100">
+          %s
+        </div>
+      </div>',
+    bar_status,
+    if (task_status == "RUNNING") " progress-bar-striped progress-bar-animated" else "",
+    task_width, task_width, task_label
+  )
+  
+  # Add secondary items progress bar if needed
+  if (show_dual) {
+    items_complete_safe <- if (is.na(items_complete)) 0 else items_complete
+    items_total_safe <- if (is.na(items_total) || items_total == 0) 1 else items_total
+    items_pct <- round(100 * items_complete_safe / items_total_safe, 1)
+    
+    progress_html <- paste0(progress_html, sprintf('
+      <div style="height: 4px;"></div>
+      <div class="progress" style="height: 15px;">
+        <div class="progress-bar progress-bar-info" role="progressbar" 
+             style="width: %d%%" aria-valuenow="%d" aria-valuemin="0" aria-valuemax="100">
+          <small>Items: %d/%d (%.1f%%)</small>
+        </div>
+      </div>',
+      items_pct, items_pct, items_complete_safe, items_total, items_pct
+    ))
+  }
+  
+  progress_html <- paste0(progress_html, '</div>')
+  
+  return(progress_html)
+}
 
 server <- function(input, output, session) {
   # ============================================================================
@@ -179,7 +370,10 @@ server <- function(input, output, session) {
         current_subtask = if (!is.na(task_status$current_subtask)) task_status$current_subtask else 0,
         total_subtasks = if (!is.na(task_status$total_subtasks)) task_status$total_subtasks else 0,
         items_total = items_total,
-        items_complete = items_complete
+        items_complete = items_complete,
+        # Add subtask name from active subtask if available
+        current_subtask_name = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_name)) subtask_info$subtask_name else "",
+        current_subtask_number = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_number)) subtask_info$subtask_number else 0
       )
       
       # Only update if something changed
@@ -377,28 +571,41 @@ server <- function(input, output, session) {
   # ============================================================================
   
   # Build the entire UI structure once using bslib::accordion
-  output$pipeline_status_ui <- renderUI({
+  # ============================================================================
+  # STATIC UI GENERATION: Build accordion structure once at startup
+  # ============================================================================
+  
+  # Build static UI structure when pipeline structure is loaded
+  observe({
     struct <- pipeline_structure()
     if (is.null(struct)) {
-      return(div(class = "alert alert-info", "Loading pipeline structure..."))
+      shinyjs::html("pipeline_stages_accordion", 
+                   '<div class="alert alert-info">Loading pipeline structure...</div>')
+      return()
     }
     
     stages <- struct$stages
     tasks <- struct$tasks
     
     if (is.null(stages) || nrow(stages) == 0) {
-      return(div(class = "alert alert-info", "No stages configured"))
+      shinyjs::html("pipeline_stages_accordion", 
+                   '<div class="alert alert-info">No stages configured</div>')
+      return()
     }
     
     if (is.null(tasks) || nrow(tasks) == 0) {
-      return(div(class = "alert alert-info", "No tasks registered"))
+      shinyjs::html("pipeline_stages_accordion", 
+                   '<div class="alert alert-info">No tasks registered</div>')
+      return()
     }
     
     # Order stages
     stages <- stages[order(stages$stage_order), ]
     
-    # Build accordion panels for each stage
-    accordion_panels <- lapply(seq_len(nrow(stages)), function(i) {
+    # Build static HTML structure
+    accordion_html <- ""
+    
+    for (i in seq_len(nrow(stages))) {
       stage <- stages[i, ]
       stage_name <- stage$stage_name
       stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
@@ -409,40 +616,56 @@ server <- function(input, output, session) {
         stage_tasks <- stage_tasks[order(stage_tasks$task_order), ]
       }
       
-      # Build task rows - structure is static, content is reactive
-      task_rows <- lapply(seq_len(nrow(stage_tasks)), function(j) {
+      # Build task rows HTML
+      task_rows_html <- ""
+      for (j in seq_len(nrow(stage_tasks))) {
         task <- stage_tasks[j, ]
         task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
         
-        div(class = "task-row",
-            div(class = "task-name", task$task_name),
-            uiOutput(paste0("task_status_", task_id)),
-            uiOutput(paste0("task_progress_", task_id)),
-            uiOutput(paste0("task_message_", task_id)),
-            uiOutput(paste0("task_reset_", task_id))
-        )
-      })
+        task_rows_html <- paste0(task_rows_html, sprintf('
+          <div class="task-row">
+            <div class="task-name">%s</div>
+            <div id="task_status_%s" class="task-status-badge"></div>
+            <div id="task_progress_%s" class="task-progress-container"></div>
+            <div id="task_message_%s" class="task-message"></div>
+            <div id="task_reset_%s" class="task-reset-button"></div>
+          </div>',
+          htmltools::htmlEscape(task$task_name), task_id, task_id, task_id, task_id
+        ))
+      }
       
-      # Create accordion panel with static header structure and reactive components
-      accordion_panel(
-        title = div(class = "stage-header",
-                   div(class = "stage-name", stage_name),
-                   uiOutput(paste0("stage_badge_", stage_id), inline = TRUE),
-                   uiOutput(paste0("stage_progress_", stage_id), inline = TRUE),
-                   textOutput(paste0("stage_count_", stage_id), inline = TRUE)
-        ),
-        value = paste0("stage_panel_", stage_id),
-        task_rows
-      )
-    })
+      # Build accordion panel HTML
+      accordion_html <- paste0(accordion_html, sprintf('
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading_%s">
+            <button class="accordion-button collapsed" type="button" 
+                    data-bs-toggle="collapse" data-bs-target="#collapse_%s" 
+                    aria-expanded="false" aria-controls="collapse_%s">
+              <div class="stage-header">
+                <div class="stage-name">%s</div>
+                <div id="stage_badge_%s" class="stage-badge"></div>
+                <div id="stage_progress_%s" class="stage-progress"></div>
+                <div id="stage_count_%s" class="stage-count"></div>
+              </div>
+            </button>
+          </h2>
+          <div id="collapse_%s" class="accordion-collapse collapse" 
+               aria-labelledby="heading_%s" data-bs-parent="#pipeline_stages_accordion">
+            <div class="accordion-body">
+              %s
+            </div>
+          </div>
+        </div>',
+        stage_id, stage_id, stage_id, 
+        htmltools::htmlEscape(stage_name), stage_id, stage_id, stage_id,
+        stage_id, stage_id, task_rows_html
+      ))
+    }
     
-    # Build accordion with all stage panels (none open by default)
-    do.call(accordion, c(
-      list(id = "pipeline_stages_accordion", multiple = TRUE),
-      accordion_panels
-    ))
+    # Insert the complete accordion structure
+    shinyjs::html("pipeline_stages_accordion", accordion_html)
   })
-  
+
   # Create individual reactive outputs for stage header components
   observe({
     struct <- pipeline_structure()
@@ -458,35 +681,52 @@ server <- function(input, output, session) {
       stage_name <- stage$stage_name
       stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
       
-      # Badge - only re-renders when status changes
-      output[[paste0("stage_badge_", stage_id)]] <- renderUI({
-        stage_data <- stage_reactives[[stage_name]]
-        if (is.null(stage_data)) return(NULL)
-        badge(stage_data$status)
-      })
-      
-      # Progress bar - only re-renders when progress or status changes
-      output[[paste0("stage_progress_", stage_id)]] <- renderUI({
-        stage_data <- stage_reactives[[stage_name]]
-        if (is.null(stage_data)) return(NULL)
+      # Create reactive observers for stage components using shinyjs
+      (function(stage_name_local, stage_id_local) {
         
-        div(class = "stage-progress",
-            div(class = paste("stage-progress-fill", paste0("status-", stage_data$status)),
-                style = sprintf("width: %d%%", stage_data$progress_pct),
-                sprintf("%d%%", stage_data$progress_pct))
-        )
-      })
-      
-      # Count - only re-renders when task counts change
-      output[[paste0("stage_count_", stage_id)]] <- renderText({
-        stage_data <- stage_reactives[[stage_name]]
-        if (is.null(stage_data)) return("")
-        sprintf("%d/%d", stage_data$completed, stage_data$total)
-      })
+        # Badge - updates when status changes
+        observe({
+          stage_data <- stage_reactives[[stage_name_local]]
+          if (!is.null(stage_data)) {
+            tryCatch({
+              shinyjs::html(paste0("stage_badge_", stage_id_local), 
+                           badge_html(stage_data$status))
+            }, error = function(e) {
+              message("Error updating stage badge: ", e$message)
+            })
+          }
+        })
+        
+        # Progress bar - updates when progress or status changes
+        observe({
+          stage_data <- stage_reactives[[stage_name_local]]
+          if (!is.null(stage_data)) {
+            tryCatch({
+              shinyjs::html(paste0("stage_progress_", stage_id_local),
+                           stage_progress_html(stage_data$progress_pct, stage_data$status))
+            }, error = function(e) {
+              message("Error updating stage progress: ", e$message)
+            })
+          }
+        })
+        
+        # Count - updates when task counts change
+        observe({
+          stage_data <- stage_reactives[[stage_name_local]]
+          if (!is.null(stage_data)) {
+            tryCatch({
+              shinyjs::text(paste0("stage_count_", stage_id_local),
+                           sprintf("%d/%d", stage_data$completed, stage_data$total))
+            }, error = function(e) {
+              message("Error updating stage count: ", e$message)
+            })
+          }
+        })
+      })(stage_name, stage_id)
     })
   })
   
-  # Create reactive outputs for individual task components
+  # Create reactive observers for individual task components using shinyjs
   observe({
     struct <- pipeline_structure()
     if (is.null(struct)) return()
@@ -503,141 +743,84 @@ server <- function(input, output, session) {
       task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
       task_key <- paste(stage_name, task$task_name, sep = "||")
       
-      # Status badge
-      output[[paste0("task_status_", task_id)]] <- renderUI({
-        task_data <- task_reactives[[task_key]]
-        task_status <- if (!is.null(task_data)) task_data$status else "NOT_STARTED"
-        badge(task_status)
-      })
-      
-      # Progress bars
-      output[[paste0("task_progress_", task_id)]] <- renderUI({
-        task_data <- task_reactives[[task_key]]
+      # Create reactive observers for task components using shinyjs
+      (function(task_key_local, task_id_local, stage_name_local, task_name_local) {
         
-        if (is.null(task_data)) {
-          task_data <- list(
-            status = "NOT_STARTED",
-            overall_percent_complete = 0,
-            current_subtask = 0,
-            total_subtasks = 0,
-            items_total = 0,
-            items_complete = 0
-          )
-        }
+        # Status badge
+        observe({
+          task_data <- task_reactives[[task_key_local]]
+          task_status <- if (!is.null(task_data)) task_data$status else "NOT_STARTED"
+          tryCatch({
+            shinyjs::html(paste0("task_status_", task_id_local), badge_html(task_status))
+          }, error = function(e) {
+            message("Error updating task status: ", e$message)
+          })
+        })
         
-        task_status <- task_data$status
-        task_progress <- task_data$overall_percent_complete
-        current_subtask <- task_data$current_subtask
-        total_subtasks <- task_data$total_subtasks
-        items_total <- task_data$items_total
-        items_complete <- task_data$items_complete
+        # Progress bars with enhanced subtask information
+        observe({
+          task_data <- task_reactives[[task_key_local]]
+          tryCatch({
+            shinyjs::html(paste0("task_progress_", task_id_local), task_progress_html(task_data))
+          }, error = function(e) {
+            message("Error updating task progress: ", e$message)
+          })
+        })
         
-        show_dual <- (items_total > 1 && task_status != "COMPLETED")
-        
-        # Calculate effective progress
-        effective_progress <- if (!is.na(task_progress) && task_progress > 0) {
-          task_progress
-        } else if (total_subtasks > 0 && current_subtask > 0) {
-          round(100 * current_subtask / total_subtasks, 1)
-        } else if (!is.na(task_progress)) {
-          task_progress
-        } else {
-          0
-        }
-        
-        # Build progress bar labels
-        task_label <- if (task_status == "COMPLETED") {
-          if (total_subtasks > 0) {
-            sprintf("Task: %d/%d (100%%)", total_subtasks, total_subtasks)
-          } else {
-            "Task: 100%"
-          }
-        } else if (task_status == "FAILED") {
-          task_pct <- if (!is.na(task_progress)) task_progress else 100
-          if (total_subtasks > 0) {
-            sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, task_pct)
-          } else {
-            sprintf("Task: %.1f%%", task_pct)
-          }
-        } else if (task_status %in% c("RUNNING", "STARTED")) {
-          if (total_subtasks > 0) {
-            sprintf("Task: %d/%d (%.1f%%)", current_subtask, total_subtasks, effective_progress)
-          } else {
-            sprintf("Task: %.1f%%", effective_progress)
-          }
-        } else {
-          "Task:"
-        }
-        
-        task_width <- if (task_status == "COMPLETED") {
-          100
-        } else if (task_status == "FAILED") {
-          if (!is.na(task_progress)) task_progress else 100
-        } else if (task_status %in% c("RUNNING", "STARTED")) {
-          max(effective_progress, 1)
-        } else {
-          0
-        }
-        
-        # Determine progress bar style
-        bar_status <- switch(task_status,
-          "COMPLETED" = "success",
-          "RUNNING" = "warning",
-          "FAILED" = "danger",
-          "STARTED" = "info",
-          "primary"
-        )
-        
-        div(class = "task-progress-container", style = "width: 300px;",
-            # Primary: Task progress using shinyWidgets
-            shinyWidgets::progressBar(
-              id = paste0("progress_", task_id),
-              value = task_width,
-              total = 100,
-              title = task_label,
-              status = bar_status,
-              striped = task_status == "RUNNING",
-              display_pct = FALSE
-            ),
-            # Secondary: Items progress
-            if (show_dual) {
-              items_complete_safe <- if (is.na(items_complete)) 0 else items_complete
-              items_total_safe <- if (is.na(items_total) || items_total == 0) 1 else items_total
-              items_pct <- round(100 * items_complete_safe / items_total_safe, 1)
-              tagList(
-                tags$div(style = "height: 4px;"),
-                shinyWidgets::progressBar(
-                  id = paste0("progress_items_", task_id),
-                  value = items_pct,
-                  total = 100,
-                  title = sprintf("Items: %d/%d (%.1f%%)", items_complete_safe, items_total, items_pct),
-                  status = "info",
-                  size = "sm",
-                  display_pct = FALSE
-                )
-              )
+        # Message with enhanced subtask details
+        observe({
+          task_data <- task_reactives[[task_key_local]]
+          
+          # Create enhanced message that includes subtask information
+          message_text <- if (!is.null(task_data)) {
+            current_subtask_name <- task_data$current_subtask_name %||% ""
+            overall_progress_message <- task_data$overall_progress_message %||% ""
+            current_subtask <- task_data$current_subtask %||% 0
+            current_subtask_number <- task_data$current_subtask_number %||% 1
+            
+            if (nchar(current_subtask_name) > 0 && nchar(overall_progress_message) > 0) {
+              # Combine subtask name with overall progress message
+              sprintf("Subtask %d.%d: %s | %s", 
+                     current_subtask, current_subtask_number,
+                     current_subtask_name, overall_progress_message)
+            } else if (nchar(current_subtask_name) > 0) {
+              # Show only subtask name if no overall message
+              sprintf("Subtask %d.%d: %s", current_subtask, current_subtask_number, current_subtask_name)
+            } else {
+              # Fall back to overall progress message
+              overall_progress_message
             }
-        )
-      })
-      
-      # Message
-      output[[paste0("task_message_", task_id)]] <- renderUI({
-        task_data <- task_reactives[[task_key]]
-        message_text <- if (!is.null(task_data)) task_data$overall_progress_message else ""
+          } else {
+            ""
+          }
+          
+          message_text <- message_text %||% ""
+          
+          tryCatch({
+            shinyjs::html(paste0("task_message_", task_id_local), 
+                         sprintf('<div class="task-message" title="%s">%s</div>',
+                                htmltools::htmlEscape(message_text),
+                                htmltools::htmlEscape(message_text)))
+          }, error = function(e) {
+            message("Error updating task message: ", e$message)
+          })
+        })
         
-        div(class = "task-message", 
-            title = message_text,
-            message_text)
-      })
-      
-      # Reset button
-      output[[paste0("task_reset_", task_id)]] <- renderUI({
-        actionButton(paste0("reset_btn_", task_id), "Reset", 
-                    class = "btn-sm btn-warning task-reset-btn",
-                    title = "Reset this task to NOT_STARTED",
-                    onclick = sprintf("Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})", 
-                                    stage_name, task$task_name))
-      })
+        # Reset button
+        observe({
+          tryCatch({
+            reset_btn_html <- sprintf(
+              '<button id="reset_btn_%s" class="btn btn-sm btn-warning task-reset-btn" title="Reset this task to NOT_STARTED" onclick="Shiny.setInputValue(\'task_reset_clicked\', {stage: \'%s\', task: \'%s\', timestamp: Date.now()}, {priority: \'event\'})">Reset</button>',
+              task_id_local, 
+              htmltools::htmlEscape(stage_name_local), 
+              htmltools::htmlEscape(task_name_local)
+            )
+            shinyjs::html(paste0("task_reset_", task_id_local), reset_btn_html)
+          }, error = function(e) {
+            message("Error updating task reset button: ", e$message)
+          })
+        })
+      })(task_key, task_id, stage_name, task$task_name)
     })
   })
   
