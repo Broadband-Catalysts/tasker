@@ -5,10 +5,12 @@ library(tasker)
 library(dplyr)
 library(lubridate)
 library(shinyWidgets)
+library(shinyjs)
 
 
 ui <- page_fluid(
   theme = bs_theme(version = 5),
+  useShinyjs(),
   tags$head(
     title = "Tasker Monitor",
     tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css"),
@@ -63,7 +65,11 @@ ui <- page_fluid(
         id = "main_tabs",
         tabPanel("Pipeline Status",
                  div(class = "pipeline-status-container",
-                     uiOutput("pipeline_status_ui")
+                     # Static accordion structure - populated by server
+                     div(id = "pipeline_stages_accordion",
+                         class = "accordion",
+                         # Accordion items will be inserted here by server
+                     )
                  )
         )
       )

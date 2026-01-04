@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TASKER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SRC_ROOT="$(cd "$TASKER_ROOT/.." && pwd)"
 
-IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor"
+IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-dev"
 IMAGE_TAG="${1:-latest}"
 FULL_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
 
@@ -20,13 +20,13 @@ echo "Build context: $SRC_ROOT"
 echo "Dockerfile: $TASKER_ROOT/inst/shiny/Dockerfile"
 echo ""
 
-# Build from the src directory (parent of tasker) to include both tasker and bbcDB
+# Build from the src directory (parent of tasker-dev) to include both tasker-dev and bbcDB
 cd "$SRC_ROOT"
 
 echo "Building image..."
 docker build \
     -t "$FULL_IMAGE" \
-    -f tasker/inst/shiny/Dockerfile \
+    -f tasker-dev/inst/shiny/Dockerfile \
     .
 
 echo ""

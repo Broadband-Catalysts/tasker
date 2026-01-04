@@ -5,6 +5,7 @@ library(tasker)
 library(dplyr)
 library(lubridate)
 library(shinyWidgets)
+library(shinyjs)
 
 # Load configuration from .tasker.yml file
 # Try several locations in order of preference
