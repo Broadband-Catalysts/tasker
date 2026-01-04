@@ -580,45 +580,32 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # PIPELINE STATUS UI: Static structure with reactive components
+  # PIPELINE STATUS UI: Reactive structure with proper Shiny UI elements
   # ============================================================================
   
-  # Build the entire UI structure once using bslib::accordion
-  # ============================================================================
-  # STATIC UI GENERATION: Build accordion structure once at startup
-  # ============================================================================
-  
-  # Build static UI structure when pipeline structure is loaded
-  observe({
+  # Build the entire accordion UI structure using proper Shiny reactive UI
+  output$pipeline_stages_accordion <- renderUI({
     struct <- pipeline_structure()
     if (is.null(struct)) {
-      shinyjs::html("pipeline_stages_accordion", 
-                   '<div class="alert alert-info">Loading pipeline structure...</div>')
-      return()
+      return(div(class = "alert alert-info", "Loading pipeline structure..."))
     }
     
     stages <- struct$stages
     tasks <- struct$tasks
     
     if (is.null(stages) || nrow(stages) == 0) {
-      shinyjs::html("pipeline_stages_accordion", 
-                   '<div class="alert alert-info">No stages configured</div>')
-      return()
+      return(div(class = "alert alert-info", "No stages configured"))
     }
     
     if (is.null(tasks) || nrow(tasks) == 0) {
-      shinyjs::html("pipeline_stages_accordion", 
-                   '<div class="alert alert-info">No tasks registered</div>')
-      return()
+      return(div(class = "alert alert-info", "No tasks registered"))
     }
     
     # Order stages
     stages <- stages[order(stages$stage_order), ]
     
-    # Build static HTML structure
-    accordion_html <- ""
-    
-    for (i in seq_len(nrow(stages))) {
+    # Build accordion panels
+    accordion_panels <- lapply(seq_len(nrow(stages)), function(i) {
       stage <- stages[i, ]
       stage_name <- stage$stage_name
       stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
@@ -629,54 +616,54 @@ server <- function(input, output, session) {
         stage_tasks <- stage_tasks[order(stage_tasks$task_order), ]
       }
       
-      # Build task rows HTML
-      task_rows_html <- ""
-      for (j in seq_len(nrow(stage_tasks))) {
+      # Build task rows using proper UI elements
+      task_rows <- lapply(seq_len(nrow(stage_tasks)), function(j) {
         task <- stage_tasks[j, ]
         task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
         
-        task_rows_html <- paste0(task_rows_html, sprintf('
-          <div class="task-row">
-            <div class="task-name">%s</div>
-            <div id="task_status_%s" class="task-status-badge"></div>
-            <div id="task_progress_%s" class="task-progress-container"></div>
-            <div id="task_message_%s" class="task-message"></div>
-            <div id="task_reset_%s" class="task-reset-button"></div>
-          </div>',
-          htmltools::htmlEscape(task$task_name), task_id, task_id, task_id, task_id
-        ))
-      }
+        div(
+          class = "task-row",
+          div(class = "task-name", task$task_name),
+          uiOutput(paste0("task_status_", task_id), class = "task-status-badge", inline = TRUE),
+          uiOutput(paste0("task_progress_", task_id), class = "task-progress-container", inline = TRUE),
+          uiOutput(paste0("task_message_", task_id), class = "task-message", inline = TRUE),
+          uiOutput(paste0("task_reset_", task_id), class = "task-reset-button", inline = TRUE)
+        )
+      })
       
-      # Build accordion panel HTML
-      accordion_html <- paste0(accordion_html, sprintf('
-        <div class="accordion-item">
-          <h2 class="accordion-header" id="heading_%s">
-            <button class="accordion-button collapsed" type="button" 
-                    data-bs-toggle="collapse" data-bs-target="#collapse_%s" 
-                    aria-expanded="false" aria-controls="collapse_%s">
-              <div class="stage-header">
-                <div class="stage-name">%s</div>
-                <div id="stage_badge_%s" class="stage-badge"></div>
-                <div id="stage_progress_%s" class="stage-progress"></div>
-                <div id="stage_count_%s" class="stage-count"></div>
-              </div>
-            </button>
-          </h2>
-          <div id="collapse_%s" class="accordion-collapse collapse" 
-               aria-labelledby="heading_%s">
-            <div class="accordion-body">
-              %s
-            </div>
-          </div>
-        </div>',
-        stage_id, stage_id, stage_id, 
-        htmltools::htmlEscape(stage_name), stage_id, stage_id, stage_id,
-        stage_id, stage_id, task_rows_html
-      ))
-    }
+      # Build accordion panel
+      div(
+        class = "accordion-item",
+        tags$h2(
+          class = "accordion-header",
+          id = paste0("heading_", stage_id),
+          tags$button(
+            class = "accordion-button collapsed",
+            type = "button",
+            `data-bs-toggle` = "collapse",
+            `data-bs-target` = paste0("#collapse_", stage_id),
+            `aria-expanded` = "false",
+            `aria-controls` = paste0("collapse_", stage_id),
+            div(
+              class = "stage-header",
+              div(class = "stage-name", stage_name),
+              uiOutput(paste0("stage_badge_", stage_id), class = "stage-badge", inline = TRUE),
+              uiOutput(paste0("stage_progress_", stage_id), class = "stage-progress", inline = TRUE),
+              uiOutput(paste0("stage_count_", stage_id), class = "stage-count", inline = TRUE)
+            )
+          )
+        ),
+        div(
+          id = paste0("collapse_", stage_id),
+          class = "accordion-collapse collapse",
+          `aria-labelledby` = paste0("heading_", stage_id),
+          div(class = "accordion-body", task_rows)
+        )
+      )
+    })
     
-    # Insert the complete accordion structure
-    shinyjs::html("pipeline_stages_accordion", accordion_html)
+    # Return the complete accordion
+    div(class = "accordion", id = "pipeline_stages_accordion_inner", accordion_panels)
   })
 
   # Create individual reactive outputs for stage header components
@@ -694,45 +681,30 @@ server <- function(input, output, session) {
       stage_name <- stage$stage_name
       stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
       
-      # Create reactive observers for stage components using shinyjs
+      # Create renderUI blocks for stage components
       (function(stage_name_local, stage_id_local) {
         
-        # Badge - updates when status changes
-        observe({
+        # Badge - reactive renderUI
+        output[[paste0("stage_badge_", stage_id_local)]] <- renderUI({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            tryCatch({
-              shinyjs::html(paste0("stage_badge_", stage_id_local), 
-                           badge_html(stage_data$status))
-            }, error = function(e) {
-              message("Error updating stage badge: ", e$message)
-            })
+            HTML(badge_html(stage_data$status))
           }
         })
         
-        # Progress bar - updates when progress or status changes
-        observe({
+        # Progress bar - reactive renderUI  
+        output[[paste0("stage_progress_", stage_id_local)]] <- renderUI({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            tryCatch({
-              shinyjs::html(paste0("stage_progress_", stage_id_local),
-                           stage_progress_html(stage_data$progress_pct, stage_data$status))
-            }, error = function(e) {
-              message("Error updating stage progress: ", e$message)
-            })
+            HTML(stage_progress_html(stage_data$progress_pct, stage_data$status))
           }
         })
         
-        # Count - updates when task counts change
-        observe({
+        # Count - reactive renderUI
+        output[[paste0("stage_count_", stage_id_local)]] <- renderUI({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            tryCatch({
-              shinyjs::html(paste0("stage_count_", stage_id_local),
-                           sprintf("%d/%d", stage_data$completed, stage_data$total))
-            }, error = function(e) {
-              message("Error updating stage count: ", e$message)
-            })
+            span(sprintf("%d/%d", stage_data$completed, stage_data$total))
           }
         })
       })(stage_name, stage_id)
@@ -749,39 +721,31 @@ server <- function(input, output, session) {
     
     if (is.null(stages) || nrow(stages) == 0 || is.null(tasks) || nrow(tasks) == 0) return()
     
-    # For each task, create individual reactive outputs
+    # For each task, create individual reactive outputs using renderUI
     lapply(seq_len(nrow(tasks)), function(i) {
       task <- tasks[i, ]
       stage_name <- task$stage_name
       task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
       task_key <- paste(stage_name, task$task_name, sep = "||")
       
-      # Create reactive observers for task components using shinyjs
+      # Create renderUI blocks for task components
       (function(task_key_local, task_id_local, stage_name_local, task_name_local) {
         
-        # Status badge
-        observe({
+        # Status badge - reactive renderUI
+        output[[paste0("task_status_", task_id_local)]] <- renderUI({
           task_data <- task_reactives[[task_key_local]]
           task_status <- if (!is.null(task_data)) task_data$status else "NOT_STARTED"
-          tryCatch({
-            shinyjs::html(paste0("task_status_", task_id_local), badge_html(task_status))
-          }, error = function(e) {
-            message("Error updating task status: ", e$message)
-          })
+          HTML(badge_html(task_status))
         })
         
-        # Progress bars with enhanced subtask information
-        observe({
+        # Progress bars with enhanced subtask information - reactive renderUI
+        output[[paste0("task_progress_", task_id_local)]] <- renderUI({
           task_data <- task_reactives[[task_key_local]]
-          tryCatch({
-            shinyjs::html(paste0("task_progress_", task_id_local), task_progress_html(task_data))
-          }, error = function(e) {
-            message("Error updating task progress: ", e$message)
-          })
+          HTML(task_progress_html(task_data))
         })
         
-        # Message with enhanced subtask details
-        observe({
+        # Message with enhanced subtask details - reactive renderUI
+        output[[paste0("task_message_", task_id_local)]] <- renderUI({
           task_data <- task_reactives[[task_key_local]]
           
           # Create enhanced message that includes subtask information
@@ -809,29 +773,22 @@ server <- function(input, output, session) {
           
           message_text <- message_text %||% ""
           
-          tryCatch({
-            shinyjs::html(paste0("task_message_", task_id_local), 
-                         sprintf('<div class="task-message" title="%s">%s</div>',
-                                htmltools::htmlEscape(message_text),
-                                htmltools::htmlEscape(message_text)))
-          }, error = function(e) {
-            message("Error updating task message: ", e$message)
-          })
+          div(class = "task-message", title = message_text, message_text)
         })
         
-        # Reset button
-        observe({
-          tryCatch({
-            reset_btn_html <- sprintf(
-              '<button id="reset_btn_%s" class="btn btn-sm btn-warning task-reset-btn" title="Reset this task to NOT_STARTED" onclick="Shiny.setInputValue(\'task_reset_clicked\', {stage: \'%s\', task: \'%s\', timestamp: Date.now()}, {priority: \'event\'})">Reset</button>',
-              task_id_local, 
-              htmltools::htmlEscape(stage_name_local), 
+        # Reset button - reactive renderUI
+        output[[paste0("task_reset_", task_id_local)]] <- renderUI({
+          tags$button(
+            id = paste0("reset_btn_", task_id_local),
+            class = "btn btn-sm btn-warning task-reset-btn",
+            title = "Reset this task to NOT_STARTED",
+            onclick = sprintf(
+              "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
+              htmltools::htmlEscape(stage_name_local),
               htmltools::htmlEscape(task_name_local)
-            )
-            shinyjs::html(paste0("task_reset_", task_id_local), reset_btn_html)
-          }, error = function(e) {
-            message("Error updating task reset button: ", e$message)
-          })
+            ),
+            "Reset"
+          )
         })
       })(task_key, task_id, stage_name, task$task_name)
     })
