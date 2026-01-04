@@ -430,16 +430,24 @@ update_stage_progress <- function(session, stage_name, stage_tasks) {
   # Calculate aggregated metrics
   completed_count <- sum(stage_tasks$status == "COMPLETED")
   total_count <- nrow(stage_tasks)
-  running_count <- sum(stage_tasks$status %in% c("RUNNING", "STARTED"))
   failed_count <- sum(stage_tasks$status == "FAILED")
+  running_count <- sum(stage_tasks$status == "RUNNING")
+  started_count <- sum(stage_tasks$status == "STARTED")
   
-  # Determine stage status
+  # Determine stage status (priority order):
+  # 1. FAILED: if any task failed
+  # 2. RUNNING: if any task currently running
+  # 3. COMPLETED: if all tasks completed
+  # 4. STARTED: if any task started OR completed (work in progress)
+  # 5. NOT_STARTED: if no tasks have begun
   stage_status <- if (failed_count > 0) {
     "FAILED"
-  } else if (completed_count == total_count) {
-    "COMPLETED"
   } else if (running_count > 0) {
     "RUNNING"
+  } else if (completed_count == total_count) {
+    "COMPLETED"
+  } else if (started_count > 0 || completed_count > 0) {
+    "STARTED"
   } else {
     "NOT_STARTED"
   }
