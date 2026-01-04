@@ -165,18 +165,26 @@ task_progress_html <- function(task_data) {
   )
   
   # Build primary progress bar HTML
-  progress_html <- sprintf('
-    <div class="task-progress-container">
-      <div class="progress" style="height: 20px; overflow: visible;">
-        <div class="progress-bar progress-bar-%s%s" role="progressbar" 
-             style="width: %.0f%%; overflow: visible;" aria-valuenow="%.0f" aria-valuemin="0" aria-valuemax="100">
-          %s
-        </div>
-      </div>',
-    bar_status,
-    if (task_status == "RUNNING") " progress-bar-striped progress-bar-animated" else "",
-    task_width, task_width, task_label
-  )
+  if (task_width > 0) {
+    progress_html <- sprintf('
+      <div class="task-progress-container">
+        <div class="progress" style="height: 20px; overflow: visible;">
+          <div class="progress-bar progress-bar-%s%s" role="progressbar" 
+               style="width: %.0f%%; overflow: visible;" aria-valuenow="%.0f" aria-valuemin="0" aria-valuemax="100">
+            %s
+          </div>
+        </div>',
+      bar_status,
+      if (task_status == "RUNNING") " progress-bar-striped progress-bar-animated" else "",
+      task_width, task_width, task_label
+    )
+  } else {
+    # For NOT_STARTED tasks, render empty progress bar container
+    progress_html <- '
+      <div class="task-progress-container">
+        <div class="progress" style="height: 20px; overflow: visible;">
+        </div>'
+  }
   
   # Add secondary items progress bar if needed
   if (show_dual) {
