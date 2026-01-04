@@ -7,8 +7,9 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TASKER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SRC_ROOT="$(cd "$TASKER_ROOT/.." && pwd)"
+TASKER_DIR_NAME="$(basename "$TASKER_ROOT")"
 
-IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-dev"
+IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor"
 IMAGE_TAG="${1:-latest}"
 FULL_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
 
@@ -18,15 +19,17 @@ echo "==========================================================================
 echo "Image: $FULL_IMAGE"
 echo "Build context: $SRC_ROOT"
 echo "Dockerfile: $TASKER_ROOT/inst/shiny/Dockerfile"
+echo "Tasker directory: $TASKER_DIR_NAME"
 echo ""
 
-# Build from the src directory (parent of tasker-dev) to include both tasker-dev and bbcDB
+# Build from the src directory (parent directory) to include both tasker/tasker-dev and bbcDB
 cd "$SRC_ROOT"
 
 echo "Building image..."
 docker build \
+    --build-arg TASKER_DIR="$TASKER_DIR_NAME" \
     -t "$FULL_IMAGE" \
-    -f tasker-dev/inst/shiny/Dockerfile \
+    -f "$TASKER_DIR_NAME/inst/shiny/Dockerfile" \
     .
 
 echo ""
