@@ -94,7 +94,7 @@
 
 .stage-badge.status-NOT_STARTED {
   background: #e0e0e0;
-  color: #666;
+  color: #444;
 }
 
 .stage-badge.status-STARTED {
@@ -104,7 +104,7 @@
 
 .stage-badge.status-RUNNING {
   background: #ffd54f;
-  color: #666;
+  color: #444;
   animation: pulse 2s infinite;
 }
 
@@ -142,7 +142,7 @@ span[id^="stage_progress_"] {
   justify-content: center;
   font-size: 11px;
   font-weight: bold;
-  color: #666;
+  color: #444;
 }
 
 .stage-progress-fill.status-NOT_STARTED {
@@ -173,7 +173,7 @@ span[id^="stage_progress_"] {
 
 .stage-count {
   font-size: 13px;
-  color: #666;
+  color: #444;
   flex: 0 0 auto;
   min-width: 60px;
   text-align: right;
@@ -220,7 +220,7 @@ span[id^="stage_progress_"] {
 
 .task-status-badge.status-NOT_STARTED {
   background: #e0e0e0;
-  color: #666;
+  color: #444;
 }
 
 .task-status-badge.status-STARTED {
@@ -230,7 +230,7 @@ span[id^="stage_progress_"] {
 
 .task-status-badge.status-RUNNING {
   background: #ffd54f;
-  color: #666;
+  color: #444;
   animation: pulse 2s infinite;
 }
 
@@ -304,7 +304,7 @@ span[id^="stage_progress_"] {
 .task-progress-text {
   font-size: 11px;
   font-weight: bold;
-  color: #666;
+  color: #444;
   padding-left: 10px;
   white-space: nowrap;
 }
@@ -344,7 +344,7 @@ span[id^="stage_progress_"] {
 .item-progress-text {
   font-size: 10px;
   font-weight: bold;
-  color: #666;
+  color: #444;
   padding-left: 8px;
 }
 
@@ -372,14 +372,14 @@ span[id^="stage_progress_"] {
 
 .progress-label {
   font-size: 10px;
-  color: #666;
+  color: #444;
   font-weight: 500;
 }
 
 .task-message {
   flex: 0 0 200px;
   font-size: 12px;
-  color: #666;
+  color: #444;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
