@@ -199,6 +199,279 @@ span[id^="stage_progress_"] {
   font-size: 14px;
 }
 
+/* Toggle buttons container */
+.task-toggle-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-right: 8px;
+  flex: 0 0 auto;
+}
+
+/* Process toggle button (graph icon) */
+.btn-expand-process {
+  border: 1px solid #ccc;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  min-width: 28px;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.btn-expand-process:hover {
+  background: #e9ecef;
+  border-color: #999;
+}
+
+/* Visual change when process pane is expanded */
+.btn-expand-process.expanded {
+  background: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+/* Log toggle button (file icon) */
+.btn-expand-log {
+  border: 1px solid #ccc;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  min-width: 28px;
+  justify-content: center;
+}
+
+.btn-expand-log:hover {
+  background: #e9ecef;
+  border-color: #999;
+}
+
+/* Visual change when log pane is expanded */
+.btn-expand-log.expanded {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+/* Sub-panes */
+.task-subpane {
+  margin: 10px 0 10px 40px;
+  padding: 15px;
+  background: #fff;
+  border-left: 3px solid #007bff;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 2000px;
+  }
+}
+
+.task-subpane.process-pane {
+  border-left-color: #28a745;
+}
+
+.task-subpane.log-pane {
+  border-left-color: #007bff;
+}
+
+/* Process pane components */
+.process-info-header {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.process-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  margin-bottom: 15px;
+  font-size: 13px;
+}
+
+.process-detail-item {
+  display: flex;
+  gap: 8px;
+}
+
+.process-detail-item strong {
+  min-width: 80px;
+  color: #666;
+}
+
+.child-process-header {
+  font-weight: 600;
+  font-size: 14px;
+  margin: 15px 0 10px 0;
+  color: #333;
+}
+
+.child-process-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 15px;
+}
+
+.child-process-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 12px;
+  border-left: 3px solid #17a2b8;
+}
+
+.child-process-item span:first-child {
+  font-weight: 500;
+}
+
+.child-process-item span:last-child {
+  color: #666;
+}
+
+.subtask-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.subtask-table th {
+  background: #f8f9fa;
+  padding: 8px;
+  text-align: left;
+  border-bottom: 2px solid #dee2e6;
+  font-weight: 600;
+}
+
+.subtask-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.subtask-table tr:hover {
+  background: #f8f9fa;
+}
+
+/* Log pane components */
+.log-controls-container {
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.log-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.log-controls select,
+.log-controls input[type="text"] {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.log-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  margin: 0;
+}
+
+.log-content-container {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.log-file-info {
+  background: #e9ecef;
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #495057;
+}
+
+.log-file-info strong {
+  color: #212529;
+  font-weight: 600;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.log-line-error {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.log-line-warning {
+  color: #ffc107;
+}
+
+.log-line-info {
+  color: #17a2b8;
+}
+
+.process-error-banner {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.process-error-banner i {
+  color: #856404;
+  font-size: 20px;
+}
+
+.process-error-banner .error-text {
+  color: #856404;
+  font-weight: 500;
+}
+
+
 .task-name {
   flex: 0 0 300px;
   font-weight: 500;
