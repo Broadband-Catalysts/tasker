@@ -68,7 +68,8 @@ Traditional logging approaches fail to provide:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                      R Application Layer               │
+│                   R Application Layer                  │
+│                                                        │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │  │ Task Scripts │  │ Pipeline Mgr │  │ Monitoring   │  │
 │  │              │  │              │  │ Dashboard    │  │
