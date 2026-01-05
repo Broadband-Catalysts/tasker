@@ -65,11 +65,8 @@ ui <- page_fluid(
         id = "main_tabs",
         tabPanel("Pipeline Status",
                  div(class = "pipeline-status-container",
-                     # Static accordion structure - populated by server
-                     div(id = "pipeline_stages_accordion",
-                         class = "accordion",
-                         # Accordion items will be inserted here by server
-                     )
+                     # Accordion structure built dynamically with proper Shiny UI elements
+                     uiOutput("pipeline_stages_accordion")
                  )
         )
       )

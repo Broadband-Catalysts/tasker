@@ -22,7 +22,7 @@ echo "Dockerfile: $TASKER_ROOT/inst/shiny/Dockerfile"
 echo "Tasker directory: $TASKER_DIR_NAME"
 echo ""
 
-# Build from the src directory (parent of tasker) to include both tasker and bbcDB
+# Build from the src directory (parent directory) to include both tasker/tasker-dev and bbcDB
 cd "$SRC_ROOT"
 
 echo "Building image..."
