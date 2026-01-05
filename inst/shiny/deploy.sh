@@ -5,13 +5,25 @@
 set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor"
+TASKER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Determine branch and set image name accordingly
+cd "$TASKER_ROOT"
+GIT_BRANCH="$(git branch --show-current)"
+
+if [ "$GIT_BRANCH" = "main" ]; then
+    IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor"
+else
+    IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-${GIT_BRANCH}"
+fi
+
 IMAGE_TAG="${1:-latest}"
 FULL_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
 
 echo "================================================================================"
 echo "Deploying FCC Pipeline Monitor"
 echo "================================================================================"
+echo "Git branch: $GIT_BRANCH"
 echo "Image: $FULL_IMAGE"
 echo ""
 

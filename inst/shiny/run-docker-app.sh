@@ -12,14 +12,30 @@
 
 set -euo pipefail
 
-IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-dev:latest"
-CONTAINER_NAME="fcc-pipeline-monitor-dev-manual"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TASKER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+TASKER_DIR_NAME="$(basename "$TASKER_ROOT")"
+
+# Determine branch and set image/directory names accordingly
+cd "$TASKER_ROOT"
+GIT_BRANCH="$(git branch --show-current)"
+
+if [ "$GIT_BRANCH" = "main" ]; then
+    IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor:latest"
+    CONTAINER_NAME="fcc-pipeline-monitor-manual"
+else
+    IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-${GIT_BRANCH}:latest"
+    CONTAINER_NAME="fcc-pipeline-monitor-${GIT_BRANCH}-manual"
+fi
+
 PORT_HOST=${1:-3939}  # Default to port 3939, but allow override as first argument
 STARTUP_COMMAND=${2:-}  # Optional startup command override
 
 echo "=================================================================================="
 echo "FCC Pipeline Monitor Docker Container Manager"
 echo "=================================================================================="
+echo "Git branch: $GIT_BRANCH"
+echo "Tasker directory: $TASKER_DIR_NAME"
 echo "Image: $IMAGE"
 echo "Container name: $CONTAINER_NAME"
 echo "Host port: $PORT_HOST"
@@ -119,7 +135,7 @@ if [ "$RUN_INTERACTIVE" = true ]; then
         --add-host=manager.broadbandcatalysts.com:192.168.77.4 \
         -p "$PORT_HOST:3838" \
         -v "/home/warnes/src/fccData:/home/warnes/src/fccData:ro" \
-        -v "/home/warnes/src/tasker-dev:/home/warnes/src/tasker-dev:ro" \
+        -v "/home/warnes/src/$TASKER_DIR_NAME:/home/warnes/src/$TASKER_DIR_NAME:ro" \
         -v "/home/warnes/src/bbcDB:/home/warnes/src/bbcDB:ro" \
         -e SHINYPROXY_USERNAME=manual \
         -e TASKER_MONITOR_HOST=0.0.0.0 \
@@ -136,7 +152,7 @@ else
         --add-host=manager.broadbandcatalysts.com:192.168.77.4 
         -p "$PORT_HOST:3838" 
         -v "/home/warnes/src/fccData:/home/warnes/src/fccData:ro" 
-        -v "/home/warnes/src/tasker-dev:/home/warnes/src/tasker-dev:ro" 
+        -v "/home/warnes/src/$TASKER_DIR_NAME:/home/warnes/src/$TASKER_DIR_NAME:ro" 
         -v "/home/warnes/src/bbcDB:/home/warnes/src/bbcDB:ro" 
         -e SHINYPROXY_USERNAME=manual 
         -e TASKER_MONITOR_HOST=0.0.0.0 
