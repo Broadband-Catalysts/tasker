@@ -8,6 +8,7 @@ library(shinyWidgets)
 library(shinyjs)
 library(htmltools)
 library(ps)
+library(jsonlite)
 
 # ============================================================================
 # UTILITY FUNCTIONS for Static UI Updates  
@@ -61,13 +62,17 @@ stage_progress_html <- function(progress_pct, status) {
   progress_pct <- max(0, min(100, as.numeric(progress_pct %||% 0)))
   status <- as.character(status %||% "unknown")
   
+  # Apply minimum width for active stages to show activity
+  if (status %in% c("STARTED", "RUNNING")) {
+    progress_pct <- max(progress_pct, 0.5)
+  }
+  
   sprintf('
     <div class="stage-progress">
-      <div class="stage-progress-fill status-%s" style="width: %.0f%%">
-        %.0f%%
-      </div>
+      <div class="stage-progress-fill status-%s" style="width: %.1f%%"></div>
+      <span class="stage-progress-text">%.0f%%</span>
     </div>',
-    htmltools::htmlEscape(status), progress_pct, progress_pct
+    htmltools::htmlEscape(status), progress_pct, round(progress_pct)
   )
 }
 
@@ -148,9 +153,13 @@ task_progress_html <- function(task_data) {
   } else if (task_status == "FAILED") {
     effective_progress
   } else if (task_status == "RUNNING") {
-    max(effective_progress, 1)
+    # Show minimum progress to indicate activity
+    min_width <- if (total_subtasks > 0) (0.5 / total_subtasks) * 100 else 0.5
+    max(effective_progress, min_width)
   } else if (task_status == "STARTED") {
-    max(effective_progress, 1)
+    # Show minimum progress to indicate activity
+    min_width <- if (total_subtasks > 0) (0.5 / total_subtasks) * 100 else 0.5
+    max(effective_progress, min_width)
   } else if (task_status == "NOT_STARTED") {
     0
   } else {
@@ -171,19 +180,20 @@ task_progress_html <- function(task_data) {
     progress_html <- sprintf('
       <div class="task-progress-container">
         <div class="task-progress" style="height: 20px;">
-          <div class="task-progress-fill status-%s" style="width: %.0f%%">
-            <span class="task-progress-text">%s</span>
-          </div>
+          <div class="task-progress-fill status-%s" style="width: %.0f%%"></div>
+          <span class="task-progress-text">%s</span>
         </div>',
       task_status,
       task_width, task_label
     )
   } else {
     # For NOT_STARTED tasks, render empty progress bar container
-    progress_html <- '
+    progress_html <- sprintf('
       <div class="task-progress-container">
         <div class="task-progress" style="height: 20px;">
-        </div>'
+          <span class="task-progress-text">%s</span>
+        </div>',
+      task_label)
   }
   
   # Add secondary items progress bar if needed
@@ -192,15 +202,20 @@ task_progress_html <- function(task_data) {
     items_total_safe <- if (is.na(items_total) || items_total == 0) 1 else items_total
     items_pct <- round(100 * items_complete_safe / items_total_safe, 1)
     
+    # Apply minimum width for active tasks to show activity
+    if (task_status %in% c("STARTED", "RUNNING")) {
+      min_width <- (0.5 / items_total_safe) * 100
+      items_pct <- max(items_pct, min_width)
+    }
+    
     progress_html <- paste0(progress_html, sprintf('
       <div style="height: 4px;"></div>
       <div class="task-progress" style="height: 15px;">
-        <div class="item-progress-fill status-%s" style="width: %.1f%%">
-          <span class="item-progress-text">Items: %.0f/%.0f (%.1f%%)</span>
-        </div>
+        <div class="item-progress-fill status-%s" style="width: %.2f%%"></div>
+        <span class="item-progress-text">Items: %.0f/%.0f (%.1f%%)</span>
       </div>',
       task_status,
-      items_pct, items_complete_safe, items_total, items_pct
+      items_pct, items_complete_safe, items_total, round(items_pct, 1)
     ))
   }
   
@@ -211,8 +226,28 @@ task_progress_html <- function(task_data) {
 
 # Generate process status pane HTML
 build_process_status_html <- function(task_data, stage_name, task_name) {
-  if (is.null(task_data) || is.null(task_data$run_id)) {
-    return(HTML("<div class='process-info-header'>No active process</div>"))
+  if (is.null(task_data)) {
+    return(HTML("<div class='process-info-header'>No task data available</div>"))
+  }
+  
+  # Show basic task info even if never run
+  if (is.null(task_data$run_id) || is.na(task_data$run_id)) {
+    basic_info <- sprintf(
+      "<div class='process-info'>
+        <h4 class='process-info-header'>Task Information</h4>
+        <div class='process-details'>
+          <div class='process-detail-item'><strong>Stage:</strong> <span>%s</span></div>
+          <div class='process-detail-item'><strong>Task:</strong> <span>%s</span></div>
+          <div class='process-detail-item'><strong>Status:</strong> <span>%s</span></div>
+          <div class='process-detail-item'><strong>Last Run:</strong> <span>Never executed</span></div>
+        </div>
+        <p style='margin-top: 15px; color: #666;'>This task has not been executed yet. No process information or subtask details are available.</p>
+      </div>",
+      htmltools::htmlEscape(stage_name),
+      htmltools::htmlEscape(task_name), 
+      htmltools::htmlEscape(task_data$status %||% "NOT_STARTED")
+    )
+    return(HTML(basic_info))
   }
   
   run_id <- task_data$run_id
@@ -377,7 +412,13 @@ server <- function(input, output, session) {
     expanded_process_panes = c(),
     expanded_log_panes = c(),
     # Per-task log settings (stored as list with task_id as key)
-    log_settings = list()
+    log_settings = list(),
+    # Trigger for log refresh (increment to force re-render)
+    log_refresh_trigger = 0,
+    # Track last file positions for incremental log reading
+    log_last_positions = list(),
+    # Flag to track if initial auto-expand has been performed
+    initial_auto_expand_done = FALSE
   )
   
   # Get pipeline structure (stages + registered tasks) - this rarely changes
@@ -529,22 +570,16 @@ server <- function(input, output, session) {
         }
       }
       
-      new_val <- list(
-        stage_name = task_status$stage_name,
-        task_name = task_status$task_name,
-        task_order = if (!is.null(current_val)) current_val$task_order else NA,
-        status = task_status$status,
-        overall_percent_complete = if (!is.na(task_status$overall_percent_complete)) task_status$overall_percent_complete else 0,
-        overall_progress_message = if (!is.na(task_status$overall_progress_message)) task_status$overall_progress_message else "",
-        run_id = task_status$run_id,
-        current_subtask = if (!is.na(task_status$current_subtask)) task_status$current_subtask else 0,
-        total_subtasks = if (!is.na(task_status$total_subtasks)) task_status$total_subtasks else 0,
-        items_total = items_total,
-        items_complete = items_complete,
-        # Add subtask name from active subtask if available
-        current_subtask_name = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_name)) subtask_info$subtask_name else "",
-        current_subtask_number = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_number)) subtask_info$subtask_number else 0
-      )
+      # Use task_status directly and just add/modify the fields we need
+      new_val <- task_status %>%
+        mutate(
+          task_order = if (!is.null(current_val)) current_val$task_order else NA,
+          items_total = items_total,
+          items_complete = items_complete,
+          current_subtask_name = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_name)) subtask_info$subtask_name else "",
+          current_subtask_number = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_number)) subtask_info$subtask_number else 0
+        ) %>%
+        as.list()
       
       # Only update if something changed
       if (is.null(current_val) || !identical(current_val, new_val)) {
@@ -556,38 +591,68 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # AUTO-EXPAND: Automatically expand process panes for RUNNING/STARTED tasks
+  # AUTO-EXPAND: Automatically expand stage accordion when status is RUNNING/STARTED
+  # (both on initialization and when status changes)
   # ============================================================================
   
   observe({
     struct <- pipeline_structure()
     if (is.null(struct)) return()
     
-    tasks <- struct$tasks
-    if (is.null(tasks) || nrow(tasks) == 0) return()
+    stages <- struct$stages
+    if (is.null(stages) || nrow(stages) == 0) return()
     
-    # Trigger on any task_reactives change
-    reactiveValuesToList(task_reactives)
+    # Trigger on any stage_reactives change
+    stage_reactives_list <- reactiveValuesToList(stage_reactives)
     
-    # Check each task's status
-    lapply(seq_len(nrow(tasks)), function(i) {
-      task <- tasks[i, ]
-      stage_name <- task$stage_name
-      task_name <- task$task_name
-      task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task_name, sep="_"))
-      task_key <- paste(stage_name, task_name, sep = "||")
-      
-      task_data <- task_reactives[[task_key]]
-      
-      if (!is.null(task_data) && task_data$status %in% c("RUNNING", "STARTED")) {
-        # Auto-expand process pane if not already expanded
-        if (!(task_id %in% rv$expanded_process_panes)) {
-          rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
-          shinyjs::show(paste0("process_pane_", task_id))
-          shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
+    # Wait for stage reactives to be populated before doing initial auto-expand
+    has_data <- any(sapply(stage_reactives_list, function(x) !is.null(x)))
+    if (!has_data) return()
+    
+    # Use delay to ensure DOM is ready
+    shinyjs::delay(300, {
+      # Check each stage's status
+      lapply(seq_len(nrow(stages)), function(i) {
+        stage <- stages[i, ]
+        stage_name <- stage$stage_name
+        stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
+        
+        stage_data <- stage_reactives[[stage_name]]
+        
+        if (!is.null(stage_data) && stage_data$status %in% c("RUNNING", "STARTED")) {
+          # Auto-expand stage accordion if not already expanded
+          if (!(stage_name %in% rv$expanded_stages)) {
+            rv$expanded_stages <- c(rv$expanded_stages, stage_name)
+            
+            # Use shinyjs to manipulate Bootstrap accordion
+            collapse_id <- paste0("collapse_", stage_id)
+            button_id <- paste0("heading_", stage_id)
+            
+            # Show the collapse element
+            shinyjs::show(id = collapse_id)
+            
+            # Remove collapsed class from button and add expanded state
+            shinyjs::runjs(sprintf(
+              "
+              var button = document.querySelector('#%s .accordion-button');
+              var collapse = document.getElementById('%s');
+              if (button && collapse) {
+                button.classList.remove('collapsed');
+                button.setAttribute('aria-expanded', 'true');
+                collapse.classList.add('show');
+              }
+              ",
+              button_id, collapse_id
+            ))
+          }
         }
-      }
+      })
     })
+    
+    # Mark that initial auto-expand has been checked
+    if (!rv$initial_auto_expand_done) {
+      rv$initial_auto_expand_done <- TRUE
+    }
   })
   
   # ============================================================================
@@ -1052,7 +1117,7 @@ server <- function(input, output, session) {
           build_process_status_html(task_data, stage_name_local, task_name_local)
         })
         
-        # Log pane content - only update when pane is expanded
+        # Log pane content - static UI structure with controls
         output[[paste0("log_content_", task_id_local)]] <- renderUI({
           # Only render if this pane is expanded
           if (!(task_id_local %in% rv$expanded_log_panes)) {
@@ -1070,10 +1135,81 @@ server <- function(input, output, session) {
             )
           }
           
+          # Build static controls
+          tagList(
+            div(
+              class = "log-controls-container",
+              div(
+                class = "log-controls",
+                selectInput(
+                  paste0("log_lines_", task_id_local),
+                  NULL,
+                  choices = c(
+                    "Last 5 lines" = 5,
+                    "Last 10 lines" = 10,
+                    "Last 25 lines" = 25,
+                    "Last 50 lines" = 50,
+                    "Last 100 lines" = 100,
+                    "Full log" = -1
+                  ),
+                  selected = settings$num_lines,
+                  width = "140px"
+                ),
+                checkboxInput(
+                  paste0("log_tail_", task_id_local),
+                  "Tail mode",
+                  value = settings$tail_mode
+                ),
+                checkboxInput(
+                  paste0("log_auto_refresh_", task_id_local),
+                  "Auto-refresh",
+                  value = settings$auto_refresh
+                ),
+                actionButton(
+                  paste0("log_refresh_", task_id_local),
+                  "Refresh",
+                  icon = icon("sync"),
+                  class = "btn-sm btn-primary"
+                )
+              )
+            ),
+            # Terminal container with dynamic content
+            div(
+              class = "log-terminal",
+              htmlOutput(paste0("log_text_", task_id_local))
+            )
+          )
+        })
+        
+        # Log text content - incremental updates using observer
+        observe({
+          # Only process if this pane is expanded
+          if (!(task_id_local %in% rv$expanded_log_panes)) {
+            return()
+          }
+          
+          # Depend on log_refresh_trigger to re-render when settings change
+          rv$log_refresh_trigger
+          
+          # Get log settings for this task
+          settings <- rv$log_settings[[task_id_local]]
+          if (is.null(settings)) {
+            settings <- list(
+              num_lines = 100,
+              tail_mode = TRUE,
+              auto_refresh = TRUE,
+              filter = ""
+            )
+          }
+          
+          # Auto-refresh support
+          if (settings$auto_refresh && task_id_local %in% rv$expanded_log_panes) {
+            invalidateLater(2000)  # Refresh every 2 seconds
+          }
+          
           task_data <- task_reactives[[task_key_local]]
           
           # Determine log file location
-          # Get log path from task data, fallback to config, then to fccData scripts directory
           log_path <- task_data$log_path
           if (is.null(log_path) || is.na(log_path) || log_path == "") {
             log_path <- getOption("tasker.config")$logging$log_dir
@@ -1085,70 +1221,205 @@ server <- function(input, output, session) {
           # Determine log filename
           log_file <- NULL
           if (!is.null(task_data$log_filename) && !is.na(task_data$log_filename)) {
-            # Use provided log filename
             log_file <- file.path(log_path, task_data$log_filename)
           } else {
-            # Fallback: try to find .Rout file based on task name
-            # Pattern: task_name with .Rout extension
             potential_log <- file.path(log_path, paste0(task_name_local, ".Rout"))
             if (file.exists(potential_log)) {
               log_file <- potential_log
             }
           }
           
-          if (is.null(log_file)) {
-            return(HTML("<div class='log-line'>No log file configured for this task</div>"))
-          }
-          
-          if (!file.exists(log_file)) {
-            return(HTML(sprintf("<div class='log-line'>Log file not found: %s</div>", 
-                               htmltools::htmlEscape(log_file))))
-          }
-          
-          # Read log file (simplified version for now)
-          lines <- tryCatch({
-            all_lines <- readLines(log_file, warn = FALSE)
-            if (settings$tail_mode) {
-              tail(all_lines, settings$num_lines)
+          if (is.null(log_file) || !file.exists(log_file)) {
+            # Show helpful message when no log file is available
+            task_status <- task_data$status %||% "NOT_STARTED"
+            
+            no_log_message <- if (is.null(log_file)) {
+              sprintf(
+                "<div class='log-file-info-bar'>
+                  <span><strong>Task:</strong> %s</span>
+                  <span><strong>Status:</strong> %s</span>
+                  <span><strong>Log:</strong> Not configured</span>
+                </div>
+                <div class='log-line' style='padding: 20px; text-align: center; color: #888;'>
+                  <div style='margin-bottom: 10px;'><strong>No log file configured for this task</strong></div>
+                  <div>Log files are typically created when a task is executed.</div>
+                  <div>Expected location: %s/%s.Rout</div>
+                </div>",
+                htmltools::htmlEscape(task_name_local),
+                htmltools::htmlEscape(task_status),
+                htmltools::htmlEscape(log_path),
+                htmltools::htmlEscape(task_name_local)
+              )
             } else {
-              head(all_lines, settings$num_lines)
+              sprintf(
+                "<div class='log-file-info-bar'>
+                  <span><strong>File:</strong> %s</span>
+                  <span><strong>Status:</strong> %s</span>
+                  <span><strong>State:</strong> File not found</span>
+                </div>
+                <div class='log-line' style='padding: 20px; text-align: center; color: #888;'>
+                  <div style='margin-bottom: 10px;'><strong>Log file not found</strong></div>
+                  <div>Expected: %s</div>
+                  <div style='margin-top: 10px;'>This file will be created when the task runs.</div>
+                </div>",
+                htmltools::htmlEscape(basename(log_file)),
+                htmltools::htmlEscape(task_status),
+                htmltools::htmlEscape(log_file)
+              )
             }
+            
+            # Update the output with the no-log message
+            output[[paste0("log_text_", task_id_local)]] <- renderUI({
+              HTML(no_log_message)
+            })
+            return()
+          }
+          
+          # Get last position for this log
+          pos_key <- paste0(task_id_local, "_", log_file)
+          last_pos <- rv$log_last_positions[[pos_key]]
+          if (is.null(last_pos)) {
+            last_pos <- list(line_count = 0, display_mode = paste(settings$num_lines, settings$tail_mode))
+          }
+          
+          # Check if display settings changed (requires full refresh)
+          current_mode <- paste(settings$num_lines, settings$tail_mode)
+          settings_changed <- (last_pos$display_mode != current_mode)
+          
+          # Read log file
+          all_lines <- tryCatch({
+            readLines(log_file, warn = FALSE)
           }, error = function(e) {
             return(character(0))
           })
           
-          if (length(lines) == 0) {
-            return(HTML("<div class='log-line'>Log file is empty</div>"))
+          if (length(all_lines) == 0) {
+            return()
           }
           
-          # Build header with file info
-          file_info <- sprintf(
-            "<div class='log-file-info'>
-              <strong>Log File:</strong> %s<br/>
-              <strong>Lines:</strong> %s | <strong>Mode:</strong> %s | <strong>Updated:</strong> %s
-            </div>
-            <hr style='margin: 10px 0; border: none; border-top: 1px solid #dee2e6;'>",
-            htmltools::htmlEscape(log_file),
-            length(lines),
-            if (settings$tail_mode) sprintf("Last %d lines", settings$num_lines) else sprintf("First %d lines", settings$num_lines),
-            format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-          )
+          # Determine which lines to show
+          num_to_read <- if (settings$num_lines <= -1) length(all_lines) else settings$num_lines
+          if (settings$tail_mode) {
+            lines_to_show <- tail(all_lines, num_to_read)
+            start_line <- max(1, length(all_lines) - num_to_read + 1)
+          } else {
+            lines_to_show <- head(all_lines, num_to_read)
+            start_line <- 1
+          }
           
-          # Format lines
-          formatted_lines <- sapply(lines, function(line) {
-            line <- htmltools::htmlEscape(line)
-            class_attr <- ""
-            if (grepl("ERROR|FAIL", line)) {
-              class_attr <- " log-line-error"
-            } else if (grepl("WARN", line)) {
-              class_attr <- " log-line-warning"
-            } else if (grepl("INFO", line)) {
-              class_attr <- " log-line-info"
-            }
-            paste0("<div class='log-line", class_attr, "'>", line, "</div>")
-          }, USE.NAMES = FALSE)
-          
-          HTML(paste0(file_info, paste(formatted_lines, collapse = "")))
+          # If settings changed or this is first load, replace all content
+          if (settings_changed || last_pos$line_count == 0) {
+            # Format all lines
+            formatted_lines <- sapply(lines_to_show, function(line) {
+              line <- htmltools::htmlEscape(line)
+              class_attr <- ""
+              if (grepl("ERROR|FAIL", line)) {
+                class_attr <- " log-line-error"
+              } else if (grepl("WARN", line)) {
+                class_attr <- " log-line-warning"
+              } else if (grepl("INFO", line)) {
+                class_attr <- " log-line-info"
+              }
+              paste0("<div class='log-line", class_attr, "'>", line, "</div>")
+            }, USE.NAMES = FALSE)
+            
+            # Build file info header
+            file_info <- sprintf(
+              "<div class='log-file-info-bar'>
+                <span><strong>File:</strong> %s</span>
+                <span><strong>Lines:</strong> %s</span>
+                <span><strong>Updated:</strong> %s</span>
+              </div>",
+              htmltools::htmlEscape(basename(log_file)),
+              length(lines_to_show),
+              format(Sys.time(), "%H:%M:%S")
+            )
+            
+            content <- paste0(file_info, paste(formatted_lines, collapse = ""))
+            
+            # Replace entire content using renderUI output
+            output[[paste0("log_text_", task_id_local)]] <- renderUI({
+              HTML(content)
+            })
+            
+            # Update position tracker
+            rv$log_last_positions[[pos_key]] <- list(
+              line_count = length(all_lines),
+              last_end_line = start_line + length(lines_to_show) - 1,
+              display_mode = current_mode
+            )
+          } else if (settings$tail_mode && length(all_lines) > last_pos$line_count) {
+            # Tail mode: Append new lines
+            new_line_count <- length(all_lines) - last_pos$line_count
+            new_lines <- tail(all_lines, new_line_count)
+            
+            # Format new lines
+            formatted_new_lines <- sapply(new_lines, function(line) {
+              line <- htmltools::htmlEscape(line)
+              class_attr <- ""
+              if (grepl("ERROR|FAIL", line)) {
+                class_attr <- " log-line-error"
+              } else if (grepl("WARN", line)) {
+                class_attr <- " log-line-warning"
+              } else if (grepl("INFO", line)) {
+                class_attr <- " log-line-info"
+              }
+              paste0("<div class='log-line", class_attr, "'>", line, "</div>")
+            }, USE.NAMES = FALSE)
+            
+            # Append using JavaScript
+            new_content <- paste(formatted_new_lines, collapse = "")
+            log_text_id <- paste0("log_text_", task_id_local)
+            
+            shinyjs::runjs(sprintf(
+              "var elem = document.getElementById('%s');
+               if (elem) {
+                 var wasAtBottom = elem.scrollHeight - elem.scrollTop <= elem.clientHeight + 50;
+                 elem.insertAdjacentHTML('beforeend', %s);
+                 if (wasAtBottom) {
+                   elem.scrollTop = elem.scrollHeight;
+                 }
+               }",
+              log_text_id,
+              jsonlite::toJSON(new_content, auto_unbox = TRUE)
+            ))
+            
+            # Update line info bar
+            file_info <- sprintf(
+              "<div class='log-file-info-bar'>
+                <span><strong>File:</strong> %s</span>
+                <span><strong>Lines:</strong> %s</span>
+                <span><strong>Updated:</strong> %s</span>
+              </div>",
+              htmltools::htmlEscape(basename(log_file)),
+              length(lines_to_show),
+              format(Sys.time(), "%H:%M:%S")
+            )
+            
+            shinyjs::runjs(sprintf(
+              "var elem = document.getElementById('%s');
+               if (elem) {
+                 var infoBar = elem.querySelector('.log-file-info-bar');
+                 if (infoBar) {
+                   infoBar.outerHTML = %s;
+                 }
+               }",
+              log_text_id,
+              jsonlite::toJSON(file_info, auto_unbox = TRUE)
+            ))
+            
+            # Update position tracker
+            rv$log_last_positions[[pos_key]] <- list(
+              line_count = length(all_lines),
+              last_end_line = length(all_lines),
+              display_mode = current_mode
+            )
+          }
+        })
+        
+        # Initial render for log text output
+        output[[paste0("log_text_", task_id_local)]] <- renderUI({
+          NULL  # Will be populated by observer
         })
       })(task_key, task_id, stage_name, task_name)
     })
@@ -1842,5 +2113,87 @@ server <- function(input, output, session) {
       shinyjs::addClass(paste0("btn_expand_log_", task_id), "expanded")
     }
   })
+  
+  # ============================================================================
+  # LOG CONTROLS: Dynamic observers for log viewer settings
+  # ============================================================================
+  
+  # Observer to create reactive handlers for each task's log controls
+  observe({
+    struct <- pipeline_structure()
+    if (is.null(struct)) return()
+    
+    tasks <- struct$tasks
+    if (is.null(tasks) || nrow(tasks) == 0) return()
+    
+    # Create observers for each task's log controls
+    lapply(seq_len(nrow(tasks)), function(i) {
+      task <- tasks[i, ]
+      stage_name <- task$stage_name
+      task_name <- task$task_name
+      task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task_name, sep="_"))
+      
+      # Observer for num_lines dropdown
+      observeEvent(input[[paste0("log_lines_", task_id)]], {
+        new_value <- as.numeric(input[[paste0("log_lines_", task_id)]])
+        
+        # Initialize settings if not exists
+        if (is.null(rv$log_settings[[task_id]])) {
+          rv$log_settings[[task_id]] <- list(
+            num_lines = 100,
+            tail_mode = TRUE,
+            auto_refresh = TRUE,
+            filter = ""
+          )
+        }
+        
+        # Update num_lines setting
+        rv$log_settings[[task_id]]$num_lines <- new_value
+        # Trigger re-render
+        rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+      }, ignoreInit = TRUE)
+      
+      # Observer for tail_mode checkbox
+      observeEvent(input[[paste0("log_tail_", task_id)]], {
+        new_value <- input[[paste0("log_tail_", task_id)]]
+        
+        if (is.null(rv$log_settings[[task_id]])) {
+          rv$log_settings[[task_id]] <- list(
+            num_lines = 100,
+            tail_mode = TRUE,
+            auto_refresh = TRUE,
+            filter = ""
+          )
+        }
+        
+        rv$log_settings[[task_id]]$tail_mode <- new_value
+        # Trigger re-render
+        rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+      }, ignoreInit = TRUE)
+      
+      # Observer for auto_refresh checkbox
+      observeEvent(input[[paste0("log_auto_refresh_", task_id)]], {
+        new_value <- input[[paste0("log_auto_refresh_", task_id)]]
+        
+        if (is.null(rv$log_settings[[task_id]])) {
+          rv$log_settings[[task_id]] <- list(
+            num_lines = 100,
+            tail_mode = TRUE,
+            auto_refresh = TRUE,
+            filter = ""
+          )
+        }
+        
+        rv$log_settings[[task_id]]$auto_refresh <- new_value
+        # Trigger re-render
+        rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+      }, ignoreInit = TRUE)
+      
+      # Observer for refresh button
+      observeEvent(input[[paste0("log_refresh_", task_id)]], {
+        # Trigger re-render
+        rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+      }, ignoreInit = TRUE)
+    })
+  })
 }
-

@@ -4,18 +4,29 @@
 # with the same mount settings as used in ShinyProxy
 #
 # Usage: 
-#   ./run-docker-app.sh [PORT] [COMMAND]
+#   ./run-docker-app.sh [PORT] [COMMAND [ARGS...]]
 #   
-#   PORT    - Host port to expose (default: 3939)
+#   PORT    - Host port to expose (default: 3939, must be numeric if provided)
 #   COMMAND - Command to run in container (default: none, uses image CMD)
-#             Examples: /bin/bash, R, etc.
+#             Examples: bash, bash -c 'echo hello', R --vanilla, etc.
+#   
+#   If first argument is numeric, it's treated as PORT.
+#   Otherwise, all arguments are treated as COMMAND.
 
 set -euo pipefail
 
 IMAGE="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-dev:latest"
 CONTAINER_NAME="fcc-pipeline-monitor-dev-manual"
-PORT_HOST=${1:-3939}  # Default to port 3939, but allow override as first argument
-STARTUP_COMMAND=${2:-}  # Optional startup command override
+
+# Parse arguments: if first arg is numeric, it's the port; otherwise it's part of the command
+if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
+    PORT_HOST="$1"
+    shift  # Remove port from arguments
+    STARTUP_COMMAND="$*"  # Remaining args are the command
+else
+    PORT_HOST=3939  # Use default port
+    STARTUP_COMMAND="$*"  # All args are the command
+fi
 
 echo "=================================================================================="
 echo "FCC Pipeline Monitor Docker Container Manager"
@@ -103,16 +114,10 @@ if [ -n "$STARTUP_COMMAND" ]; then
 fi
 echo
 
-# Check if we're running an interactive shell command
-RUN_INTERACTIVE=false
-if [ -n "$STARTUP_COMMAND" ] && [[ "$STARTUP_COMMAND" =~ (bash|sh|zsh)$ ]]; then
-    RUN_INTERACTIVE=true
-fi
-
-# Build docker run command
-if [ "$RUN_INTERACTIVE" = true ]; then
-    # For interactive shells, run in foreground with -it
-    echo "🔗 Starting interactive container..."
+# Build docker run command based on whether a command was provided
+if [ -n "$STARTUP_COMMAND" ]; then
+    # User provided a command - run container interactively with that command
+    echo "🔗 Starting container interactively with command: $STARTUP_COMMAND"
     docker run --rm -it \
         --name "$CONTAINER_NAME" \
         --network=broadband-network \
@@ -126,10 +131,11 @@ if [ "$RUN_INTERACTIVE" = true ]; then
         -e TASKER_MONITOR_PORT=3838 \
         "$IMAGE" $STARTUP_COMMAND
     
-    echo "✅ Interactive session ended"
+    echo "✅ Container command completed"
     exit 0
 else
-    # For background services, run detached
+    # No command provided - run detached with default CMD, then open bash
+    echo "🔗 Starting container in background with default command..."
     RUN_CMD=(docker run --rm -d 
         --name "$CONTAINER_NAME" 
         --network=broadband-network 
@@ -142,12 +148,8 @@ else
         -e TASKER_MONITOR_HOST=0.0.0.0 
         -e TASKER_MONITOR_PORT=3838)
     
-    # Add command override if specified
-    if [ -n "$STARTUP_COMMAND" ]; then
-        RUN_CMD+=("$IMAGE" $STARTUP_COMMAND)
-    else
-        RUN_CMD+=("$IMAGE")
-    fi
+    # Run container with default image CMD
+    RUN_CMD+=("$IMAGE")
     
     # Run container with same mounts as ShinyProxy
     "${RUN_CMD[@]}"
@@ -166,6 +168,8 @@ if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q "^${CONTAINER_NA
     echo "🌐 Access the app at: http://localhost:$PORT_HOST"
     echo "🐳 Container name: $CONTAINER_NAME"
     echo
+    
+    # Always open interactive bash when no command was provided
     echo "📱 Opening interactive bash session..."
     echo "   (Type 'exit' to leave the container shell)"
     echo
