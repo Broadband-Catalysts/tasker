@@ -1,3 +1,27 @@
+/* Page Title Styles */
+h2 {
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #3498db;
+}
+
+/* Build Info Styles */
+.build-info {
+  position: fixed;
+  top: 0px;
+  right: 10px;
+  font-size: 0.75rem;
+  color: #999;
+  text-align: right;
+  line-height: 1.4;
+  z-index: 1000;
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+
 /* Animations */
 
 @keyframes pulse {
