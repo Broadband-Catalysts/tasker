@@ -12,26 +12,18 @@ ui <- page_fluid(
   theme = bs_theme(version = 5),
   useShinyjs(),
   tags$head(
-    title = "Tasker Monitor",
-    tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css"),
+    tags$title("FCC Data Pipeline - Tasker Monitor"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css")
   ),
 
   titlePanel(
-    div(
-      style = "display: flex; justify-content: space-between; align-items: center;",
-      div({
-        config <- getOption("tasker.config")
-        pipeline_name <- if (!is.null(config$pipeline$name)) config$pipeline$name else "Pipeline"
-        paste(pipeline_name, "- Tasker Monitor")
-      }),
-      div(
-        style = "font-size: 12px; color: #666; text-align: right; font-weight: normal;",
-        div(sprintf("Build: %s", BUILD_TIME)),
-        div(sprintf("Commit: %s", GIT_COMMIT))
-      )
-    )
+    "FCC Data Pipeline - Tasker Monitor"
   ),
-  
+  div(
+    class="build-info",
+    sprintf("Branch: %s", GIT_BRANCH), br(),
+    sprintf("Build: %s", BUILD_TIME)
+  ),
   sidebarLayout(
     sidebarPanel(
       width = 2,

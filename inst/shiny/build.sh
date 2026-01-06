@@ -38,6 +38,7 @@ cd "$SRC_ROOT"
 echo "Building image..."
 docker build \
     --build-arg TASKER_DIR="$TASKER_DIR_NAME" \
+    --build-arg GIT_BRANCH="$GIT_BRANCH" \
     -t "$FULL_IMAGE" \
     -f "$TASKER_DIR_NAME/inst/shiny/Dockerfile" \
     .

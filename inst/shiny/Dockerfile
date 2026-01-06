@@ -2,6 +2,7 @@ FROM rocker/r2u:jammy
 
 # Accept build argument for directory name (tasker or tasker-dev)
 ARG TASKER_DIR=tasker
+ARG GIT_BRANCH=unknown
 
 # Install system dependencies and R packages from r2u
 # Use --mount=type=cache for apt to cache package downloads
@@ -68,8 +69,9 @@ WORKDIR /home/warnes/src/${TASKER_DIR}/inst/shiny
 # Capture build metadata
 RUN mkdir -p /app && \
     cd /home/warnes/src/${TASKER_DIR} && \
-    echo "BUILD_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")" > /app/build_info.txt && \
-    echo "GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")" >> /app/build_info.txt
+    echo "BUILD_TIME=$(TZ='America/New_York' date +"%Y-%m-%d %H:%M:%S %Z")" > /app/build_info.txt && \
+    echo "GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")" >> /app/build_info.txt && \
+    echo "GIT_BRANCH=${GIT_BRANCH}" >> /app/build_info.txt
 
 # Set environment variables
 ENV SHINYPROXY_USERNAME=docker

@@ -63,9 +63,16 @@ if (file.exists(build_info_file)) {
   } else {
     "Unknown"
   }
+
+  GIT_BRANCH <<- if (length(build_info_lines) >= 3) {
+    sub("GIT_BRANCH=", "", build_info_lines[3])
+  } else {
+    "Unknown"
+  }
 } else {
   BUILD_TIME <<- "Unknown"
   GIT_COMMIT <<- "Unknown"
+  GIT_BRANCH <<- "Unknown"
 }
 
 # Load UI
