@@ -10,6 +10,9 @@ library(htmltools)
 library(ps)
 library(jsonlite)
 
+# Source completion estimation functions - now in tasker package
+# (kept for reference - functions are now called via tasker:: namespace)
+
 # ============================================================================
 # UTILITY FUNCTIONS for Static UI Updates  
 # ============================================================================
@@ -74,6 +77,18 @@ stage_progress_html <- function(progress_pct, status) {
     </div>',
     htmltools::htmlEscape(status), progress_pct, round(progress_pct)
   )
+}
+
+# Initialize log settings with defaults
+init_log_settings <- function(rv, task_id) {
+  if (is.null(rv$log_settings[[task_id]])) {
+    rv$log_settings[[task_id]] <- list(
+      num_lines = 5,
+      tail_mode = TRUE,
+      auto_refresh = TRUE,
+      filter = ""
+    )
+  }
 }
 
 # Generate task progress bars HTML with subtask information
@@ -225,7 +240,7 @@ task_progress_html <- function(task_data) {
 }
 
 # Generate process status pane HTML
-build_process_status_html <- function(task_data, stage_name, task_name) {
+build_process_status_html <- function(task_data, stage_name, task_name, progress_history_env = NULL, output = NULL, task_reactives = NULL, session = NULL) {
   if (is.null(task_data)) {
     return(HTML("<div class='process-info-header'>No task data available</div>"))
   }
@@ -329,28 +344,54 @@ build_process_status_html <- function(task_data, stage_name, task_name) {
     # Build subtask table
     table_rows <- lapply(seq_len(nrow(subtasks)), function(i) {
       st <- subtasks[i, ]
-      duration <- if (!is.null(st$start_time) && !is.na(st$start_time)) {
-        format_duration(st$start_time, st$last_update)
-      } else {
-        "-"
-      }
+      duration <- tryCatch({
+        start_val <- st$start_time
+        if (!is.null(start_val) && !is.na(start_val)) {
+          format_duration(start_val, st$last_update)
+        } else {
+          "-"
+        }
+      }, error = function(e) "-")
       
-      items_display <- if (!is.null(st$items_complete) && !is.na(st$items_complete) && 
-                          !is.null(st$items_total) && !is.na(st$items_total)) {
-        sprintf("%d / %d", as.integer(st$items_complete), as.integer(st$items_total))
-      } else {
-        "-"
-      }
+      items_display <- tryCatch({
+        items_complete_val <- st$items_complete
+        items_total_val <- st$items_total
+        
+        if (!is.null(items_complete_val) && !is.na(items_complete_val) && 
+            !is.null(items_total_val) && !is.na(items_total_val)) {
+          sprintf("%d / %d", as.integer(items_complete_val), as.integer(items_total_val))
+        } else {
+          "-"
+        }
+      }, error = function(e) "-")
       
-      progress_display <- if (!is.null(st$percent_complete) && !is.na(st$percent_complete)) {
-        sprintf("%.1f%%", as.numeric(st$percent_complete))
-      } else {
-        "0%"
-      }
+      progress_display <- tryCatch({
+        items_complete_val <- st$items_complete
+        items_total_val <- st$items_total
+        
+        if (!is.null(items_complete_val) && !is.na(items_complete_val) &&
+            !is.null(items_total_val) && !is.na(items_total_val) && items_total_val > 0) {
+          progress_pct <- (as.numeric(items_complete_val) / as.numeric(items_total_val)) * 100
+          sprintf("%.1f%%", progress_pct)
+        } else {
+          # Fallback to database percent_complete if items not available
+          progress_val <- st$percent_complete
+          if (!is.null(progress_val) && !is.na(progress_val)) {
+            sprintf("%.1f%%", as.numeric(progress_val))
+          } else {
+            "0%"
+          }
+        }
+      }, error = function(e) "0%")
+      
+      # Create reactive output ID for this completion estimate
+      estimate_output_id <- paste0("completion_estimate_", gsub("[^a-zA-Z0-9]", "_", task_data$run_id), "_", st$subtask_number)
+      completion_estimate <- paste0('<div id="', estimate_output_id, '" class="shiny-text-output">Computing...</div>')
       
       sprintf(
         "<tr>
           <td>%d</td>
+          <td>%s</td>
           <td>%s</td>
           <td>%s</td>
           <td>%s</td>
@@ -364,7 +405,8 @@ build_process_status_html <- function(task_data, stage_name, task_name) {
         progress_display,
         items_display,
         htmltools::htmlEscape(if (!is.null(st$progress_message) && !is.na(st$progress_message)) st$progress_message else ""),
-        duration
+        duration,
+        completion_estimate
       )
     })
     
@@ -379,6 +421,7 @@ build_process_status_html <- function(task_data, stage_name, task_name) {
             <th>Items</th>
             <th>Message</th>
             <th>Duration</th>
+            <th>Est. Completion</th>
           </tr>
         </thead>
         <tbody>
@@ -389,6 +432,54 @@ build_process_status_html <- function(task_data, stage_name, task_name) {
     )
     
     html_parts <- c(html_parts, subtask_table)
+    
+    # Create reactive outputs for completion estimates (if output object provided)
+    if (!is.null(output)) {
+      for (i in seq_len(nrow(subtasks))) {
+        local({
+          # Create local copies for closure
+          st <- subtasks[i, ]
+          local_run_id <- task_data$run_id
+          local_subtask_number <- st$subtask_number
+          local_status <- st$status
+          local_items_total <- st$items_total
+          local_stage_name <- stage_name
+          local_task_name <- task_name
+          local_output_id <- paste0("completion_estimate_", gsub("[^a-zA-Z0-9]", "_", local_run_id), "_", local_subtask_number)
+          
+          # Create reactive output if it doesn't exist
+          if (!local_output_id %in% names(output)) {
+            output[[local_output_id]] <- renderText({
+              # Force re-execution every 5 seconds to pick up new progress snapshots
+              invalidateLater(5000, session)
+              
+              # Also depend on task_reactives for immediate updates when task changes
+              task_key <- paste0(local_stage_name, "__", local_task_name)
+              task_data <- task_reactives[[task_key]]
+              
+              # Read current status from local copies
+              status_safe <- if (!is.null(local_status)) as.character(local_status) else "UNKNOWN"
+              items_total_safe <- if (!is.null(local_items_total) && !is.na(local_items_total)) as.numeric(local_items_total) else 0
+              
+              if (status_safe %in% c("RUNNING", "STARTED") && items_total_safe > 0 && !is.null(local_run_id) && !is.na(local_run_id)) {
+                # Read from environment - this will update every 5 seconds due to invalidateLater
+                estimate <- tasker::get_completion_estimate(progress_history_env, local_run_id, local_subtask_number, quiet = TRUE)
+                completion_text <- tasker::format_completion_with_ci(estimate, quiet = TRUE)
+                if (is.null(completion_text) || completion_text == "") {
+                  "Computing..."
+                } else {
+                  completion_text
+                }
+              } else if (status_safe %in% c("COMPLETED", "FAILED", "SKIPPED")) {
+                toupper(status_safe)
+              } else {
+                "--"
+              }
+            })
+          }
+        })
+      }
+    }
   }
   
   HTML(paste(html_parts, collapse = "\n"))
@@ -452,6 +543,11 @@ server <- function(input, output, session) {
   
   # Storage for stage aggregate data - computed from tasks
   stage_reactives <- reactiveValues()
+  
+  # ============================================================================
+  # PROGRESS DATA HARVESTING: Storage for completion time prediction
+  # ============================================================================
+  
   
   # Initialize task reactiveVals when structure is loaded
   observe({
@@ -567,6 +663,57 @@ server <- function(input, output, session) {
         if (!is.null(subtask_info) && !is.na(subtask_info$items_total) && subtask_info$items_total > 0) {
           items_total <- subtask_info$items_total
           items_complete <- if (!is.na(subtask_info$items_complete)) subtask_info$items_complete else 0
+          
+          # ============================================================================
+          # PROGRESS DATA HARVESTING: Capture progress snapshots for statistical prediction
+          # ============================================================================
+          
+          # Create progress snapshot for active subtasks
+          if (subtask_info$status %in% c("RUNNING", "STARTED") && items_total > 0) {
+            tryCatch({
+              run_key <- paste0("run_", task_status$run_id)
+              subtask_key <- paste0("subtask_", subtask_info$subtask_number)
+              storage_key <- paste0(run_key, "_", subtask_key)
+              
+              # Get current history list or initialize empty
+              if (exists(storage_key, envir = progress_history_env)) {
+                history_list <- get(storage_key, envir = progress_history_env)
+              } else {
+                history_list <- list()
+              }
+              
+              # Create snapshot
+              snapshot <- list(
+                timestamp = Sys.time(),
+                items_complete = items_complete,
+                items_total = items_total,
+                subtask_name = subtask_info$subtask_name,
+                status = subtask_info$status
+              )
+              
+              # Add to history (keep last 100 snapshots per subtask)
+              history_list[[length(history_list) + 1]] <- snapshot
+              
+              # # Debug output
+              # message("DEBUG: Created snapshot for ", run_key, " ", subtask_key, 
+              #         " - total snapshots: ", length(history_list))
+              
+              # Trim to last 100 snapshots to prevent memory bloat
+              if (length(history_list) > 100) {
+                history_list <- history_list[(length(history_list) - 99):length(history_list)]
+              }
+              
+              # Store back to environment
+              assign(storage_key, history_list, envir = progress_history_env)
+              
+              # Verify storage
+              verified_list <- get(storage_key, envir = progress_history_env)
+              # message("DEBUG: Verified storage - ", run_key, " ", subtask_key, 
+              #         " now has ", length(verified_list), " snapshots")
+            }, error = function(e) {
+              message("Error capturing progress snapshot: ", e$message)
+            })
+          }
         }
       }
       
@@ -1114,7 +1261,7 @@ server <- function(input, output, session) {
           }
           
           task_data <- task_reactives[[task_key_local]]
-          build_process_status_html(task_data, stage_name_local, task_name_local)
+          build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session)
         })
         
         # Log pane content - static UI structure with controls
@@ -1128,7 +1275,7 @@ server <- function(input, output, session) {
           settings <- rv$log_settings[[task_id_local]]
           if (is.null(settings)) {
             settings <- list(
-              num_lines = 100,
+              num_lines = 5,
               tail_mode = TRUE,
               auto_refresh = TRUE,
               filter = ""
@@ -1195,7 +1342,7 @@ server <- function(input, output, session) {
           settings <- rv$log_settings[[task_id_local]]
           if (is.null(settings)) {
             settings <- list(
-              num_lines = 100,
+              num_lines = 5,
               tail_mode = TRUE,
               auto_refresh = TRUE,
               filter = ""
@@ -2089,14 +2236,7 @@ server <- function(input, output, session) {
     task_id <- input$toggle_log_pane
     
     # Initialize log settings for this task if not exists
-    if (is.null(rv$log_settings[[task_id]])) {
-      rv$log_settings[[task_id]] <- list(
-        num_lines = 100,
-        tail_mode = TRUE,
-        auto_refresh = TRUE,
-        filter = ""
-      )
-    }
+    init_log_settings(rv, task_id)
     
     # Toggle expanded state
     if (task_id %in% rv$expanded_log_panes) {
@@ -2138,14 +2278,7 @@ server <- function(input, output, session) {
         new_value <- as.numeric(input[[paste0("log_lines_", task_id)]])
         
         # Initialize settings if not exists
-        if (is.null(rv$log_settings[[task_id]])) {
-          rv$log_settings[[task_id]] <- list(
-            num_lines = 100,
-            tail_mode = TRUE,
-            auto_refresh = TRUE,
-            filter = ""
-          )
-        }
+        init_log_settings(rv, task_id)
         
         # Update num_lines setting
         rv$log_settings[[task_id]]$num_lines <- new_value
@@ -2157,14 +2290,7 @@ server <- function(input, output, session) {
       observeEvent(input[[paste0("log_tail_", task_id)]], {
         new_value <- input[[paste0("log_tail_", task_id)]]
         
-        if (is.null(rv$log_settings[[task_id]])) {
-          rv$log_settings[[task_id]] <- list(
-            num_lines = 100,
-            tail_mode = TRUE,
-            auto_refresh = TRUE,
-            filter = ""
-          )
-        }
+        init_log_settings(rv, task_id)
         
         rv$log_settings[[task_id]]$tail_mode <- new_value
         # Trigger re-render
@@ -2175,14 +2301,7 @@ server <- function(input, output, session) {
       observeEvent(input[[paste0("log_auto_refresh_", task_id)]], {
         new_value <- input[[paste0("log_auto_refresh_", task_id)]]
         
-        if (is.null(rv$log_settings[[task_id]])) {
-          rv$log_settings[[task_id]] <- list(
-            num_lines = 100,
-            tail_mode = TRUE,
-            auto_refresh = TRUE,
-            filter = ""
-          )
-        }
+        init_log_settings(rv, task_id)
         
         rv$log_settings[[task_id]]$auto_refresh <- new_value
         # Trigger re-render

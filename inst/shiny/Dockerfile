@@ -41,6 +41,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-shiny \
     r-cran-shinyjs \
     r-cran-shinywidgets \
+    r-cran-sqlparser \
     r-cran-stringr \
     r-cran-tibble \
     r-cran-tictoc \

@@ -20,6 +20,13 @@ search_paths <- c(
 TASKER_MONITOR_HOST <- Sys.getenv("TASKER_MONITOR_HOST", unset = "0.0.0.0")
 TASKER_MONITOR_PORT <- as.numeric(Sys.getenv("TASKER_MONITOR_PORT", unset = "3838"))
 
+# ============================================================================
+# PROGRESS DATA HARVESTING: Non-reactive storage for completion time prediction
+# ============================================================================
+
+# Create environment for storing progress history (avoids reactive loops)
+progress_history_env <- new.env(parent = emptyenv())
+
 
 for (path in search_paths) {
   expanded_path <- path.expand(path)
