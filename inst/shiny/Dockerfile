@@ -1,7 +1,7 @@
 FROM rocker/r2u:jammy
 
 # Accept build argument for directory name (tasker or tasker-dev)
-ARG TASKER_DIR=tasker-dev
+ARG TASKER_DIR=tasker
 
 # Install system dependencies and R packages from r2u
 # Use --mount=type=cache for apt to cache package downloads

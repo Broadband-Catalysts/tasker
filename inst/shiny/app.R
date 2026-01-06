@@ -1,11 +1,12 @@
 library(shiny)
 library(bslib)
 library(DT)
-library(tasker)
 library(dplyr)
 library(lubridate)
 library(shinyWidgets)
 library(shinyjs)
+
+devtools::load_all()
 
 # Load configuration from .tasker.yml file
 # Try several locations in order of preference

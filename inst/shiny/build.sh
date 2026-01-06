@@ -9,13 +9,23 @@ TASKER_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SRC_ROOT="$(cd "$TASKER_ROOT/.." && pwd)"
 TASKER_DIR_NAME="$(basename "$TASKER_ROOT")"
 
-IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor"
+# Determine branch and set image name accordingly
+cd "$TASKER_ROOT"
+GIT_BRANCH="$(git branch --show-current)"
+
+if [ "$GIT_BRANCH" = "main" ]; then
+    IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor"
+else
+    IMAGE_NAME="manager.broadbandcatalysts.com:5000/bbc/fcc-pipeline-monitor-${GIT_BRANCH}"
+fi
+
 IMAGE_TAG="${1:-latest}"
 FULL_IMAGE="$IMAGE_NAME:$IMAGE_TAG"
 
 echo "================================================================================"
 echo "Building FCC Pipeline Monitor Docker Image"
 echo "================================================================================"
+echo "Git branch: $GIT_BRANCH"
 echo "Image: $FULL_IMAGE"
 echo "Build context: $SRC_ROOT"
 echo "Dockerfile: $TASKER_ROOT/inst/shiny/Dockerfile"
