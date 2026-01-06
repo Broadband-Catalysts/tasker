@@ -8,3 +8,5 @@
 ^Meta$
 .env.test
 .tasker.yml
+.RData
+.Rhistory
