@@ -494,7 +494,6 @@ server <- function(input, output, session) {
   rv <- reactiveValues(
     selected_task_id = NULL,
     last_update = NULL,
-    expanded_stages = c(),
     error_message = NULL,
     force_refresh = 0,
     reset_pending_stage = NULL,
@@ -509,7 +508,9 @@ server <- function(input, output, session) {
     # Track last file positions for incremental log reading
     log_last_positions = list(),
     # Flag to track if initial auto-expand has been performed
-    initial_auto_expand_done = FALSE
+    initial_auto_expand_done = FALSE,
+    # Track previous stage statuses to detect transitions
+    stage_previous_statuses = list()
   )
   
   # Get pipeline structure (stages + registered tasks) - this rarely changes
@@ -738,8 +739,8 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # AUTO-EXPAND: Automatically expand stage accordion when status is RUNNING/STARTED
-  # (both on initialization and when status changes)
+  # AUTO-EXPAND: Automatically expand stage accordion when status TRANSITIONS to RUNNING/STARTED
+  # Only expands on status change, not on every poll
   # ============================================================================
   
   observe({
@@ -756,34 +757,42 @@ server <- function(input, output, session) {
     has_data <- any(sapply(stage_reactives_list, function(x) !is.null(x)))
     if (!has_data) return()
     
-    # Use delay to ensure DOM is ready
-    shinyjs::delay(300, {
-      # Check each stage's status
-      lapply(seq_len(nrow(stages)), function(i) {
-        stage <- stages[i, ]
-        stage_name <- stage$stage_name
-        stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
+    # Check each stage's status and compare with previous status
+    lapply(seq_len(nrow(stages)), function(i) {
+      stage <- stages[i, ]
+      stage_name <- stage$stage_name
+      stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
+      
+      stage_data <- stage_reactives[[stage_name]]
+      
+      if (!is.null(stage_data)) {
+        current_status <- stage_data$status
+        previous_status <- rv$stage_previous_statuses[[stage_name]]
         
-        stage_data <- stage_reactives[[stage_name]]
+        # Store current status for next comparison
+        rv$stage_previous_statuses[[stage_name]] <- current_status
         
-        if (!is.null(stage_data) && stage_data$status %in% c("RUNNING", "STARTED")) {
-          # Auto-expand stage accordion if not already expanded
-          if (!(stage_name %in% rv$expanded_stages)) {
-            rv$expanded_stages <- c(rv$expanded_stages, stage_name)
-            
-            # Use shinyjs to manipulate Bootstrap accordion
+        # Only auto-expand if status CHANGED TO RUNNING or STARTED
+        status_changed_to_active <- !is.null(previous_status) && 
+                                     !(previous_status %in% c("RUNNING", "STARTED")) &&
+                                     (current_status %in% c("RUNNING", "STARTED"))
+        
+        # On initial load (previous_status is NULL), expand active stages
+        initial_load_active <- is.null(previous_status) && 
+                               (current_status %in% c("RUNNING", "STARTED"))
+        
+        if (status_changed_to_active || initial_load_active) {
+          # Use shinyjs to manipulate Bootstrap accordion with delay for DOM readiness
+          shinyjs::delay(100, {
             collapse_id <- paste0("collapse_", stage_id)
             button_id <- paste0("heading_", stage_id)
             
-            # Show the collapse element
-            shinyjs::show(id = collapse_id)
-            
-            # Remove collapsed class from button and add expanded state
+            # Only expand if not already expanded (check DOM state to respect manual user actions)
             shinyjs::runjs(sprintf(
               "
               var button = document.querySelector('#%s .accordion-button');
               var collapse = document.getElementById('%s');
-              if (button && collapse) {
+              if (button && collapse && !collapse.classList.contains('show')) {
                 button.classList.remove('collapsed');
                 button.setAttribute('aria-expanded', 'true');
                 collapse.classList.add('show');
@@ -791,9 +800,9 @@ server <- function(input, output, session) {
               ",
               button_id, collapse_id
             ))
-          }
+          })
         }
-      })
+      }
     })
     
     # Mark that initial auto-expand has been checked
@@ -850,13 +859,20 @@ server <- function(input, output, session) {
         "NOT_STARTED"
       }
       
-      # Update stage reactive
-      stage_reactives[[stage_name]] <- list(
+      # Update stage reactive only if something changed
+      new_stage_data <- list(
         completed = completed,
         total = total_tasks,
         progress_pct = progress_pct,
         status = stage_status
       )
+      
+      current_stage_data <- stage_reactives[[stage_name]]
+      
+      # Only update if something actually changed
+      if (is.null(current_stage_data) || !identical(current_stage_data, new_stage_data)) {
+        stage_reactives[[stage_name]] <- new_stage_data
+      }
     }
   })
   
