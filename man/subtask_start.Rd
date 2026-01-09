@@ -5,20 +5,16 @@
 \title{Start tracking a subtask}
 \usage{
 subtask_start(
-  run_id,
-  subtask_number,
   subtask_name,
   items_total = NULL,
   message = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL,
+  subtask_number = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
-\item{subtask_number}{Subtask number}
-
 \item{subtask_name}{Subtask name/description}
 
 \item{items_total}{Total items to process (optional)}
@@ -28,6 +24,10 @@ subtask_start(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
+
+\item{subtask_number}{Subtask number, or NULL for auto-increment}
 }
 \value{
 progress_id
@@ -37,6 +37,14 @@ Start tracking a subtask
 }
 \examples{
 \dontrun{
-subtask_start(run_id, 1, "Processing state-level data", items_total = 56)
+# Old style - explicit parameters
+subtask_start("Processing state-level data", items_total = 56, 
+              run_id = run_id, subtask_number = 1)
+
+# New style - auto-increment subtask number
+task_start("STAGE", "Task")
+subtask_start("Load data", items_total = 100)  # Subtask 1
+subtask_start("Transform data")                # Subtask 2
+subtask_start("Save data")                     # Subtask 3
 }
 }

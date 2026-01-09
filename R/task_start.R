@@ -8,16 +8,28 @@
 #' @param git_commit Git commit hash (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param .active Set this run as the active context (default: TRUE).
+#'   When TRUE, subsequent tasker function calls can omit the run_id parameter.
+#'   Set to FALSE if starting a task within a library function to avoid
+#'   overwriting the user's active context.
 #' @return run_id (UUID) to track this execution
 #' @export
 #'
 #' @examples
 #' \dontrun{
+#' # Old style - explicit run_id
 #' run_id <- task_start("STATIC", "Process FCC Data")
+#'
+#' # New style - automatic context (run_id optional in subsequent calls)
+#' task_start("STATIC", "Process FCC Data")
+#' subtask_start("Load files")  # No run_id needed!
+#' subtask_complete()
+#' task_complete()
 #' }
 task_start <- function(stage, task, total_subtasks = NULL, 
                       message = NULL, version = NULL, 
-                      git_commit = NULL, quiet = FALSE, conn = NULL) {
+                      git_commit = NULL, quiet = FALSE, conn = NULL,
+                      .active = TRUE) {
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -82,6 +94,11 @@ task_start <- function(stage, task, total_subtasks = NULL,
         log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)
+    }
+    
+    # Set as active context if requested
+    if (.active) {
+      tasker_context(run_id)
     }
     
     run_id

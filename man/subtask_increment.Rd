@@ -5,23 +5,23 @@
 \title{Atomically increment subtask item counter}
 \usage{
 subtask_increment(
-  run_id,
-  subtask_number,
   increment = 1,
   quiet = TRUE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL,
+  subtask_number = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
-\item{subtask_number}{Subtask number}
-
 \item{increment}{Number of items to add to counter (default: 1)}
 
 \item{quiet}{Suppress console messages (default: TRUE for parallel workers)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
+
+\item{subtask_number}{Subtask number, or NULL to use current subtask}
 }
 \value{
 TRUE on success
@@ -33,10 +33,10 @@ making it safe for use by parallel workers.
 }
 \examples{
 \dontrun{
-# In parallel worker function:
-process_item <- function(item) {
-  # ... do work ...
-  subtask_increment(run_id, subtask_num, increment = 1)
-}
+# Old style - explicit parameters
+subtask_increment(increment = 1, run_id = run_id, subtask_number = subtask_num)
+
+# New style - use context
+subtask_increment(increment = 1)  # Uses active context and current subtask
 }
 }

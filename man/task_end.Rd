@@ -5,18 +5,16 @@
 \title{End a task execution with specified status}
 \usage{
 task_end(
-  run_id,
   status,
   message = NULL,
   error_message = NULL,
   error_detail = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
 \item{status}{Status: "COMPLETED", "FAILED", "CANCELLED", "SKIPPED"}
 
 \item{message}{Final message (optional)}
@@ -28,6 +26,8 @@ task_end(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
 }
 \value{
 TRUE on success

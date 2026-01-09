@@ -1,7 +1,8 @@
-#' Estimate task completion time using Poisson distribution
+#' Estimate task completion time with confidence intervals
 #'
-#' Analyzes progress snapshots to estimate completion time with 95% confidence intervals
-#' using Poisson distribution modeling and gamma-based confidence intervals.
+#' Calculates estimated time to completion using simple linear extrapolation:
+#' (elapsed time / items completed) * items remaining. 
+#' Provides 95% confidence intervals using normal approximation for the rate estimate.
 #'
 #' @param progress_history_env Environment containing progress snapshot history
 #' @param run_id Task run ID
@@ -36,50 +37,27 @@ get_completion_estimate <- function(progress_history_env, run_id, subtask_number
             " - history length: ", history_length)
   }
   
-  if (is.null(history_list) || length(history_list) < 3) {
+  if (is.null(history_list) || length(history_list) < 2) {
     return(NULL)
   }
   
-  # Get snapshots from most recent 50 entries (or all if less)
-  recent_snapshots <- tail(history_list, 50)
+  # Get the first and most recent snapshots
+  first_snapshot <- history_list[[1]]
+  current_snapshot <- tail(history_list, 1)[[1]]
   
-  # Calculate progress rates between consecutive snapshots
-  rates <- c()
-  for (i in 2:length(recent_snapshots)) {
-    prev_snapshot <- recent_snapshots[[i-1]]
-    curr_snapshot <- recent_snapshots[[i]]
-    
-    time_diff <- as.numeric(difftime(curr_snapshot$timestamp, prev_snapshot$timestamp, units = "secs"))
-    items_diff <- curr_snapshot$items_complete - prev_snapshot$items_complete
-    
-    if (time_diff > 0 && items_diff >= 0) {
-      rate <- items_diff / time_diff  # items per second
-      if (rate > 0) {
-        rates <- c(rates, rate)
-      }
-    }
-  }
-  
-  if (length(rates) == 0) {
-    if (!quiet) message("DEBUG: No valid rates calculated - returning NULL")
-    return(NULL)
-  }
-
-  if (!quiet) message("DEBUG: Calculated ", length(rates), " rates, lambda = ", mean(rates))
-  
-  # Calculate lambda (average rate) for Poisson distribution
-  lambda_estimate <- mean(rates)
-  
-  # Determine confidence level based on data quality
-  confidence <- if (length(rates) >= 10) "high" else if (length(rates) >= 5) "medium" else "low"
-  
-  # Get current status
-  current_snapshot <- tail(recent_snapshots, 1)[[1]]
+  # Calculate elapsed time and items completed
+  elapsed_time <- as.numeric(difftime(current_snapshot$timestamp, first_snapshot$timestamp, units = "secs"))
+  items_complete <- current_snapshot$items_complete - first_snapshot$items_complete
   items_remaining <- current_snapshot$items_total - current_snapshot$items_complete
   
-  # Return NULL if no items remaining (task complete) or invalid rate
-  if (items_remaining < 0 || lambda_estimate <= 0) {
-    if (!quiet) message("DEBUG: Invalid state - items_remaining: ", items_remaining, ", lambda: ", lambda_estimate)
+  # Validate data
+  if (elapsed_time <= 0 || items_complete <= 0) {
+    if (!quiet) message("DEBUG: No progress detected - elapsed: ", elapsed_time, ", items_complete: ", items_complete)
+    return(NULL)
+  }
+  
+  if (items_remaining < 0) {
+    if (!quiet) message("DEBUG: Invalid state - items_remaining: ", items_remaining)
     return(NULL)
   }
   
@@ -88,22 +66,40 @@ get_completion_estimate <- function(progress_history_env, run_id, subtask_number
     return(list(
       eta = 0,
       confidence_interval = c(0, 0),
-      confidence = confidence,
-      rate = lambda_estimate,
+      confidence = "high",
+      rate = items_complete / elapsed_time,
       items_remaining = 0
     ))
   }
-
-  if (!quiet) message("DEBUG: Computing estimate - items_remaining: ", items_remaining, ", ETA: ", items_remaining / lambda_estimate, " seconds")
   
-  # Expected time = items_remaining / lambda_estimate
-  eta_seconds <- items_remaining / lambda_estimate
+  # Simple estimate: (elapsed / # completed) * # remaining
+  eta_seconds <- (elapsed_time / items_complete) * items_remaining
   
-  # Use gamma distribution for confidence intervals
-  # For Poisson rate estimation, use gamma distribution with shape = items_remaining, rate = lambda_estimate
-  alpha <- 0.05  # 95% confidence interval
-  ci_lower_time <- items_remaining / qgamma(1 - alpha/2, shape = items_remaining, rate = lambda_estimate)
-  ci_upper_time <- items_remaining / qgamma(alpha/2, shape = items_remaining, rate = lambda_estimate)
+  if (!quiet) message("DEBUG: Computing estimate - elapsed: ", elapsed_time, 
+                     ", items_complete: ", items_complete, 
+                     ", items_remaining: ", items_remaining, 
+                     ", ETA: ", eta_seconds, " seconds")
+  
+  # Calculate 95% upper confidence limit using normal approximation
+  # For a Poisson process, the rate estimate has variance lambda/t
+  # The completion time estimate has variance (items_remaining^2 / lambda^2) * (lambda / elapsed_time)
+  lambda_estimate <- items_complete / elapsed_time  # items per second
+  
+  # Standard error of the rate estimate
+  se_lambda <- sqrt(lambda_estimate / elapsed_time)
+  
+  # 95% confidence interval for lambda (using normal approximation)
+  # Lower bound for rate gives upper bound for time
+  z_score <- 1.96  # 95% confidence
+  lambda_lower <- max(lambda_estimate - z_score * se_lambda, 1e-10)  # Prevent division by zero
+  lambda_upper <- lambda_estimate + z_score * se_lambda
+  
+  # Confidence intervals for completion time
+  ci_lower_time <- items_remaining / lambda_upper  # Faster rate = less time
+  ci_upper_time <- items_remaining / lambda_lower  # Slower rate = more time
+  
+  # Determine confidence level based on sample size (items completed)
+  confidence <- if (items_complete >= 30) "high" else if (items_complete >= 10) "medium" else "low"
   
   return(list(
     eta = eta_seconds,

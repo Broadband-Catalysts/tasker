@@ -2,7 +2,7 @@
 % Please edit documentation in R/completion_estimation.R
 \name{get_completion_estimate}
 \alias{get_completion_estimate}
-\title{Estimate task completion time using Poisson distribution}
+\title{Estimate task completion time with confidence intervals}
 \usage{
 get_completion_estimate(
   progress_history_env,
@@ -25,8 +25,9 @@ List with eta, confidence_interval, confidence level, rate, and items_remaining,
 or NULL if insufficient data
 }
 \description{
-Analyzes progress snapshots to estimate completion time with 95\% confidence intervals
-using Poisson distribution modeling and gamma-based confidence intervals.
+Calculates estimated time to completion using simple linear extrapolation:
+(elapsed time / items completed) * items remaining.
+Provides 95\% confidence intervals using normal approximation for the rate estimate.
 }
 \examples{
 \dontrun{

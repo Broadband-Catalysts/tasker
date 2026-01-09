@@ -6,6 +6,17 @@ Task and Pipeline Execution Tracking
 
 `tasker` provides a comprehensive system for tracking the status and progress of tasks, subtasks, and pipeline executions in a PostgreSQL database. It supports hierarchical tracking (stages → tasks → subtasks) with detailed progress monitoring.
 
+## What's New in v2.0 🎉
+
+**Simplified API** - Dramatically reduced boilerplate code:
+- **Context-based tracking**: No more passing `run_id` to every function
+- **Auto-numbered subtasks**: Automatic subtask numbering
+- **One-line parallel setup**: Simplified cluster initialization with `tasker_cluster()`
+- **Auto-configuration**: Configuration loads automatically on first use
+- **50-70% less boilerplate** while maintaining full backward compatibility
+
+See the [API Simplification Proposal](inst/docs/API_SIMPLIFICATION_PROPOSAL.md) for details.
+
 ## Features
 
 - **Hierarchical tracking**: Organize work into stages, tasks, and subtasks
@@ -15,6 +26,7 @@ Task and Pipeline Execution Tracking
 - **Rich metadata**: Capture hostname, PID, timing, errors, and custom metadata
 - **Query functions**: Retrieve current status, history, and active tasks
 - **Shiny dashboard**: Visual monitoring of pipeline execution
+- **Parallel processing helpers**: Built-in support for parallel workflows
 
 ## Installation
 
@@ -128,6 +140,74 @@ get_task_history(stage = "STATIC", limit = 50)
 # Get subtask details
 get_subtask_progress(run_id)
 ```
+
+## NEW: Simplified API Examples
+
+### Context-Based Tracking (No run_id!)
+
+```r
+# Start task - becomes active context
+task_start("PROCESS", "Data Analysis")
+
+# All subsequent calls use context automatically
+subtask_start("Load data", items_total = 100)
+subtask_update(status = "RUNNING", items_complete = 50)
+subtask_complete()
+
+# Auto-numbered subtasks!
+subtask_start("Transform data")
+subtask_complete()
+
+task_complete("Analysis done")
+```
+
+### Simplified Parallel Processing
+
+```r
+task_start("PROCESS", "County Analysis")
+subtask_start("Process counties", items_total = 3143)
+
+# One-line cluster setup!
+cl <- tasker_cluster(
+  ncores = 16,
+  export = c("counties")
+)
+
+# Workers use context automatically
+results <- parallel::parLapplyLB(cl, counties, function(county_fips) {
+  result <- analyze_county(county_fips)
+  subtask_increment(increment = 1, quiet = TRUE)
+  return(result)
+})
+
+stop_tasker_cluster(cl)
+subtask_complete()
+task_complete()
+```
+
+### API Comparison
+
+**Old API (still works, backward compatible):**
+```r
+run_id <- task_start("STAGE", "Task", total_subtasks = 3)
+subtask_start(run_id, 1, "Load", items_total = 100)
+subtask_update(run_id, 1, "RUNNING", items_complete = 50)
+subtask_complete(run_id, 1)
+task_complete(run_id)
+```
+
+**New API (cleaner, less boilerplate):**
+```r
+task_start("STAGE", "Task")
+subtask_start("Load", items_total = 100)
+subtask_update(status = "RUNNING", items_complete = 50)
+subtask_complete()
+task_complete()
+```
+
+**Result: 50-70% reduction in boilerplate code!**
+
+See [inst/examples/example_pipeline_simplified.R](inst/examples/example_pipeline_simplified.R) for a complete working example.
 
 ## Shiny Dashboard
 

@@ -5,19 +5,15 @@
 \title{Complete a subtask}
 \usage{
 subtask_complete(
-  run_id,
-  subtask_number,
   items_completed = NULL,
   message = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL,
+  subtask_number = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
-\item{subtask_number}{Subtask number}
-
 \item{items_completed}{Items completed (optional)}
 
 \item{message}{Final message (optional)}
@@ -25,10 +21,23 @@ subtask_complete(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
+
+\item{subtask_number}{Subtask number, or NULL to use current subtask}
 }
 \value{
 TRUE on success
 }
 \description{
 Complete a subtask
+}
+\examples{
+\dontrun{
+# Old style
+subtask_complete(message = "Done", run_id = run_id, subtask_number = 1)
+
+# New style - use context
+subtask_complete(message = "Done")
+}
 }

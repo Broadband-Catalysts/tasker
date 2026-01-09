@@ -630,7 +630,59 @@ server <- function(input, output, session) {
     current_status <- task_data()
     rv$force_refresh  # Also depend on force_refresh
     
-    if (is.null(current_status) || nrow(current_status) == 0) return()
+    # Get list of task keys that exist in current_status
+    current_task_keys <- if (!is.null(current_status) && nrow(current_status) > 0) {
+      paste(current_status$stage_name, current_status$task_name, sep = "||")
+    } else {
+      character(0)
+    }
+    
+    # Check for tasks that have been reset (exist in task_reactives but not in current_status)
+    # These should be set back to NOT_STARTED state
+    struct <- pipeline_structure()
+    if (!is.null(struct) && !is.null(struct$tasks)) {
+      all_task_keys <- paste(struct$tasks$stage_name, struct$tasks$task_name, sep = "||")
+      
+      # Find tasks that are registered but have no current status (have been reset)
+      reset_task_keys <- setdiff(all_task_keys, current_task_keys)
+      
+      for (task_key in reset_task_keys) {
+        current_val <- task_reactives[[task_key]]
+        # Only reset if currently showing a status other than NOT_STARTED
+        if (!is.null(current_val) && !is.null(current_val$status) && current_val$status != "NOT_STARTED") {
+          # Get task info from registered tasks
+          parts <- strsplit(task_key, "||", fixed = TRUE)[[1]]
+          stage_name <- parts[1]
+          task_name <- parts[2]
+          
+          task_info <- struct$tasks[struct$tasks$stage_name == stage_name & struct$tasks$task_name == task_name, ]
+          if (nrow(task_info) > 0) {
+            task_reactives[[task_key]] <- list(
+              stage_name = stage_name,
+              task_name = task_name,
+              task_order = task_info$task_order[1],
+              status = "NOT_STARTED",
+              overall_percent_complete = 0,
+              overall_progress_message = "",
+              run_id = NA,
+              current_subtask = 0,
+              total_subtasks = 0,
+              items_total = 0,
+              items_complete = 0,
+              current_subtask_name = "",
+              current_subtask_number = 0,
+              log_path = task_info$log_path[1],
+              log_filename = task_info$log_filename[1]
+            )
+          }
+        }
+      }
+    }
+    
+    if (is.null(current_status) || nrow(current_status) == 0) {
+      rv$last_update <- Sys.time()
+      return()
+    }
     
     # Update each task's reactive ONLY if it changed
     for (i in seq_len(nrow(current_status))) {
@@ -982,6 +1034,35 @@ server <- function(input, output, session) {
         type = "message",
         duration = 3
       )
+      
+      # Reset the task reactive to NOT_STARTED state
+      task_key <- paste(stage, task, sep = "||")
+      if (!is.null(task_reactives[[task_key]])) {
+        # Get current task info from registered tasks for log paths
+        struct <- pipeline_structure()
+        if (!is.null(struct) && !is.null(struct$tasks)) {
+          task_info <- struct$tasks[struct$tasks$stage_name == stage & struct$tasks$task_name == task, ]
+          if (nrow(task_info) > 0) {
+            task_reactives[[task_key]] <- list(
+              stage_name = stage,
+              task_name = task,
+              task_order = task_info$task_order[1],
+              status = "NOT_STARTED",
+              overall_percent_complete = 0,
+              overall_progress_message = "",
+              run_id = NA,
+              current_subtask = 0,
+              total_subtasks = 0,
+              items_total = 0,
+              items_complete = 0,
+              current_subtask_name = "",
+              current_subtask_number = 0,
+              log_path = task_info$log_path[1],
+              log_filename = task_info$log_filename[1]
+            )
+          }
+        }
+      }
       
       # Force refresh of task data
       rv$force_refresh <- rv$force_refresh + 1

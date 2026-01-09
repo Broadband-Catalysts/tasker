@@ -5,22 +5,18 @@
 \title{Update subtask progress}
 \usage{
 subtask_update(
-  run_id,
-  subtask_number,
   status,
   percent = NULL,
   items_complete = NULL,
   message = NULL,
   error_message = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL,
+  subtask_number = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
-\item{subtask_number}{Subtask number}
-
 \item{status}{Status: RUNNING, COMPLETED, FAILED, SKIPPED}
 
 \item{percent}{Percent complete 0-100 (optional)}
@@ -34,6 +30,10 @@ subtask_update(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
+
+\item{subtask_number}{Subtask number, or NULL to use current subtask}
 }
 \value{
 TRUE on success
@@ -47,7 +47,11 @@ to avoid race conditions.
 }
 \examples{
 \dontrun{
-subtask_update(run_id, 1, "RUNNING", percent = 50, items_complete = 28)
-subtask_update(run_id, 1, "COMPLETED", percent = 100, items_complete = 56)
+# Old style
+subtask_update(status = "RUNNING", percent = 50, items_complete = 28,
+               run_id = run_id, subtask_number = 1)
+
+# New style - use context
+subtask_update(status = "RUNNING", percent = 50)
 }
 }

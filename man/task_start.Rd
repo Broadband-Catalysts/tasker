@@ -12,7 +12,8 @@ task_start(
   version = NULL,
   git_commit = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  .active = TRUE
 )
 }
 \arguments{
@@ -31,6 +32,11 @@ task_start(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{.active}{Set this run as the active context (default: TRUE).
+When TRUE, subsequent tasker function calls can omit the run_id parameter.
+Set to FALSE if starting a task within a library function to avoid
+overwriting the user's active context.}
 }
 \value{
 run_id (UUID) to track this execution
@@ -40,6 +46,13 @@ Start tracking a task execution
 }
 \examples{
 \dontrun{
+# Old style - explicit run_id
 run_id <- task_start("STATIC", "Process FCC Data")
+
+# New style - automatic context (run_id optional in subsequent calls)
+task_start("STATIC", "Process FCC Data")
+subtask_start("Load files")  # No run_id needed!
+subtask_complete()
+task_complete()
 }
 }
