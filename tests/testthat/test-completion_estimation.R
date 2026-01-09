@@ -43,14 +43,6 @@ test_that("get_completion_estimate returns NULL with insufficient data", {
   ), envir = env)
   result <- get_completion_estimate(env, "test_run", 1, quiet = TRUE)
   expect_null(result)
-  
-  # Only 2 snapshots
-  assign("run_test_run_subtask_1", list(
-    list(timestamp = Sys.time() - 10, items_complete = 10, items_total = 100),
-    list(timestamp = Sys.time(), items_complete = 20, items_total = 100)
-  ), envir = env)
-  result <- get_completion_estimate(env, "test_run", 1, quiet = TRUE)
-  expect_null(result)
 })
 
 test_that("get_completion_estimate calculates with valid data", {
@@ -78,7 +70,7 @@ test_that("get_completion_estimate calculates with valid data", {
   expect_true(result$eta > 0)  # Still work remaining
   expect_true(result$rate > 0)
   expect_equal(result$items_remaining, 50)  # 50 items complete out of 100
-  expect_equal(result$confidence, "medium")  # 9 rates (10 snapshots - 1), need >=10 for "high"
+  expect_equal(result$confidence, "high")  # 50 items completed (>=30 for "high")
 })
 
 test_that("get_completion_estimate handles no progress", {
@@ -106,41 +98,29 @@ test_that("get_completion_estimate confidence levels are correct", {
   env <- new.env(parent = emptyenv())
   base_time <- Sys.time()
   
-  # Test low confidence (< 5 rates)
-  snapshots <- list()
-  for (i in 1:4) {
-    snapshots[[i]] <- list(
-      timestamp = base_time + (i - 1) * 5,
-      items_complete = i * 10,
-      items_total = 100
-    )
-  }
+  # Test low confidence (< 10 items completed)
+  snapshots <- list(
+    list(timestamp = base_time, items_complete = 0, items_total = 100),
+    list(timestamp = base_time + 5, items_complete = 5, items_total = 100)
+  )
   assign("run_test_run_subtask_1", snapshots, envir = env)
   result <- get_completion_estimate(env, "test_run", 1, quiet = TRUE)
   expect_equal(result$confidence, "low")
   
-  # Test medium confidence (5-9 rates)
-  snapshots <- list()
-  for (i in 1:7) {
-    snapshots[[i]] <- list(
-      timestamp = base_time + (i - 1) * 5,
-      items_complete = i * 10,
-      items_total = 100
-    )
-  }
+  # Test medium confidence (10-29 items completed)
+  snapshots <- list(
+    list(timestamp = base_time, items_complete = 0, items_total = 100),
+    list(timestamp = base_time + 50, items_complete = 15, items_total = 100)
+  )
   assign("run_test_run_subtask_1", snapshots, envir = env)
   result <- get_completion_estimate(env, "test_run", 1, quiet = TRUE)
   expect_equal(result$confidence, "medium")
   
-  # Test high confidence (>= 10 rates)
-  snapshots <- list()
-  for (i in 1:12) {
-    snapshots[[i]] <- list(
-      timestamp = base_time + (i - 1) * 5,
-      items_complete = i * 5,
-      items_total = 100
-    )
-  }
+  # Test high confidence (>= 30 items completed)
+  snapshots <- list(
+    list(timestamp = base_time, items_complete = 0, items_total = 100),
+    list(timestamp = base_time + 150, items_complete = 35, items_total = 100)
+  )
   assign("run_test_run_subtask_1", snapshots, envir = env)
   result <- get_completion_estimate(env, "test_run", 1, quiet = TRUE)
   expect_equal(result$confidence, "high")
