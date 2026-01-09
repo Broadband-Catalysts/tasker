@@ -36,6 +36,7 @@ ui <- page_fluid(
       numericInput("refresh_interval", "Auto-refresh (seconds):", 
                    value = 5, min = 1, max = 60),
       checkboxInput("auto_refresh", "Auto-refresh", value = TRUE),
+      checkboxInput("show_script_name", "Show script names", value = FALSE),
       hr(),
       actionButton("refresh", "Refresh Now", class = "btn-primary"),
       hr(),
@@ -59,6 +60,20 @@ ui <- page_fluid(
                  div(class = "pipeline-status-container",
                      # Accordion structure built dynamically with proper Shiny UI elements
                      uiOutput("pipeline_stages_accordion")
+                 )
+        ),
+        tabPanel("SQL Queries",
+                 div(class = "sql-queries-container", style = "padding: 15px;",
+                     fluidRow(
+                       column(12,
+                              actionButton("sql_refresh_now", "Refresh Now", 
+                                         class = "btn-primary")
+                       )
+                     ),
+                     hr(),
+                     div(style = "overflow: auto;",
+                         DTOutput("sql_queries_table")
+                     )
                  )
         )
       )
