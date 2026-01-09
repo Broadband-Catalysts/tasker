@@ -263,6 +263,14 @@ Rscript -e "cat('Hello!\n')"  # Shell interprets ! as history expansion
 R --slave -e "result <- 2 + 2; print(result)"  # Variables like $var get expanded
 ```
 
+**Why:** In bash, double quotes allow:
+- Variable expansion: `$var` gets replaced with variable value
+- Command substitution: `$(command)` gets executed
+- History expansion: `!` triggers history substitution (if enabled)
+- Escape sequences: `\n`, `\t` may be interpreted by shell
+
+Single quotes preserve the literal string, preventing shell interpretation and ensuring R code is passed exactly as written.
+
 ## Code Review Practices
 
 ### Review Modified Files
@@ -321,6 +329,35 @@ subtask_increment <- function(run_id, subtask_number, increment = 1, quiet = TRU
   # Implementation
 }
 ```
+
+## Git Commit Messages
+
+### Summarizing Changes
+
+**When preparing a commit message, briefly summarize all changed files using a small number of high-level bullet points:**
+
+```bash
+# ✅ CORRECT - High-level summary
+feat: Simplify API with context-based tracking
+
+- Add session context management for run_id
+- Make subtask numbering automatic
+- Add parallel cluster helpers
+- Update documentation with v2.0 examples
+
+# ❌ INCORRECT - Too detailed or missing context
+Update R/task_update.R
+Update R/subtask_start.R
+Update R/subtask_update.R
+...
+```
+
+**Guidelines:**
+- **Use high-level themes** instead of listing individual file changes
+- **Group related changes** into conceptual bullet points (3-5 bullets)
+- **Focus on user-facing changes** and their benefits
+- **Include context** about why changes were made when relevant
+- Review output from `get_changed_files` to ensure all changes are represented
 
 ## Common Gotchas
 
