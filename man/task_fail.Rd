@@ -5,16 +5,14 @@
 \title{Mark a task execution as failed}
 \usage{
 task_fail(
-  run_id,
   error_message,
   error_detail = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
 \item{error_message}{Error message}
 
 \item{error_detail}{Detailed error info (optional)}
@@ -22,6 +20,8 @@ task_fail(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
 }
 \value{
 TRUE on success

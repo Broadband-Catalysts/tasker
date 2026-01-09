@@ -249,6 +249,9 @@ validate_config <- function(config) {
 
 #' Ensure configuration is loaded
 #'
+#' Automatically attempts to load tasker configuration if not already loaded.
+#' This allows most users to skip the explicit tasker_config() call.
+#'
 #' @return TRUE if configured
 #' @keywords internal
 ensure_configured <- function() {
@@ -256,14 +259,16 @@ ensure_configured <- function() {
   
   if (is.null(config)) {
     tryCatch({
+      # Attempt auto-configuration
       tasker_config()
+      # Success message suppressed for cleaner output
     }, error = function(e) {
       stop(
         "tasker is not configured. Please:\n",
         "  1. Create .tasker.yml in your project root, OR\n",
         "  2. Set TASKER_DB_* environment variables, OR\n",
         "  3. Call tasker_config() with explicit parameters\n",
-        "\nError: ", e$message,
+        "\nError: ", conditionMessage(e),
         call. = FALSE
       )
     })

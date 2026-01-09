@@ -1,6 +1,5 @@
 #' Update task execution status
 #'
-#' @param run_id Run ID from task_start()
 #' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED
 #' @param current_subtask Current subtask number (optional)
 #' @param overall_percent Overall percent complete 0-100 (optional)
@@ -9,19 +8,29 @@
 #' @param error_detail Detailed error info (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
 #' @return TRUE on success
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' task_update(run_id, status = "RUNNING", overall_percent = 50)
-#' task_update(run_id, status = "COMPLETED", overall_percent = 100)
+#' # With explicit run_id
+#' task_update(status = "RUNNING", overall_percent = 50, run_id = run_id)
+#'
+#' # With context (run_id optional)
+#' task_start("STAGE", "Task")
+#' task_update(status = "RUNNING", overall_percent = 50)
 #' }
-task_update <- function(run_id, status, current_subtask = NULL,
+task_update <- function(status, current_subtask = NULL,
                        overall_percent = NULL, message = NULL,
                        error_message = NULL, error_detail = NULL,
-                       quiet = FALSE, conn = NULL) {
+                       quiet = FALSE, conn = NULL, run_id = NULL) {
   ensure_configured()
+  
+  # Resolve run_id from context if not provided
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
   
   close_on_exit <- FALSE
   if (is.null(conn)) {
@@ -118,33 +127,44 @@ task_update <- function(run_id, status, current_subtask = NULL,
 
 #' Complete a task execution
 #'
-#' @param run_id Run ID from task_start()
 #' @param message Final message (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
 #' @return TRUE on success
 #' @export
-task_complete <- function(run_id, message = NULL, quiet = FALSE, conn = NULL) {
-  task_update(run_id, status = "COMPLETED", overall_percent = 100,
-              message = message, quiet = quiet, conn = conn)
+#'
+#' @examples
+#' \dontrun{
+#' # With explicit run_id
+#' task_complete(message = "All done", run_id = run_id)
+#'
+#' # With context (run_id optional)
+#' task_start("STAGE", "Task")
+#' task_complete(message = "All done")
+#' }
+task_complete <- function(message = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
+  task_update(status = "COMPLETED", overall_percent = 100,
+              message = message, quiet = quiet, conn = conn, run_id = run_id)
 }
 
 
 #' Mark a task execution as failed
 #'
-#' @param run_id Run ID from task_start()
 #' @param error_message Error message
 #' @param error_detail Detailed error info (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
 #' @return TRUE on success
 #' @export
-task_fail <- function(run_id, error_message, error_detail = NULL, quiet = FALSE, conn = NULL) {
-  task_update(run_id, status = "FAILED", 
+task_fail <- function(error_message, error_detail = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
+  task_update(status = "FAILED", 
               error_message = error_message,
               error_detail = error_detail,
               quiet = quiet,
-              conn = conn)
+              conn = conn,
+              run_id = run_id)
 }
 
 
@@ -153,26 +173,26 @@ task_fail <- function(run_id, error_message, error_detail = NULL, quiet = FALSE,
 #' Generic function to end a task with any status. For convenience,
 #' use task_complete() or task_fail() instead.
 #'
-#' @param run_id Run ID from task_start()
 #' @param status Status: "COMPLETED", "FAILED", "CANCELLED", "SKIPPED"
 #' @param message Final message (optional)
 #' @param error_message Error message (for FAILED status)
 #' @param error_detail Detailed error info (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
 #' @return TRUE on success
 #' @export
-task_end <- function(run_id, status, message = NULL, 
-                     error_message = NULL, error_detail = NULL, quiet = FALSE, conn = NULL) {
+task_end <- function(status, message = NULL, 
+                     error_message = NULL, error_detail = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
   if (status == "COMPLETED") {
-    task_complete(run_id, message = message, quiet = quiet, conn = conn)
+    task_complete(message = message, quiet = quiet, conn = conn, run_id = run_id)
   } else if (status == "FAILED") {
     if (is.null(error_message)) error_message <- "Task failed"
-    task_fail(run_id, error_message = error_message, 
-              error_detail = error_detail, quiet = quiet, conn = conn)
+    task_fail(error_message = error_message, 
+              error_detail = error_detail, quiet = quiet, conn = conn, run_id = run_id)
   } else {
-    task_update(run_id, status = status, message = message,
+    task_update(status = status, message = message,
                 error_message = error_message, error_detail = error_detail,
-                quiet = quiet, conn = conn)
+                quiet = quiet, conn = conn, run_id = run_id)
   }
 }

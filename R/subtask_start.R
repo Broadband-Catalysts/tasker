@@ -1,22 +1,40 @@
 #' Start tracking a subtask
 #'
-#' @param run_id Run ID from task_start()
-#' @param subtask_number Subtask number
 #' @param subtask_name Subtask name/description
 #' @param items_total Total items to process (optional)
 #' @param message Progress message (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
+#' @param subtask_number Subtask number, or NULL for auto-increment
 #' @return progress_id
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' subtask_start(run_id, 1, "Processing state-level data", items_total = 56)
+#' # Old style - explicit parameters
+#' subtask_start("Processing state-level data", items_total = 56, 
+#'               run_id = run_id, subtask_number = 1)
+#'
+#' # New style - auto-increment subtask number
+#' task_start("STAGE", "Task")
+#' subtask_start("Load data", items_total = 100)  # Subtask 1
+#' subtask_start("Transform data")                # Subtask 2
+#' subtask_start("Save data")                     # Subtask 3
 #' }
-subtask_start <- function(run_id, subtask_number, subtask_name,
-                         items_total = NULL, message = NULL, quiet = FALSE, conn = NULL) {
+subtask_start <- function(subtask_name, items_total = NULL, message = NULL, 
+                         quiet = FALSE, conn = NULL, run_id = NULL, subtask_number = NULL) {
   ensure_configured()
+  
+  # Resolve run_id from context if not provided
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
+  # Auto-increment subtask number if not provided
+  if (is.null(subtask_number)) {
+    subtask_number <- get_next_subtask(run_id)
+  }
   
   close_on_exit <- FALSE
   if (is.null(conn)) {

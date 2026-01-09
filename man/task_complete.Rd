@@ -4,20 +4,30 @@
 \alias{task_complete}
 \title{Complete a task execution}
 \usage{
-task_complete(run_id, message = NULL, quiet = FALSE, conn = NULL)
+task_complete(message = NULL, quiet = FALSE, conn = NULL, run_id = NULL)
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
 \item{message}{Final message (optional)}
 
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
 }
 \value{
 TRUE on success
 }
 \description{
 Complete a task execution
+}
+\examples{
+\dontrun{
+# With explicit run_id
+task_complete(message = "All done", run_id = run_id)
+
+# With context (run_id optional)
+task_start("STAGE", "Task")
+task_complete(message = "All done")
+}
 }

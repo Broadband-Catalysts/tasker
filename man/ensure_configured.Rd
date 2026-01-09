@@ -14,8 +14,7 @@ TRUE if configured
 TRUE if configured
 }
 \description{
-Ensure configuration is loaded
-
-Ensure configuration is loaded
+Automatically attempts to load tasker configuration if not already loaded.
+This allows most users to skip the explicit tasker_config() call.
 }
 \keyword{internal}

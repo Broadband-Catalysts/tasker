@@ -5,7 +5,6 @@
 \title{Update task execution status}
 \usage{
 task_update(
-  run_id,
   status,
   current_subtask = NULL,
   overall_percent = NULL,
@@ -13,12 +12,11 @@ task_update(
   error_message = NULL,
   error_detail = NULL,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  run_id = NULL
 )
 }
 \arguments{
-\item{run_id}{Run ID from task_start()}
-
 \item{status}{Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED}
 
 \item{current_subtask}{Current subtask number (optional)}
@@ -34,6 +32,8 @@ task_update(
 \item{quiet}{Suppress console messages (default: FALSE)}
 
 \item{conn}{Database connection (optional)}
+
+\item{run_id}{Run ID from task_start(), or NULL to use active context}
 }
 \value{
 TRUE on success
@@ -43,7 +43,11 @@ Update task execution status
 }
 \examples{
 \dontrun{
-task_update(run_id, status = "RUNNING", overall_percent = 50)
-task_update(run_id, status = "COMPLETED", overall_percent = 100)
+# With explicit run_id
+task_update(status = "RUNNING", overall_percent = 50, run_id = run_id)
+
+# With context (run_id optional)
+task_start("STAGE", "Task")
+task_update(status = "RUNNING", overall_percent = 50)
 }
 }

@@ -4,25 +4,39 @@
 #' Unlike subtask_update() which sets the value, this function increments it,
 #' making it safe for use by parallel workers.
 #'
-#' @param run_id Run ID from task_start()
-#' @param subtask_number Subtask number
 #' @param increment Number of items to add to counter (default: 1)
 #' @param quiet Suppress console messages (default: TRUE for parallel workers)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
+#' @param subtask_number Subtask number, or NULL to use current subtask
 #' @return TRUE on success
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' # In parallel worker function:
-#' process_item <- function(item) {
-#'   # ... do work ...
-#'   subtask_increment(run_id, subtask_num, increment = 1)
+#' # Old style - explicit parameters
+#' subtask_increment(increment = 1, run_id = run_id, subtask_number = subtask_num)
+#'
+#' # New style - use context
+#' subtask_increment(increment = 1)  # Uses active context and current subtask
 #' }
-#' }
-subtask_increment <- function(run_id, subtask_number, increment = 1,
-                             quiet = TRUE, conn = NULL) {
+subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
+                             run_id = NULL, subtask_number = NULL) {
   ensure_configured()
+  
+  # Resolve run_id from context if not provided
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
+  # Resolve subtask_number from current subtask if not provided
+  if (is.null(subtask_number)) {
+    subtask_number <- get_current_subtask(run_id)
+    if (is.null(subtask_number)) {
+      stop("No subtask currently active. Either pass subtask_number explicitly or start a subtask first.",
+           call. = FALSE)
+    }
+  }
   
   close_on_exit <- FALSE
   if (is.null(conn)) {
@@ -77,8 +91,6 @@ subtask_increment <- function(run_id, subtask_number, increment = 1,
 
 #' Update subtask progress
 #'
-#' @param run_id Run ID from task_start()
-#' @param subtask_number Subtask number
 #' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED
 #' @param percent Percent complete 0-100 (optional)
 #' @param items_complete Items completed - sets absolute value (optional)
@@ -86,6 +98,8 @@ subtask_increment <- function(run_id, subtask_number, increment = 1,
 #' @param error_message Error message if failed (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
+#' @param subtask_number Subtask number, or NULL to use current subtask
 #' @return TRUE on success
 #' @export
 #'
@@ -94,14 +108,32 @@ subtask_increment <- function(run_id, subtask_number, increment = 1,
 #'
 #' @examples
 #' \dontrun{
-#' subtask_update(run_id, 1, "RUNNING", percent = 50, items_complete = 28)
-#' subtask_update(run_id, 1, "COMPLETED", percent = 100, items_complete = 56)
+#' # Old style
+#' subtask_update(status = "RUNNING", percent = 50, items_complete = 28,
+#'                run_id = run_id, subtask_number = 1)
+#'
+#' # New style - use context
+#' subtask_update(status = "RUNNING", percent = 50)
 #' }
-subtask_update <- function(run_id, subtask_number, status,
-                          percent = NULL, items_complete = NULL,
+subtask_update <- function(status, percent = NULL, items_complete = NULL,
                           message = NULL, error_message = NULL,
-                          quiet = FALSE, conn = NULL) {
+                          quiet = FALSE, conn = NULL,
+                          run_id = NULL, subtask_number = NULL) {
   ensure_configured()
+  
+  # Resolve run_id from context if not provided
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
+  # Resolve subtask_number from current subtask if not provided
+  if (is.null(subtask_number)) {
+    subtask_number <- get_current_subtask(run_id)
+    if (is.null(subtask_number)) {
+      stop("No subtask currently active. Either pass subtask_number explicitly or start a subtask first.",
+           call. = FALSE)
+    }
+  }
   
   close_on_exit <- FALSE
   if (is.null(conn)) {
@@ -202,32 +234,45 @@ subtask_update <- function(run_id, subtask_number, status,
 
 #' Complete a subtask
 #'
-#' @param run_id Run ID from task_start()
-#' @param subtask_number Subtask number
 #' @param items_completed Items completed (optional)
 #' @param message Final message (optional)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
+#' @param subtask_number Subtask number, or NULL to use current subtask
 #' @return TRUE on success
 #' @export
-subtask_complete <- function(run_id, subtask_number, items_completed = NULL, 
-                            message = NULL, quiet = FALSE, conn = NULL) {
-  subtask_update(run_id, subtask_number, status = "COMPLETED",
+#'
+#' @examples
+#' \dontrun{
+#' # Old style
+#' subtask_complete(message = "Done", run_id = run_id, subtask_number = 1)
+#'
+#' # New style - use context
+#' subtask_complete(message = "Done")
+#' }
+subtask_complete <- function(items_completed = NULL, message = NULL, 
+                            quiet = FALSE, conn = NULL,
+                            run_id = NULL, subtask_number = NULL) {
+  subtask_update(status = "COMPLETED",
                 percent = 100, items_complete = items_completed, 
-                message = message, quiet = quiet, conn = conn)
+                message = message, quiet = quiet, conn = conn,
+                run_id = run_id, subtask_number = subtask_number)
 }
 
 
 #' Mark a subtask as failed
 #'
-#' @param run_id Run ID from task_start()
-#' @param subtask_number Subtask number
 #' @param error_message Error message
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
+#' @param run_id Run ID from task_start(), or NULL to use active context
+#' @param subtask_number Subtask number, or NULL to use current subtask
 #' @return TRUE on success
 #' @export
-subtask_fail <- function(run_id, subtask_number, error_message, quiet = FALSE, conn = NULL) {
-  subtask_update(run_id, subtask_number, status = "FAILED",
-                error_message = error_message, quiet = quiet, conn = conn)
+subtask_fail <- function(error_message, quiet = FALSE, conn = NULL,
+                        run_id = NULL, subtask_number = NULL) {
+  subtask_update(status = "FAILED",
+                error_message = error_message, quiet = quiet, conn = conn,
+                run_id = run_id, subtask_number = subtask_number)
 }
