@@ -33,7 +33,7 @@ get_monitor_connection <- function(config = NULL, session_con = NULL) {
   }
   
   # Create new connection based on database type
-  db_type <- config$database$driver %||% "postgresql"
+  db_type <- if (is.null(config$database$driver)) "postgresql" else config$database$driver
   
   if (db_type == "postgresql") {
     if (!requireNamespace("RPostgres", quietly = TRUE)) {
@@ -48,11 +48,11 @@ get_monitor_connection <- function(config = NULL, session_con = NULL) {
       password = config$database$password
     )
   } else if (db_type == "mysql") {
-    if (!requireNamespace("RMySQL", quietly = TRUE)) {
-      stop("RMySQL package required for MySQL", call. = FALSE)
+    if (!requireNamespace("RMariaDB", quietly = TRUE)) {
+      stop("RMariaDB package required for MySQL", call. = FALSE)
     }
     con <- DBI::dbConnect(
-      RMySQL::MySQL(),
+      RMariaDB::MariaDB(),
       host = config$database$host,
       port = config$database$port,
       dbname = config$database$dbname,
@@ -97,7 +97,7 @@ get_monitor_connection <- function(config = NULL, session_con = NULL) {
 get_database_queries <- function(con, db_type = NULL) {
   if (is.null(db_type)) {
     config <- getOption("tasker.config")
-    db_type <- config$database$driver %||% "postgresql"
+    db_type <- if (is.null(config$database$driver)) "postgresql" else config$database$driver
   }
   
   if (db_type == "postgresql") {

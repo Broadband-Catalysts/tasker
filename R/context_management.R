@@ -34,9 +34,16 @@
 #' }
 tasker_context <- function(run_id = NULL) {
   if (!missing(run_id)) {
-    # Setting context
-    if (!is.null(run_id) && !is.character(run_id)) {
-      stop("run_id must be a character string or NULL", call. = FALSE)
+    # Setting context - validate input
+    if (!is.null(run_id)) {
+      if (!is.character(run_id) || length(run_id) != 1 || nchar(trimws(run_id)) == 0) {
+        stop("'run_id' must be a non-empty character string or NULL", call. = FALSE)
+      }
+      # Basic UUID format validation
+      uuid_pattern <- "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+      if (!grepl(uuid_pattern, run_id, ignore.case = TRUE)) {
+        warning("'run_id' does not appear to be a valid UUID format", call. = FALSE)
+      }
     }
     .tasker_env$active_run_id <- run_id
     
@@ -61,9 +68,9 @@ get_active_run_id <- function() {
   run_id <- .tasker_env$active_run_id
   if (is.null(run_id)) {
     stop(
-      "No active task run context.\n",
-      "  Either:\n",
-      "  1. Call task_start() first (it sets the context automatically), OR\n",
+      "No active task run context found.\n",
+      "Solutions:\n",
+      "  1. Call task_start() first (sets context automatically), OR\n",
       "  2. Pass run_id explicitly to this function, OR\n",
       "  3. Set context with tasker_context(run_id)",
       call. = FALSE

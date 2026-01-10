@@ -64,6 +64,30 @@ tasker_cluster <- function(ncores = NULL,
                            envir = parent.frame(),
                            load_all = FALSE) {
   
+  # Input validation
+  if (!is.null(ncores)) {
+    if (!is.numeric(ncores) || length(ncores) != 1 || ncores < 1) {
+      stop("'ncores' must be a positive integer", call. = FALSE)
+    }
+    ncores <- as.integer(ncores)
+  }
+  
+  if (!is.null(packages)) {
+    if (!is.character(packages)) {
+      stop("'packages' must be a character vector of package names", call. = FALSE)
+    }
+  }
+  
+  if (!is.null(export)) {
+    if (!is.character(export)) {
+      stop("'export' must be a character vector of object names", call. = FALSE)
+    }
+  }
+  
+  if (!is.logical(load_all) || length(load_all) != 1) {
+    stop("'load_all' must be TRUE or FALSE", call. = FALSE)
+  }
+  
   # Auto-detect number of cores
   if (is.null(ncores)) {
     ncores <- parallel::detectCores() - 2
@@ -131,9 +155,13 @@ tasker_cluster <- function(ncores = NULL,
     if (!is.null(subtask_counter)) {
       parallel::clusterEvalQ(cl, { 
         tasker::tasker_context(run_id)
-        # Restore subtask counter - access internal environment via get()
-        env <- get(".tasker_env", envir = asNamespace("tasker"))
-        env$subtask_counter <- subtask_counter
+        # Restore subtask counter - access internal environment safely
+        tryCatch({
+          env <- get(".tasker_env", envir = asNamespace("tasker"))
+          env$subtask_counter <- subtask_counter
+        }, error = function(e) {
+          warning("Failed to restore subtask counter on worker: ", e$message)
+        })
         NULL 
       })
     } else {
@@ -151,9 +179,16 @@ tasker_cluster <- function(ncores = NULL,
   
   # Run setup expression on workers if provided
   if (!is.null(setup_expr)) {
-    parallel::clusterEvalQ(cl, {
-      eval(setup_expr)
-      NULL  # Always return NULL to avoid serialization issues
+    result <- parallel::clusterEvalQ(cl, {
+      tryCatch({
+        result <- eval(setup_expr)
+        # Always return NULL to avoid serialization issues
+        NULL
+      }, error = function(e) {
+        # Log error but don't fail - some setup is optional
+        warning("Setup expression failed on worker: ", e$message)
+        NULL
+      })
     })
   }
   

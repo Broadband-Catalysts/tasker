@@ -22,6 +22,23 @@
 #' }
 subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
                              run_id = NULL, subtask_number = NULL) {
+  
+  # Input validation
+  if (!is.numeric(increment) || length(increment) != 1 || increment <= 0) {
+    stop("'increment' must be a positive number", call. = FALSE)
+  }
+  
+  if (!is.logical(quiet) || length(quiet) != 1) {
+    stop("'quiet' must be TRUE or FALSE", call. = FALSE)
+  }
+  
+  if (!is.null(subtask_number)) {
+    if (!is.numeric(subtask_number) || length(subtask_number) != 1 || subtask_number < 1) {
+      stop("'subtask_number' must be a positive integer if provided", call. = FALSE)
+    }
+    subtask_number <- as.integer(subtask_number)
+  }
+  
   ensure_configured()
   
   # Resolve run_id from context if not provided
@@ -120,6 +137,28 @@ subtask_update <- function(status, percent = NULL, items_complete = NULL,
                           quiet = FALSE, conn = NULL,
                           run_id = NULL, subtask_number = NULL) {
   ensure_configured()
+  
+  # Input validation
+  if (missing(status) || !is.character(status) || length(status) != 1) {
+    stop("'status' must be a single character string", call. = FALSE)
+  }
+  
+  if (!is.null(percent)) {
+    if (!is.numeric(percent) || length(percent) != 1 || percent < 0 || percent > 100) {
+      stop("'percent' must be a number between 0 and 100 if provided", call. = FALSE)
+    }
+  }
+  
+  if (!is.null(items_complete)) {
+    if (!is.numeric(items_complete) || length(items_complete) != 1 || items_complete < 0) {
+      stop("'items_complete' must be a non-negative number if provided", call. = FALSE)
+    }
+    items_complete <- as.integer(items_complete)
+  }
+  
+  if (!is.logical(quiet) || length(quiet) != 1) {
+    stop("'quiet' must be TRUE or FALSE", call. = FALSE)
+  }
   
   # Resolve run_id from context if not provided
   if (is.null(run_id)) {

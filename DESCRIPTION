@@ -1,7 +1,7 @@
 Package: tasker
 Type: Package
 Title: Task and Pipeline Execution Tracking
-Version: 0.1.0
+Version: 0.5.0
 Authors@R: person('Gregory', 'Warnes', email = 'greg@warnes.net', role = c('aut', 'cre'))
 Description: Track the status and progress of tasks, subtasks, and pipeline
     executions in a PostgreSQL database. Provides functions for initializing,

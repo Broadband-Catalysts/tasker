@@ -25,14 +25,41 @@ get_table_name <- function(table, conn) {
 }
 
 
-#' Prepare parameters for SQL queries (handle NULLs)
-#' @param ... Parameters to prepare
-#' @return List of parameters with NULL converted to NA
+#' Create standardized tasker error with consistent formatting
+#' @param message Error message
+#' @param context Additional context about where error occurred
+#' @param call Whether to include call information
 #' @keywords internal
-prepare_params <- function(...) {
-  params <- list(...)
-  # Convert NULL to NA for RSQLite compatibility
-  lapply(params, function(x) if (is.null(x)) NA else x)
+tasker_error <- function(message, context = NULL, call = FALSE) {
+  full_message <- if (!is.null(context)) {
+    sprintf("[tasker:%s] %s", context, message)
+  } else {
+    sprintf("[tasker] %s", message)
+  }
+  stop(full_message, call. = call)
+}
+
+
+#' Validate and clean run_id parameter
+#' @param run_id Run ID to validate
+#' @return Cleaned run_id or error
+#' @keywords internal
+validate_run_id <- function(run_id) {
+  if (is.null(run_id)) {
+    return(NULL)
+  }
+  
+  if (!is.character(run_id) || length(run_id) != 1 || nchar(trimws(run_id)) == 0) {
+    tasker_error("'run_id' must be a non-empty character string")
+  }
+  
+  # Basic UUID format validation
+  uuid_pattern <- "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+  if (!grepl(uuid_pattern, run_id, ignore.case = TRUE)) {
+    warning("'run_id' does not appear to be a valid UUID format", call. = FALSE)
+  }
+  
+  trimws(run_id)
 }
 
 
@@ -95,184 +122,5 @@ build_sql <- function(sql, conn = NULL) {
 }
 
 
-#' Load YAML configuration file
-#'
-#' @param config_file Path to YAML file
-#' @return List with configuration
-#' @keywords internal
-load_yaml_config <- function(config_file) {
-  if (!requireNamespace("yaml", quietly = TRUE)) {
-    stop("Package 'yaml' required for configuration files. Install with: install.packages('yaml')")
-  }
-  
-  tryCatch({
-    config <- yaml::read_yaml(config_file)
-    config <- expand_env_vars(config)
-    config
-  }, error = function(e) {
-    stop("Failed to parse configuration file '", config_file, "': ", e$message)
-  })
-}
 
-
-#' Load configuration from environment variables
-#'
-#' @return List with configuration from environment
-#' @keywords internal
-load_env_config <- function() {
-  config <- list(database = list())
-  
-  if (Sys.getenv("TASKER_DB_HOST") != "") {
-    config$database$host <- Sys.getenv("TASKER_DB_HOST")
-  }
-  
-  if (Sys.getenv("TASKER_DB_PORT") != "") {
-    config$database$port <- as.integer(Sys.getenv("TASKER_DB_PORT"))
-  }
-  
-  if (Sys.getenv("TASKER_DB_NAME") != "") {
-    config$database$dbname <- Sys.getenv("TASKER_DB_NAME")
-  }
-  
-  if (Sys.getenv("TASKER_DB_USER") != "") {
-    config$database$user <- Sys.getenv("TASKER_DB_USER")
-  }
-  
-  if (Sys.getenv("TASKER_DB_PASSWORD") != "") {
-    config$database$password <- Sys.getenv("TASKER_DB_PASSWORD")
-  }
-  
-  if (Sys.getenv("TASKER_DB_SCHEMA") != "") {
-    config$database$schema <- Sys.getenv("TASKER_DB_SCHEMA")
-  }
-  
-  if (Sys.getenv("TASKER_DB_DRIVER") != "") {
-    config$database$driver <- Sys.getenv("TASKER_DB_DRIVER")
-  }
-  
-  config
-}
-
-
-#' Expand environment variables in configuration
-#'
-#' @param config Configuration list
-#' @return Configuration list with expanded variables
-#' @keywords internal
-expand_env_vars <- function(config) {
-  if (is.list(config)) {
-    lapply(config, expand_env_vars)
-  } else if (is.character(config)) {
-    pattern <- "\\$\\{([^}]+)\\}"
-    matches <- gregexpr(pattern, config, perl = TRUE)
-    
-    if (matches[[1]][1] != -1) {
-      for (match_info in regmatches(config, matches)[[1]]) {
-        var_name <- sub("\\$\\{([^}]+)\\}", "\\1", match_info, perl = TRUE)
-        var_value <- Sys.getenv(var_name, "")
-        config <- sub(match_info, var_value, config, fixed = TRUE)
-      }
-    }
-    
-    config
-  } else {
-    config
-  }
-}
-
-
-#' Merge two configuration lists
-#'
-#' @param base Base configuration
-#' @param overlay Configuration to overlay
-#' @return Merged configuration
-#' @keywords internal
-merge_configs <- function(base, overlay) {
-  if (!is.list(overlay) || length(overlay) == 0) {
-    return(base)
-  }
-  
-  for (name in names(overlay)) {
-    if (is.list(overlay[[name]]) && is.list(base[[name]])) {
-      base[[name]] <- merge_configs(base[[name]], overlay[[name]])
-    } else if (!is.null(overlay[[name]])) {
-      base[[name]] <- overlay[[name]]
-    }
-  }
-  
-  base
-}
-
-
-#' Validate configuration
-#'
-#' @param config Configuration list
-#' @return TRUE if valid (or stops with error)
-#' @keywords internal
-validate_config <- function(config) {
-  # For SQLite, only dbname is required
-  if (config$database$driver == "sqlite") {
-    if (is.null(config$database$dbname) || config$database$dbname == "") {
-      stop("Missing required configuration for SQLite: dbname (file path)")
-    }
-  } else {
-    # For PostgreSQL/MySQL, require host, port, dbname, user
-    required <- c("host", "port", "dbname", "user")
-    missing <- character(0)
-    
-    for (field in required) {
-      if (is.null(config$database[[field]]) || config$database[[field]] == "") {
-        missing <- c(missing, field)
-      }
-    }
-    
-    if (length(missing) > 0) {
-      stop("Missing required configuration: ", paste(missing, collapse = ", "))
-    }
-    
-    if (!is.numeric(config$database$port) || 
-        config$database$port < 1 || 
-        config$database$port > 65535) {
-      stop("Invalid port: ", config$database$port, ". Must be 1-65535")
-    }
-  }
-  
-  valid_drivers <- c("postgresql", "sqlite", "mysql")
-  if (!config$database$driver %in% valid_drivers) {
-    stop("Invalid driver '", config$database$driver, 
-         "'. Must be one of: ", paste(valid_drivers, collapse = ", "))
-  }
-  
-  TRUE
-}
-
-
-#' Ensure configuration is loaded
-#'
-#' Automatically attempts to load tasker configuration if not already loaded.
-#' This allows most users to skip the explicit tasker_config() call.
-#'
-#' @return TRUE if configured
-#' @keywords internal
-ensure_configured <- function() {
-  config <- getOption("tasker.config")
-  
-  if (is.null(config)) {
-    tryCatch({
-      # Attempt auto-configuration
-      tasker_config()
-      # Success message suppressed for cleaner output
-    }, error = function(e) {
-      stop(
-        "tasker is not configured. Please:\n",
-        "  1. Create .tasker.yml in your project root, OR\n",
-        "  2. Set TASKER_DB_* environment variables, OR\n",
-        "  3. Call tasker_config() with explicit parameters\n",
-        "\nError: ", conditionMessage(e),
-        call. = FALSE
-      )
-    })
-  }
-  
-  TRUE
-}
+# These functions are defined in tasker_config.R

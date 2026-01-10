@@ -71,11 +71,11 @@ task_mark_complete <- function(stage,
   task_runs_table <- get_table_name("task_runs", conn)
   subtask_progress_table <- get_table_name("subtask_progress", conn)
   
-  # Convert NULL to NA for glue_sql
-  total_subtasks <- if (is.null(total_subtasks)) NA else total_subtasks
-  message <- if (is.null(message)) NA else message
-  version <- if (is.null(version)) NA else version
-  git_commit <- if (is.null(git_commit)) NA else git_commit
+  # Convert NULL to SQL NULL literal for glue_sql
+  total_subtasks_sql <- if (is.null(total_subtasks)) DBI::SQL("NULL") else total_subtasks
+  message_sql <- if (is.null(message)) DBI::SQL("NULL") else message
+  version_sql <- if (is.null(version)) DBI::SQL("NULL") else version
+  git_commit_sql <- if (is.null(git_commit)) DBI::SQL("NULL") else git_commit
   
   # Determine timestamp to use
   config <- getOption("tasker.config")
@@ -123,20 +123,20 @@ task_mark_complete <- function(stage,
                 overall_progress_message, version, git_commit, user_name)
                VALUES ({task_id}, {hostname}, {process_id}, {parent_pid}, 
                        {time_value*}, {time_value*}, 'COMPLETED',
-                       {total_subtasks}, {total_subtasks}, 100,
-                       {message}, {version}, {git_commit}, {user_name})
+                       {total_subtasks_sql}, {total_subtasks_sql}, 100,
+                       {message_sql}, {version_sql}, {git_commit_sql}, {user_name})
                RETURNING run_id", .con = conn)
     )$run_id
     
     # Create subtask progress records if specified
-    if (!is.na(total_subtasks) && total_subtasks > 0) {
+    if (!is.null(total_subtasks) && total_subtasks > 0) {
       for (i in seq_len(total_subtasks)) {
         DBI::dbExecute(
           conn,
           glue::glue_sql("INSERT INTO {subtask_progress_table}
-                   (run_id, subtask_number, subtask_description, 
+                   (run_id, subtask_number, subtask_name, 
                     start_time, end_time, status, 
-                    items_total, items_completed, progress_percent,
+                    items_total, items_complete, percent_complete,
                     progress_message)
                    VALUES ({run_id}, {i}, {paste0('Subtask ', i)},
                            {time_value*}, {time_value*}, 'COMPLETED',
@@ -151,7 +151,7 @@ task_mark_complete <- function(stage,
       task_num <- if (!is.na(task_order)) paste0("Task ", task_order) else "Task"
       log_message <- sprintf("[%s] %s MARKED COMPLETE | %s / %s | run_id: %s", 
                             timestamp_str, task_num, stage, task, run_id)
-      if (!is.na(message)) {
+      if (!is.null(message)) {
         log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)

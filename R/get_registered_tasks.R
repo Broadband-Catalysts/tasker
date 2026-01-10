@@ -17,11 +17,27 @@
 get_registered_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
   ensure_configured()
   
+  # Input validation
+  if (!is.null(stage) && (!is.character(stage) || length(stage) != 1)) {
+    stop("'stage' must be a single character string if provided", call. = FALSE)
+  }
+  
+  if (!is.null(name) && (!is.character(name) || length(name) != 1)) {
+    stop("'name' must be a single character string if provided", call. = FALSE)
+  }
+  
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()
     close_on_exit <- TRUE
   }
+  
+  # Ensure cleanup on exit
+  on.exit({
+    if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
+      DBI::dbDisconnect(conn)
+    }
+  })
   
   stages_table <- get_table_name("stages", conn)
   tasks_table  <- get_table_name("tasks",  conn)
@@ -52,8 +68,8 @@ get_registered_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
      FROM {tasks_table} t
      JOIN {stages_table} s ON t.stage_id = s.stage_id
      {where_sql*}
-     ORDER BY s.stage_order NULLS LAST, s.stage_name, 
-              t.task_order NULLS LAST, t.task_name",
+     ORDER BY COALESCE(s.stage_order, 99999), s.stage_name, 
+              COALESCE(t.task_order, 99999), t.task_name",
     .con = conn
   )
   
@@ -62,9 +78,7 @@ get_registered_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
     
     result
     
-  }, finally = {
-    if (close_on_exit) {
-      DBI::dbDisconnect(conn)
-    }
+  }, error = function(e) {
+    stop("Failed to retrieve registered tasks: ", conditionMessage(e), call. = FALSE)
   })
 }

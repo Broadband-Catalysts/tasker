@@ -32,15 +32,31 @@ register_task <- function(stage,
                          conn = NULL) {
   ensure_configured()
   
-  # Validate required parameters
-  if (missing(stage) || is.null(stage) || nchar(stage) == 0) {
-    stop("'stage' is required and cannot be empty")
+  # Input validation
+  if (missing(stage) || !is.character(stage) || length(stage) != 1 || nchar(trimws(stage)) == 0) {
+    stop("'stage' must be a non-empty character string", call. = FALSE)
   }
-  if (missing(name) || is.null(name) || nchar(name) == 0) {
-    stop("'name' is required and cannot be empty")
+  
+  if (missing(name) || !is.character(name) || length(name) != 1 || nchar(trimws(name)) == 0) {
+    stop("'name' must be a non-empty character string", call. = FALSE)
   }
-  if (missing(type) || is.null(type) || nchar(type) == 0) {
-    stop("'type' is required and cannot be empty")
+  
+  if (missing(type) || !is.character(type) || length(type) != 1 || nchar(trimws(type)) == 0) {
+    stop("'type' must be a non-empty character string (e.g., 'R', 'python', 'sh')", call. = FALSE)
+  }
+  
+  if (!is.null(stage_order)) {
+    if (!is.numeric(stage_order) || length(stage_order) != 1) {
+      stop("'stage_order' must be a single number if provided", call. = FALSE)
+    }
+    stage_order <- as.integer(stage_order)
+  }
+  
+  if (!is.null(task_order)) {
+    if (!is.numeric(task_order) || length(task_order) != 1) {
+      stop("'task_order' must be a single number if provided", call. = FALSE)
+    }
+    task_order <- as.integer(task_order)
   }
   
   close_on_exit <- FALSE

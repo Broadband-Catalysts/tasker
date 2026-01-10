@@ -18,11 +18,26 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
                            limit = NULL, conn = NULL) {
   ensure_configured()
   
+  # Input validation
+  if (!is.null(limit)) {
+    if (!is.numeric(limit) || length(limit) != 1 || limit < 1) {
+      stop("'limit' must be a positive integer if provided", call. = FALSE)
+    }
+    limit <- as.integer(limit)
+  }
+  
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()
     close_on_exit <- TRUE
   }
+  
+  # Ensure cleanup on exit
+  on.exit({
+    if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
+      DBI::dbDisconnect(conn)
+    }
+  })
   
   config <- getOption("tasker.config")
   driver <- config$database$driver
@@ -64,9 +79,7 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
     
     result
     
-  }, finally = {
-    if (close_on_exit) {
-      DBI::dbDisconnect(conn)
-    }
+  }, error = function(e) {
+    stop("Failed to retrieve task status: ", conditionMessage(e), call. = FALSE)
   })
 }

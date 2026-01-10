@@ -2524,6 +2524,12 @@ server <- function(input, output, session) {
   # Initialize trigger
   rv$sql_trigger <- Sys.time()
   
+  # Filter cache for SQL queries table
+  sql_filter_cache <- reactiveValues(
+    search_cols = c(),
+    reapply_filters = FALSE
+  )
+  
   # Manual refresh button for SQL queries
   observeEvent(input$sql_refresh_now, {
     rv$sql_trigger <- Sys.time()
@@ -2613,9 +2619,13 @@ server <- function(input, output, session) {
     )
   })
   
-  # Update SQL queries table content using proxy
+  # Update SQL queries table content using proxy and preserve filters
   observe({
     queries <- sql_queries_data()
+    
+    # Cache current filters before updating data
+    sql_filter_cache$search_cols <- input$sql_queries_table_search_columns
+    sql_filter_cache$reapply_filters <- TRUE
     
     # Use proxy to update data without recreating the table
     proxy <- dataTableProxy('sql_queries_table')
@@ -2623,6 +2633,30 @@ server <- function(input, output, session) {
     # Always pass queries (which has proper column structure)
     replaceData(proxy, queries, resetPaging = FALSE, rownames = FALSE)
   })
+  
+  # Observer to handle filter preservation for SQL queries table
+  observeEvent(
+    input$sql_queries_table_search_columns,
+    {
+      if (sql_filter_cache$reapply_filters) {
+        sql_filter_cache$reapply_filters <- FALSE
+        
+        if (!is.null(sql_filter_cache$search_cols) && length(sql_filter_cache$search_cols) > 0) {
+          # Reapply filters using updateSearch
+          search_cols <- lapply(
+            sql_filter_cache$search_cols,
+            function(x) list(search = x)
+          )
+          
+          dataTableProxy("sql_queries_table") |>
+            DT::updateSearch(
+              keywords = list(columns = search_cols)
+            )
+        }
+      }
+    },
+    ignoreInit = TRUE
+  )
   
   # ============================================================================
   # DEBUGGER BUTTON

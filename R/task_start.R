@@ -30,6 +30,31 @@ task_start <- function(stage, task, total_subtasks = NULL,
                       message = NULL, version = NULL, 
                       git_commit = NULL, quiet = FALSE, conn = NULL,
                       .active = TRUE) {
+  
+  # Input validation
+  if (missing(stage) || !is.character(stage) || length(stage) != 1 || nchar(trimws(stage)) == 0) {
+    stop("'stage' must be a non-empty character string", call. = FALSE)
+  }
+  
+  if (missing(task) || !is.character(task) || length(task) != 1 || nchar(trimws(task)) == 0) {
+    stop("'task' must be a non-empty character string", call. = FALSE)
+  }
+  
+  if (!is.null(total_subtasks)) {
+    if (!is.numeric(total_subtasks) || length(total_subtasks) != 1 || total_subtasks < 1) {
+      stop("'total_subtasks' must be a positive integer if provided", call. = FALSE)
+    }
+    total_subtasks <- as.integer(total_subtasks)
+  }
+  
+  if (!is.logical(quiet) || length(quiet) != 1) {
+    stop("'quiet' must be TRUE or FALSE", call. = FALSE)
+  }
+  
+  if (!is.logical(.active) || length(.active) != 1) {
+    stop("'.active' must be TRUE or FALSE", call. = FALSE)
+  }
+  
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -42,11 +67,11 @@ task_start <- function(stage, task, total_subtasks = NULL,
   stages_table <- get_table_name("stages", conn)
   task_runs_table <- get_table_name("task_runs", conn)
   
-  # Convert NULL to NA for glue_sql
-  total_subtasks <- if (is.null(total_subtasks)) NA else total_subtasks
-  message <- if (is.null(message)) NA else message
-  version <- if (is.null(version)) NA else version
-  git_commit <- if (is.null(git_commit)) NA else git_commit
+  # Convert NULL to SQL NULL literal for glue_sql
+  total_subtasks_sql <- if (is.null(total_subtasks)) DBI::SQL("NULL") else total_subtasks
+  message_sql <- if (is.null(message)) DBI::SQL("NULL") else message
+  version_sql <- if (is.null(version)) DBI::SQL("NULL") else version
+  git_commit_sql <- if (is.null(git_commit)) DBI::SQL("NULL") else git_commit
   
   # Determine the current timestamp function based on driver
   config <- getOption("tasker.config")
@@ -80,8 +105,8 @@ task_start <- function(stage, task, total_subtasks = NULL,
                 status, total_subtasks, overall_progress_message, 
                 version, git_commit, user_name)
                VALUES ({task_id}, {hostname}, {process_id}, {parent_pid}, {time_func*}, 
-                       'STARTED', {total_subtasks}, {message}, {version},
-                       {git_commit}, {user_name})
+                       'STARTED', {total_subtasks_sql}, {message_sql}, {version_sql},
+                       {git_commit_sql}, {user_name})
                RETURNING run_id", .con = conn)
     )$run_id
     
@@ -90,7 +115,7 @@ task_start <- function(stage, task, total_subtasks = NULL,
       task_num <- if (!is.na(task_order)) paste0("Task ", task_order) else "Task"
       log_message <- sprintf("[%s] %s START | %s / %s | run_id: %s", 
                             timestamp, task_num, stage, task, run_id)
-      if (!is.na(message)) {
+      if (!is.null(message)) {
         log_message <- paste0(log_message, " | ", message)
       }
       message(log_message)

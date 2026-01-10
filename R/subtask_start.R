@@ -24,6 +24,30 @@
 #' }
 subtask_start <- function(subtask_name, items_total = NULL, message = NULL, 
                          quiet = FALSE, conn = NULL, run_id = NULL, subtask_number = NULL) {
+  
+  # Input validation
+  if (missing(subtask_name) || !is.character(subtask_name) || length(subtask_name) != 1 || nchar(trimws(subtask_name)) == 0) {
+    stop("'subtask_name' must be a non-empty character string", call. = FALSE)
+  }
+  
+  if (!is.null(items_total)) {
+    if (!is.numeric(items_total) || length(items_total) != 1 || items_total < 0) {
+      stop("'items_total' must be a non-negative integer if provided", call. = FALSE)
+    }
+    items_total <- as.integer(items_total)
+  }
+  
+  if (!is.null(subtask_number)) {
+    if (!is.numeric(subtask_number) || length(subtask_number) != 1 || subtask_number < 1) {
+      stop("'subtask_number' must be a positive integer if provided", call. = FALSE)
+    }
+    subtask_number <- as.integer(subtask_number)
+  }
+  
+  if (!is.logical(quiet) || length(quiet) != 1) {
+    stop("'quiet' must be TRUE or FALSE", call. = FALSE)
+  }
+  
   ensure_configured()
   
   # Resolve run_id from context if not provided

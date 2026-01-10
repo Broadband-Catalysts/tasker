@@ -27,6 +27,29 @@ task_update <- function(status, current_subtask = NULL,
                        quiet = FALSE, conn = NULL, run_id = NULL) {
   ensure_configured()
   
+  # Input validation
+  if (missing(status) || !is.character(status) || length(status) != 1) {
+    stop("'status' must be a single character string", call. = FALSE)
+  }
+  
+  if (!is.null(current_subtask)) {
+    if (!is.numeric(current_subtask) || length(current_subtask) != 1 || current_subtask < 1) {
+      stop("'current_subtask' must be a positive integer if provided", call. = FALSE)
+    }
+    current_subtask <- as.integer(current_subtask)
+  }
+  
+  if (!is.null(overall_percent)) {
+    if (!is.numeric(overall_percent) || length(overall_percent) != 1 || 
+        overall_percent < 0 || overall_percent > 100) {
+      stop("'overall_percent' must be a number between 0 and 100 if provided", call. = FALSE)
+    }
+  }
+  
+  if (!is.logical(quiet) || length(quiet) != 1) {
+    stop("'quiet' must be TRUE or FALSE", call. = FALSE)
+  }
+  
   # Resolve run_id from context if not provided
   if (is.null(run_id)) {
     run_id <- get_active_run_id()
@@ -37,6 +60,13 @@ task_update <- function(status, current_subtask = NULL,
     conn <- get_db_connection()
     close_on_exit <- TRUE
   }
+  
+  # Ensure cleanup on exit
+  on.exit({
+    if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
+      DBI::dbDisconnect(conn)
+    }
+  })
   
   config <- getOption("tasker.config")
   task_runs_table <- get_table_name("task_runs", conn)
@@ -117,10 +147,8 @@ task_update <- function(status, current_subtask = NULL,
     
     TRUE
     
-  }, finally = {
-    if (close_on_exit) {
-      DBI::dbDisconnect(conn)
-    }
+  }, error = function(e) {
+    stop("Failed to update task status: ", conditionMessage(e), call. = FALSE)
   })
 }
 
