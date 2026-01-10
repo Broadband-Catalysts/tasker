@@ -512,7 +512,9 @@ server <- function(input, output, session) {
     # Track previous stage statuses to detect transitions
     stage_previous_statuses = list(),
     # Database connection for SQL queries monitoring (reused)
-    monitor_connection = NULL
+    monitor_connection = NULL,
+    # Trigger for forcing initial DOM renders
+    initial_render_trigger = 0
   )
   
   # Cleanup database connection when session ends
@@ -545,6 +547,11 @@ server <- function(input, output, session) {
     })
     
     pipeline_structure(structure)
+    
+    # Trigger initial render after DOM creation with slight delay
+    shinyjs::delay(100, {
+      rv$initial_render_trigger <- rv$initial_render_trigger + 1
+    })
   })
   
   # ============================================================================
@@ -638,6 +645,9 @@ server <- function(input, output, session) {
   
   # Observer: Poll database and update only changed values
   observe({
+    # Only update when Pipeline Status tab is active
+    req(input$main_tabs == "Pipeline Status")
+    
     # Use the task_data reactive instead of duplicating the call
     current_status <- task_data()
     rv$force_refresh  # Also depend on force_refresh
@@ -880,6 +890,9 @@ server <- function(input, output, session) {
   # ============================================================================
   
   observe({
+    # Only update when Pipeline Status tab is active
+    req(input$main_tabs == "Pipeline Status")
+    
     struct <- pipeline_structure()
     if (is.null(struct)) return()
     
@@ -1157,10 +1170,22 @@ server <- function(input, output, session) {
               )
             ),
             textOutput(paste0("task_name_", task_id), inline = TRUE, container = function(...) div(class = "task-name", ...)),
-            uiOutput(paste0("task_status_", task_id), class = "task-status-badge", inline = TRUE),
-            uiOutput(paste0("task_progress_", task_id), class = "task-progress-container", inline = TRUE),
-            uiOutput(paste0("task_message_", task_id), class = "task-message", inline = TRUE),
-            uiOutput(paste0("task_reset_", task_id), class = "task-reset-button", inline = TRUE)
+            span(id = paste0("task_status_", task_id), class = "task-status-badge", ""),
+            div(id = paste0("task_progress_", task_id), class = "task-progress-container", ""),
+            div(id = paste0("task_message_", task_id), class = "task-message", ""),
+            div(id = paste0("task_reset_", task_id), class = "task-reset-button", 
+                tags$button(
+                  id = paste0("reset_btn_", task_id),
+                  class = "btn btn-sm btn-warning task-reset-btn",
+                  title = "Reset this task to NOT_STARTED",
+                  onclick = sprintf(
+                    "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
+                    htmltools::htmlEscape(task$stage_name),
+                    htmltools::htmlEscape(task$task_name)
+                  ),
+                  "Reset"
+                )
+            )
           ),
           # Process status sub-pane (hidden by default)
           div(
@@ -1216,6 +1241,9 @@ server <- function(input, output, session) {
 
   # Create individual reactive outputs for stage header components
   observe({
+    # Only create stage UI when Pipeline Status tab is active
+    req(input$main_tabs == "Pipeline Status")
+    
     struct <- pipeline_structure()
     if (is.null(struct)) return()
     
@@ -1261,6 +1289,9 @@ server <- function(input, output, session) {
   
   # Create reactive observers for individual task components using shinyjs
   observe({
+    # Only create task UI when Pipeline Status tab is active
+    req(input$main_tabs == "Pipeline Status")
+    
     struct <- pipeline_structure()
     if (is.null(struct)) return()
     
@@ -1299,21 +1330,40 @@ server <- function(input, output, session) {
           task_name_local
         })
         
-        # Status badge - reactive renderUI
-        output[[paste0("task_status_", task_id_local)]] <- renderUI({
+        # Status badge - update via shinyjs (ensure initial rendering)
+        observe({
+          # Force dependency on pipeline structure to trigger initial render
+          pipeline_structure()
+          # Force initial render trigger
+          rv$initial_render_trigger
+          
           task_data <- task_reactives[[task_key_local]]
           task_status <- if (!is.null(task_data)) task_data$status else "NOT_STARTED"
-          HTML(badge_html(task_status))
-        })
+          
+          status_id <- paste0("task_status_", task_id_local)
+          shinyjs::html(status_id, badge_html(task_status))
+        }, priority = -1)
         
-        # Progress bars with enhanced subtask information - reactive renderUI
-        output[[paste0("task_progress_", task_id_local)]] <- renderUI({
+        # Progress bars - update via shinyjs (ensure initial rendering)
+        observe({
+          # Force dependency on pipeline structure to trigger initial render
+          pipeline_structure()
+          # Force initial render trigger
+          rv$initial_render_trigger
+          
           task_data <- task_reactives[[task_key_local]]
-          HTML(task_progress_html(task_data))
-        })
+          
+          progress_id <- paste0("task_progress_", task_id_local)
+          shinyjs::html(progress_id, task_progress_html(task_data))
+        }, priority = -1)
         
-        # Message with enhanced subtask details - reactive renderUI
-        output[[paste0("task_message_", task_id_local)]] <- renderUI({
+        # Message with enhanced subtask details - update via shinyjs (ensure initial rendering)
+        observe({
+          # Force dependency on pipeline structure to trigger initial render
+          pipeline_structure()
+          # Force initial render trigger
+          rv$initial_render_trigger
+          
           task_data <- task_reactives[[task_key_local]]
           
           # Create enhanced message that includes subtask information
@@ -1341,23 +1391,13 @@ server <- function(input, output, session) {
           
           message_text <- message_text %||% ""
           
-          div(class = "task-message", title = message_text, message_text)
-        })
+          message_id <- paste0("task_message_", task_id_local)
+          shinyjs::html(message_id, message_text)
+          shinyjs::runjs(sprintf("document.getElementById('%s').title = '%s'", 
+                                message_id, htmltools::htmlEscape(message_text)))
+        }, priority = -1)
         
-        # Reset button - reactive renderUI
-        output[[paste0("task_reset_", task_id_local)]] <- renderUI({
-          tags$button(
-            id = paste0("reset_btn_", task_id_local),
-            class = "btn btn-sm btn-warning task-reset-btn",
-            title = "Reset this task to NOT_STARTED",
-            onclick = sprintf(
-              "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
-              htmltools::htmlEscape(stage_name_local),
-              htmltools::htmlEscape(task_name_local)
-            ),
-            "Reset"
-          )
-        })
+        # Reset button is now static in UI - no reactive updates needed
       })(task_key, task_id, stage_name, task$task_name)
     })
   })
@@ -2401,6 +2441,9 @@ server <- function(input, output, session) {
   
   # Observer to create reactive handlers for each task's log controls
   observe({
+    # Only create log controls when Pipeline Status tab is active
+    req(input$main_tabs == "Pipeline Status")
+    
     struct <- pipeline_structure()
     if (is.null(struct)) return()
     
@@ -2471,6 +2514,9 @@ server <- function(input, output, session) {
   
   # Fetch SQL queries
   sql_queries_data <- reactive({
+    # Only fetch when SQL Queries tab is active
+    req(input$main_tabs == "SQL Queries")
+    
     # Depend on main auto-refresh and manual trigger
     autoRefresh()
     rv$sql_trigger
@@ -2559,5 +2605,15 @@ server <- function(input, output, session) {
     
     # Always pass queries (which has proper column structure)
     replaceData(proxy, queries, resetPaging = FALSE, rownames = FALSE)
+  })
+  
+  # ============================================================================
+  # DEBUGGER BUTTON
+  # ============================================================================
+  
+  # Start debugger when button is clicked
+  observeEvent(input$start_debugger, {
+    showNotification("Starting debugger... Check R console.", type = "warning", duration = 3)
+    browser()
   })
 }

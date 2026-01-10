@@ -40,6 +40,9 @@ ui <- page_fluid(
       hr(),
       actionButton("refresh", "Refresh Now", class = "btn-primary"),
       hr(),
+      actionButton("start_debugger", "DEBUG", class = "btn-warning btn-sm", 
+                   title = "Start R debugger (browser()) for troubleshooting"),
+      hr(),
       textOutput("last_update")
     ),
     
