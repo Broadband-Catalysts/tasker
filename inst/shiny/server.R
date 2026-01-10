@@ -1677,7 +1677,7 @@ server <- function(input, output, session) {
               display_mode = current_mode
             )
           } else if (settings$tail_mode && length(all_lines) > last_pos$line_count) {
-            # Tail mode: Append new lines
+            # Tail mode: Append new lines and enforce line limit
             new_line_count <- length(all_lines) - last_pos$line_count
             new_lines <- tail(all_lines, new_line_count)
             
@@ -1695,32 +1695,49 @@ server <- function(input, output, session) {
               paste0("<div class='log-line", class_attr, "'>", line, "</div>")
             }, USE.NAMES = FALSE)
             
-            # Append using JavaScript
+            # Append using JavaScript and enforce line limit
             new_content <- paste(formatted_new_lines, collapse = "")
             log_text_id <- paste0("log_text_", task_id_local)
+            max_lines <- if (settings$num_lines <= -1) 999999 else settings$num_lines
             
             shinyjs::runjs(sprintf(
               "var elem = document.getElementById('%s');
                if (elem) {
                  var wasAtBottom = elem.scrollHeight - elem.scrollTop <= elem.clientHeight + 50;
+                 
+                 // Add new content
                  elem.insertAdjacentHTML('beforeend', %s);
+                 
+                 // Enforce line limit (skip info bar when counting)
+                 var logLines = elem.querySelectorAll('.log-line');
+                 var maxLines = %d;
+                 if (maxLines < 999999 && logLines.length > maxLines) {
+                   var linesToRemove = logLines.length - maxLines;
+                   for (var i = 0; i < linesToRemove; i++) {
+                     if (logLines[i]) logLines[i].remove();
+                   }
+                 }
+                 
                  if (wasAtBottom) {
                    elem.scrollTop = elem.scrollHeight;
                  }
                }",
               log_text_id,
-              jsonlite::toJSON(new_content, auto_unbox = TRUE)
+              jsonlite::toJSON(new_content, auto_unbox = TRUE),
+              max_lines
             ))
             
-            # Update line info bar
+            # Update line info bar with correct count
+            displayed_lines <- min(length(lines_to_show) + new_line_count, max_lines)
             file_info <- sprintf(
               "<div class='log-file-info-bar'>
                 <span><strong>File:</strong> %s</span>
-                <span><strong>Lines:</strong> %s</span>
+                <span><strong>Lines:</strong> %d (showing last %d)</span>
                 <span><strong>Updated:</strong> %s</span>
               </div>",
               htmltools::htmlEscape(basename(log_file)),
-              length(lines_to_show),
+              length(all_lines),
+              displayed_lines,
               format(Sys.time(), "%H:%M:%S")
             )
             
