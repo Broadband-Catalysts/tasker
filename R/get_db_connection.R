@@ -61,4 +61,3 @@ get_db_connection <- function() {
 
 
 # get_placeholder and build_sql are defined in utils.R
-# create_schema is defined in setup_tasker_db.R

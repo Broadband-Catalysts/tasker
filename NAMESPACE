@@ -2,7 +2,6 @@
 
 export(check_tasker_db)
 export(clear_registered_tasks)
-export(create_schema)
 export(create_tasker_config)
 export(export_tasker_context)
 export(find_config_file)

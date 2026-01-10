@@ -158,21 +158,3 @@ check_tasker_db <- function(conn = NULL) {
   message("\u2713 tasker database schema is properly initialized")
   return(TRUE)
 }
-
-
-#' Create tasker database schema (alias for setup_tasker_db)
-#'
-#' This function is an alias for setup_tasker_db() for backward compatibility.
-#' 
-#' @param conn Database connection (optional, will create if NULL)
-#' @param schema Schema name (default: from config)
-#' @return TRUE on success
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' create_schema()
-#' }
-create_schema <- function(conn = NULL, schema = NULL) {
-  setup_tasker_db(conn = conn, schema_name = schema)
-}
