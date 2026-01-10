@@ -84,6 +84,14 @@ tasker_config <- function(config_file = NULL,
     yaml_config <- load_yaml_config(config_file)
     config <- merge_configs(config, yaml_config)
     config$loaded_from <- config_file
+    
+    # Set environment variables from config if present
+    if (!is.null(yaml_config$environment) && is.list(yaml_config$environment)) {
+      for (var_name in names(yaml_config$environment)) {
+        var_value <- as.character(yaml_config$environment[[var_name]])
+        do.call(Sys.setenv, setNames(list(var_value), var_name))
+      }
+    }
   }
   
   # Load from environment variables
