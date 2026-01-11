@@ -119,6 +119,17 @@ test_that("tasker_cluster helper works", {
   expect_equal(length(results), 10)
   expect_equal(results[[5]], 10)
   
+  # Verify counter was actually incremented in database
+  conn <- DBI::dbConnect(RSQLite::SQLite(), test_db)
+  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+  
+  subtask_result <- DBI::dbGetQuery(conn,
+    "SELECT items_complete FROM subtask_progress WHERE subtask_number = 1")
+  
+  expect_equal(nrow(subtask_result), 1)
+  expect_equal(subtask_result$items_complete, 10,
+               info = sprintf("Expected 10 items incremented, got %d", subtask_result$items_complete))
+  
   # Complete
   tasker::subtask_complete()
   tasker::task_complete()

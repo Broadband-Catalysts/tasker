@@ -33,14 +33,34 @@ export_tasker_context <- function(cl, run_id = NULL) {
     }
   }
   
-  # Export to cluster
+  # Export run_id to cluster
   parallel::clusterExport(cl, "run_id", envir = environment())
   
+  # Export subtask counter state if it exists
+  subtask_counter <- .tasker_env$subtask_counter
+  if (!is.null(subtask_counter)) {
+    parallel::clusterExport(cl, "subtask_counter", envir = environment())
+  }
+  
   # Initialize context on workers
-  parallel::clusterEvalQ(cl, { 
-    tasker::tasker_context(run_id)
-    NULL 
-  })
+  if (!is.null(subtask_counter)) {
+    parallel::clusterEvalQ(cl, { 
+      tasker::tasker_context(run_id)
+      # Restore subtask counter - access internal environment safely
+      tryCatch({
+        env <- get(".tasker_env", envir = asNamespace("tasker"))
+        env$subtask_counter <- subtask_counter
+      }, error = function(e) {
+        warning("Failed to restore subtask counter on worker: ", e$message)
+      })
+      NULL 
+    })
+  } else {
+    parallel::clusterEvalQ(cl, { 
+      tasker::tasker_context(run_id)
+      NULL 
+    })
+  }
   
   invisible(run_id)
 }
