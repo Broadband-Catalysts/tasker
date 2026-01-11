@@ -19,6 +19,9 @@
 #'   \item{items_complete}{Number of items completed}
 #'   \item{error_message}{Error message if status is FAILED}
 #' }
+#' @seealso [subtask_start()] to start tracking subtasks, [subtask_update()]
+#'   to update subtask status, [get_task_status()] to view parent task status
+#'
 #' @export
 #'
 #' @examples

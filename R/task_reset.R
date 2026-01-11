@@ -10,6 +10,11 @@
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return TRUE on success
+#'
+#' @seealso [task_start()] to start tracking a task, [get_task_status()] to
+#'   check current status before resetting, [get_task_history()] to view
+#'   execution history
+#'
 #' @export
 #'
 #' @examples

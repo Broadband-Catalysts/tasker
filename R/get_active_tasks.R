@@ -2,6 +2,11 @@
 #'
 #' @param conn Database connection (optional)
 #' @return Data frame with active tasks
+#'
+#' @seealso [get_task_status()] to query all task statuses with filtering,
+#'   [get_task_history()] to view execution history, [task_start()] to start
+#'   tracking a task
+#'
 #' @export
 #'
 #' @examples

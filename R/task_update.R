@@ -10,6 +10,11 @@
 #' @param conn Database connection (optional)
 #' @param run_id Run ID from task_start(), or NULL to use active context
 #' @return TRUE on success
+#'
+#' @seealso [task_start()] to start tracking a task, [task_mark_complete()] to
+#'   mark task complete, [subtask_update()] to update subtask progress,
+#'   [get_task_status()] to query current status
+#'
 #' @export
 #'
 #' @examples

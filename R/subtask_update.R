@@ -10,6 +10,12 @@
 #' @param run_id Run ID from task_start(), or NULL to use active context
 #' @param subtask_number Subtask number, or NULL to use current subtask
 #' @return TRUE on success
+#'
+#' @seealso [subtask_update()] to set progress values (use increment for
+#'   parallel workers), [subtask_start()] to start tracking a subtask,
+#'   [export_tasker_context()] to share context with parallel workers,
+#'   [tasker_cluster()] for simplified parallel setup
+#'
 #' @export
 #'
 #' @examples
@@ -118,6 +124,11 @@ subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
 #' @param run_id Run ID from task_start(), or NULL to use active context
 #' @param subtask_number Subtask number, or NULL to use current subtask
 #' @return TRUE on success
+#'
+#' @seealso [subtask_increment()] for atomic counter updates safe for parallel
+#'   workers, [subtask_start()] to start tracking a subtask,
+#'   [get_subtask_progress()] to query subtask progress
+#'
 #' @export
 #'
 #' @note For parallel workers incrementing counters, use subtask_increment() instead

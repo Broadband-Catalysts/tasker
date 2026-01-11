@@ -8,6 +8,11 @@
 #' @param run_id Run ID from task_start(), or NULL to use active context
 #' @param subtask_number Subtask number, or NULL for auto-increment
 #' @return progress_id
+#'
+#' @seealso [subtask_update()] to update subtask status, [subtask_increment()]
+#'   for atomic counter updates in parallel workers, [task_start()] to start
+#'   the parent task, [get_subtask_progress()] to query subtask progress
+#'
 #' @export
 #'
 #' @examples

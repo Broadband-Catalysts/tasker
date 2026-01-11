@@ -6,6 +6,11 @@
 #' @param limit Maximum number of results (default: all)
 #' @param conn Database connection (optional)
 #' @return Data frame with task status
+#'
+#' @seealso [get_active_tasks()] to get only running tasks,
+#'   [get_task_history()] to view detailed execution history,
+#'   [get_subtask_progress()] to view subtask details for a run
+#'
 #' @export
 #'
 #' @examples

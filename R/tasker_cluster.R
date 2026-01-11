@@ -16,6 +16,11 @@
 #' @param envir Environment to export objects from (default: parent.frame())
 #' @param load_all If TRUE, call devtools::load_all() on workers (default: FALSE)
 #' @return Cluster object from parallel::makeCluster()
+#'
+#' @seealso [export_tasker_context()] to add context to existing clusters,
+#'   [stop_tasker_cluster()] to properly shut down clusters,
+#'   [subtask_increment()] for atomic progress updates in parallel workers
+#'
 #' @export
 #'
 #' @examples

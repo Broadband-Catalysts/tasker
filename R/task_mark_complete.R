@@ -21,6 +21,11 @@
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @return run_id (UUID) of the created completion record
+#'
+#' @seealso [task_start()] to start tracking a task normally, [task_update()]
+#'   to update running task status, [task_reset()] to reset task state,
+#'   [get_task_history()] to view execution history
+#'
 #' @export
 #'
 #' @examples

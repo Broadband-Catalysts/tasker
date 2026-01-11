@@ -5,6 +5,11 @@
 #'
 #' @param cl Existing cluster object
 #' @param run_id Run ID to export (default: current active context)
+#'
+#' @seealso [tasker_cluster()] for simplified cluster creation with automatic
+#'   context setup, [subtask_increment()] for atomic progress updates in
+#'   parallel workers, [task_start()] to create the context
+#'
 #' @export
 #'
 #' @examples

@@ -13,6 +13,12 @@
 #'   Set to FALSE if starting a task within a library function to avoid
 #'   overwriting the user's active context.
 #' @return run_id (UUID) to track this execution
+#'
+#' @seealso [task_update()] to update task status, [task_mark_complete()] to
+#'   mark task complete, [task_reset()] to reset task state,
+#'   [subtask_start()] to start tracking subtasks, [get_task_status()] to
+#'   query task status
+#'
 #' @export
 #'
 #' @examples

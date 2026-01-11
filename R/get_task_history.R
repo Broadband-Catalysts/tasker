@@ -5,6 +5,11 @@
 #' @param limit Maximum number of results (default: 100)
 #' @param conn Database connection (optional)
 #' @return Data frame with task execution history
+#'
+#' @seealso [get_task_status()] to view current status, [get_active_tasks()]
+#'   to see running tasks, [get_subtask_progress()] to view subtask details
+#'   for a run
+#'
 #' @export
 get_task_history <- function(stage = NULL, task = NULL, limit = 100, conn = NULL) {
   ensure_configured()
