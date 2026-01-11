@@ -184,9 +184,14 @@ tasker_cluster <- function(ncores = NULL,
   
   # Run setup expression on workers if provided
   if (!is.null(setup_expr)) {
+    # Export the expression to workers
+    parallel::clusterExport(cl, "setup_expr", envir = environment())
+    
+    # Evaluate at the top level of each worker so variables persist
     result <- parallel::clusterEvalQ(cl, {
       tryCatch({
-        result <- eval(setup_expr)
+        # Evaluate at top level - assignments will go into worker's global env
+        eval(setup_expr)
         # Always return NULL to avoid serialization issues
         NULL
       }, error = function(e) {
@@ -196,6 +201,6 @@ tasker_cluster <- function(ncores = NULL,
       })
     })
   }
-  
+
   return(cl)
 }
