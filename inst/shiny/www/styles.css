@@ -456,13 +456,13 @@ span[id^="stage_progress_"] {
 
 /* Terminal-style log display */
 .log-terminal {
-  background: #1e1e1e;
-  color: #d4d4d4;
+  background: #1e1e1e !important;
+  color: #e8e8e8 !important;
   border: 1px solid #333;
   border-radius: 4px;
   padding: 0;
   max-height: 500px;
-  min-height: 200px;
+  min-height: 20px;
   overflow-y: auto;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 13px;
@@ -513,6 +513,7 @@ span[id^="stage_progress_"] {
   white-space: pre-wrap;
   word-wrap: break-word;
   border-left: 3px solid transparent;
+  color: #e8e8e8 !important;
 }
 
 .log-line-error {
@@ -869,4 +870,20 @@ span[id^="stage_progress_"] {
 
 .sql-queries-container .dataTables_wrapper {
   width: 100%;
+}
+
+/* Prevent Shiny from graying out log terminal during recalculation */
+.log-terminal.recalculating,
+.log-terminal .recalculating,
+.log-line.recalculating,
+.log-file-info-bar.recalculating {
+  opacity: 1 !important;
+  color: #e8e8e8 !important;
+}
+
+.shiny-html-output.recalculating .log-terminal,
+.shiny-html-output.recalculating .log-line,
+.shiny-html-output.recalculating .log-file-info-bar {
+  opacity: 1 !important;
+  color: #cccccc !important;
 }

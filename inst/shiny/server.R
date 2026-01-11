@@ -1192,14 +1192,53 @@ server <- function(input, output, session) {
             id = paste0("process_pane_", task_id),
             class = "task-subpane process-pane",
             style = "display: none;",
-            uiOutput(paste0("process_content_", task_id))
+            htmlOutput(paste0("process_content_", task_id))
           ),
           # Log viewer sub-pane (hidden by default)
           div(
             id = paste0("log_pane_", task_id),
             class = "task-subpane log-pane",
             style = "display: none;",
-            uiOutput(paste0("log_content_", task_id))
+            div(
+              class = "log-controls-container",
+              div(
+                class = "log-controls",
+                selectInput(
+                  paste0("log_lines_", task_id),
+                  NULL,
+                  choices = c(
+                    "Last 5 lines" = 5,
+                    "Last 10 lines" = 10,
+                    "Last 25 lines" = 25,
+                    "Last 50 lines" = 50,
+                    "Last 100 lines" = 100,
+                    "Full log" = -1
+                  ),
+                  selected = 5,
+                  width = "140px"
+                ),
+                checkboxInput(
+                  paste0("log_tail_", task_id),
+                  "Tail mode",
+                  value = TRUE
+                ),
+                checkboxInput(
+                  paste0("log_auto_refresh_", task_id),
+                  "Auto-refresh",
+                  value = TRUE
+                ),
+                actionButton(
+                  paste0("log_refresh_", task_id),
+                  "Refresh",
+                  icon = icon("sync"),
+                  class = "btn-sm btn-primary"
+                )
+              )
+            ),
+            div(
+              class = "log-terminal",
+              htmlOutput(paste0("log_text_", task_id))
+            )
           )
         )
       })
@@ -1220,9 +1259,9 @@ server <- function(input, output, session) {
             div(
               class = "stage-header",
               div(class = "stage-name", stage_name),
-              uiOutput(paste0("stage_badge_", stage_id), class = "stage-badge", inline = TRUE),
-              uiOutput(paste0("stage_progress_", stage_id), class = "stage-progress", inline = TRUE),
-              uiOutput(paste0("stage_count_", stage_id), class = "stage-count", inline = TRUE)
+              htmlOutput(paste0("stage_badge_", stage_id), inline = TRUE, container = function(...) span(class = "stage-badge", ...)),
+              htmlOutput(paste0("stage_progress_", stage_id), inline = TRUE, container = function(...) span(class = "stage-progress", ...)),
+              textOutput(paste0("stage_count_", stage_id), inline = TRUE, container = function(...) span(class = "stage-count", ...))
             )
           )
         ),
@@ -1257,30 +1296,36 @@ server <- function(input, output, session) {
       stage_name <- stage$stage_name
       stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
       
-      # Create renderUI blocks for stage components
+      # Create render blocks for stage components
       (function(stage_name_local, stage_id_local) {
         
-        # Badge - reactive renderUI
-        output[[paste0("stage_badge_", stage_id_local)]] <- renderUI({
+        # Badge - reactive renderText for htmlOutput
+        output[[paste0("stage_badge_", stage_id_local)]] <- renderText({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            HTML(badge_html(stage_data$status))
+            badge_html(stage_data$status)
+          } else {
+            ""
           }
         })
         
-        # Progress bar - reactive renderUI  
-        output[[paste0("stage_progress_", stage_id_local)]] <- renderUI({
+        # Progress bar - reactive renderText for htmlOutput
+        output[[paste0("stage_progress_", stage_id_local)]] <- renderText({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            HTML(stage_progress_html(stage_data$progress_pct, stage_data$status))
+            stage_progress_html(stage_data$progress_pct, stage_data$status)
+          } else {
+            ""
           }
         })
         
-        # Count - reactive renderUI
-        output[[paste0("stage_count_", stage_id_local)]] <- renderUI({
+        # Count - reactive renderText for textOutput
+        output[[paste0("stage_count_", stage_id_local)]] <- renderText({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            span(sprintf("%d/%d", stage_data$completed, stage_data$total))
+            sprintf("%d/%d", stage_data$completed, stage_data$total)
+          } else {
+            ""
           }
         })
       })(stage_name, stage_id)
@@ -1393,8 +1438,10 @@ server <- function(input, output, session) {
           
           message_id <- paste0("task_message_", task_id_local)
           shinyjs::html(message_id, message_text)
-          shinyjs::runjs(sprintf("document.getElementById('%s').title = '%s'", 
-                                message_id, htmltools::htmlEscape(message_text)))
+          # Only set title if element exists
+          shinyjs::runjs(sprintf(
+            "var elem = document.getElementById('%s'); if (elem) { elem.title = '%s'; }", 
+            message_id, htmltools::htmlEscape(message_text)))
         }, priority = -1)
         
         # Reset button is now static in UI - no reactive updates needed
@@ -1422,79 +1469,30 @@ server <- function(input, output, session) {
       task_key <- paste(stage_name, task_name, sep = "||")
       
       (function(task_key_local, task_id_local, stage_name_local, task_name_local) {
-        # Process pane content - only update when pane is expanded
-        output[[paste0("process_content_", task_id_local)]] <- renderUI({
-          # Only render if this pane is expanded
+        # Process pane content - renderText for htmlOutput
+        output[[paste0("process_content_", task_id_local)]] <- renderText({
+          # Check if pane is expanded
           if (!(task_id_local %in% rv$expanded_process_panes)) {
-            return(NULL)
+            return("")
           }
           
           task_data <- task_reactives[[task_key_local]]
           build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session)
         })
         
-        # Log pane content - static UI structure with controls
-        output[[paste0("log_content_", task_id_local)]] <- renderUI({
-          # Only render if this pane is expanded
-          if (!(task_id_local %in% rv$expanded_log_panes)) {
-            return(NULL)
+        # Log pane content - observer to initialize controls once when expanded
+        observe({
+          # Only initialize if this pane is newly expanded and controls don't exist yet
+          if (task_id_local %in% rv$expanded_log_panes) {
+            # Get log settings for this task
+            init_log_settings(rv, task_id_local)
+            settings <- rv$log_settings[[task_id_local]]
+            
+            # Update control values (in case they were created with different defaults)
+            if (!is.null(input[[paste0("log_lines_", task_id_local)]])) {
+              updateSelectInput(session, paste0("log_lines_", task_id_local), selected = settings$num_lines)
+            }
           }
-          
-          # Get log settings for this task
-          settings <- rv$log_settings[[task_id_local]]
-          if (is.null(settings)) {
-            settings <- list(
-              num_lines = 5,
-              tail_mode = TRUE,
-              auto_refresh = TRUE,
-              filter = ""
-            )
-          }
-          
-          # Build static controls
-          tagList(
-            div(
-              class = "log-controls-container",
-              div(
-                class = "log-controls",
-                selectInput(
-                  paste0("log_lines_", task_id_local),
-                  NULL,
-                  choices = c(
-                    "Last 5 lines" = 5,
-                    "Last 10 lines" = 10,
-                    "Last 25 lines" = 25,
-                    "Last 50 lines" = 50,
-                    "Last 100 lines" = 100,
-                    "Full log" = -1
-                  ),
-                  selected = settings$num_lines,
-                  width = "140px"
-                ),
-                checkboxInput(
-                  paste0("log_tail_", task_id_local),
-                  "Tail mode",
-                  value = settings$tail_mode
-                ),
-                checkboxInput(
-                  paste0("log_auto_refresh_", task_id_local),
-                  "Auto-refresh",
-                  value = settings$auto_refresh
-                ),
-                actionButton(
-                  paste0("log_refresh_", task_id_local),
-                  "Refresh",
-                  icon = icon("sync"),
-                  class = "btn-sm btn-primary"
-                )
-              )
-            ),
-            # Terminal container with dynamic content
-            div(
-              class = "log-terminal",
-              htmlOutput(paste0("log_text_", task_id_local))
-            )
-          )
         })
         
         # Log text content - incremental updates using observer
@@ -1585,10 +1583,12 @@ server <- function(input, output, session) {
                   <span><strong>Status:</strong> %s</span>
                   <span><strong>State:</strong> File not found</span>
                 </div>
-                <div class='log-line' style='padding: 20px; text-align: center; color: #888;'>
-                  <div style='margin-bottom: 10px;'><strong>Log file not found</strong></div>
-                  <div>Expected: %s</div>
-                  <div style='margin-top: 10px;'>This file will be created when the task runs.</div>
+                <div class='log-line' style='text-align: center; white-space-collapse: collapse; line-height: 2;'>
+                    <strong>Log file not found</strong>
+                    <br>
+                    Expected: %s
+                    <br>
+                    This file will be created when the task runs.
                 </div>",
                 htmltools::htmlEscape(basename(log_file)),
                 htmltools::htmlEscape(task_status),
@@ -1665,10 +1665,9 @@ server <- function(input, output, session) {
             
             content <- paste0(file_info, paste(formatted_lines, collapse = ""))
             
-            # Replace entire content using renderUI output
-            output[[paste0("log_text_", task_id_local)]] <- renderUI({
-              HTML(content)
-            })
+            # Replace entire content using shinyjs::html
+            log_text_id <- paste0("log_text_", task_id_local)
+            shinyjs::html(log_text_id, content)
             
             # Update position tracker
             rv$log_last_positions[[pos_key]] <- list(
@@ -1708,11 +1707,12 @@ server <- function(input, output, session) {
                  // Add new content
                  elem.insertAdjacentHTML('beforeend', %s);
                  
-                 // Enforce line limit (skip info bar when counting)
+                 // Re-query to get updated list after adding new content
                  var logLines = elem.querySelectorAll('.log-line');
                  var maxLines = %d;
                  if (maxLines < 999999 && logLines.length > maxLines) {
                    var linesToRemove = logLines.length - maxLines;
+                   // Remove oldest lines from the beginning
                    for (var i = 0; i < linesToRemove; i++) {
                      if (logLines[i]) logLines[i].remove();
                    }
@@ -1760,11 +1760,6 @@ server <- function(input, output, session) {
               display_mode = current_mode
             )
           }
-        })
-        
-        # Initial render for log text output
-        output[[paste0("log_text_", task_id_local)]] <- renderUI({
-          NULL  # Will be populated by observer
         })
       })(task_key, task_id, stage_name, task_name)
     })
@@ -1908,7 +1903,7 @@ server <- function(input, output, session) {
     }
   })
   
-  # Detail panel
+  # Detail panel - renderUI is acceptable here since it's user-initiated, not auto-updating
   output$detail_panel <- renderUI({
     if (is.null(rv$selected_task_id)) {
       return(NULL)
