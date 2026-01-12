@@ -79,3 +79,8 @@ subtask_complete()
 task_complete()
 }
 }
+\seealso{
+\code{\link[=export_tasker_context]{export_tasker_context()}} to add context to existing clusters,
+\code{\link[=stop_tasker_cluster]{stop_tasker_cluster()}} to properly shut down clusters,
+\code{\link[=subtask_increment]{subtask_increment()}} for atomic progress updates in parallel workers
+}

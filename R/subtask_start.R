@@ -91,6 +91,21 @@ subtask_start <- function(subtask_name, items_total = NULL, message = NULL,
                WHERE tr.run_id = {run_id}", .con = conn)
     )
     
+    # Auto-complete previous subtask if it's still STARTED
+    # This handles the case where a subtask started but never received progress updates
+    if (subtask_number > 1) {
+      DBI::dbExecute(
+        conn,
+        glue::glue_sql("UPDATE {subtask_progress_table}
+                 SET status = 'COMPLETED',
+                     end_time = {time_func*},
+                     percent_complete = 100
+                 WHERE run_id = {run_id} 
+                   AND subtask_number = {subtask_number - 1}
+                   AND status = 'STARTED'", .con = conn)
+      )
+    }
+    
     progress_id <- DBI::dbGetQuery(
       conn,
       glue::glue_sql("INSERT INTO {subtask_progress_table}

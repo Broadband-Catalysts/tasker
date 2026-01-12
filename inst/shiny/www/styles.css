@@ -872,18 +872,78 @@ span[id^="stage_progress_"] {
   width: 100%;
 }
 
-/* Prevent Shiny from graying out log terminal during recalculation */
+/* Prevent Shiny from graying out during recalculation */
 .log-terminal.recalculating,
 .log-terminal .recalculating,
 .log-line.recalculating,
-.log-file-info-bar.recalculating {
+.log-file-info-bar.recalculating,
+.process-info-header.recalculating,
+.process-details.recalculating,
+.process-detail-item.recalculating,
+.child-process-header.recalculating,
+.child-process-list.recalculating,
+.child-process-item.recalculating,
+.subtask-table.recalculating,
+.process-error-banner.recalculating {
   opacity: 1 !important;
-  color: #e8e8e8 !important;
+  color: inherit !important;
 }
 
+.shiny-html-output.recalculating,
 .shiny-html-output.recalculating .log-terminal,
 .shiny-html-output.recalculating .log-line,
-.shiny-html-output.recalculating .log-file-info-bar {
+.shiny-html-output.recalculating .log-file-info-bar,
+.shiny-html-output.recalculating .process-info-header,
+.shiny-html-output.recalculating .process-details,
+.shiny-html-output.recalculating .process-detail-item,
+.shiny-html-output.recalculating .child-process-header,
+.shiny-html-output.recalculating .child-process-list,
+.shiny-html-output.recalculating .child-process-item,
+.shiny-html-output.recalculating .subtask-table,
+.shiny-html-output.recalculating .process-error-banner,
+.shiny-html-output.recalculating td,
+.shiny-html-output.recalculating th {
   opacity: 1 !important;
-  color: #cccccc !important;
+  color: inherit !important;
+}
+
+/* Preserve badge colors during recalculation */
+.shiny-html-output.recalculating .task-status-badge.status-COMPLETED,
+.shiny-html-output.recalculating .stage-badge.status-COMPLETED,
+.task-status-badge.status-COMPLETED.recalculating,
+.stage-badge.status-COMPLETED.recalculating {
+  background: #81c784 !important;
+  color: #2e7d32 !important;
+}
+
+.shiny-html-output.recalculating .task-status-badge.status-RUNNING,
+.shiny-html-output.recalculating .stage-badge.status-RUNNING,
+.task-status-badge.status-RUNNING.recalculating,
+.stage-badge.status-RUNNING.recalculating {
+  background: #ffd54f !important;
+  color: #444 !important;
+}
+
+.shiny-html-output.recalculating .task-status-badge.status-STARTED,
+.shiny-html-output.recalculating .stage-badge.status-STARTED,
+.task-status-badge.status-STARTED.recalculating,
+.stage-badge.status-STARTED.recalculating {
+  background: #ffd54f !important;
+  color: #f57f17 !important;
+}
+
+.shiny-html-output.recalculating .task-status-badge.status-FAILED,
+.shiny-html-output.recalculating .stage-badge.status-FAILED,
+.task-status-badge.status-FAILED.recalculating,
+.stage-badge.status-FAILED.recalculating {
+  background: #e57373 !important;
+  color: #c62828 !important;
+}
+
+.shiny-html-output.recalculating .task-status-badge.status-NOT_STARTED,
+.shiny-html-output.recalculating .stage-badge.status-NOT_STARTED,
+.task-status-badge.status-NOT_STARTED.recalculating,
+.stage-badge.status-NOT_STARTED.recalculating {
+  background: #e0e0e0 !important;
+  color: #444 !important;
 }

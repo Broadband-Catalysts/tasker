@@ -20,3 +20,8 @@ Get active (running) tasks
 get_active_tasks()
 }
 }
+\seealso{
+\code{\link[=get_task_status]{get_task_status()}} to query all task statuses with filtering,
+\code{\link[=get_task_history]{get_task_history()}} to view execution history, \code{\link[=task_start]{task_start()}} to start
+tracking a task
+}

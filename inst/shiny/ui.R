@@ -13,7 +13,15 @@ ui <- page_fluid(
   useShinyjs(),
   tags$head(
     tags$title("FCC Data Pipeline - Tasker Monitor"),
-    tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css")
+    tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css"),
+    tags$script(HTML("
+      $(document).on('click', '.kill-query-btn', function() {
+        var pid = $(this).data('pid');
+        var username = $(this).data('username');
+        Shiny.setInputValue('kill_query_pid', pid, {priority: 'event'});
+        Shiny.setInputValue('kill_query_username', username, {priority: 'event'});
+      });
+    "))
   ),
 
   titlePanel(
