@@ -40,3 +40,9 @@ subtask_increment(increment = 1, run_id = run_id, subtask_number = subtask_num)
 subtask_increment(increment = 1)  # Uses active context and current subtask
 }
 }
+\seealso{
+\code{\link[=subtask_update]{subtask_update()}} to set progress values (use increment for
+parallel workers), \code{\link[=subtask_start]{subtask_start()}} to start tracking a subtask,
+\code{\link[=export_tasker_context]{export_tasker_context()}} to share context with parallel workers,
+\code{\link[=tasker_cluster]{tasker_cluster()}} for simplified parallel setup
+}

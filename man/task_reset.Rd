@@ -34,3 +34,8 @@ task_reset(stage = "DAILY", task = "process_counties")
 task_reset(stage = "DAILY", task = "process_counties", run_id = "...")
 }
 }
+\seealso{
+\code{\link[=task_start]{task_start()}} to start tracking a task, \code{\link[=get_task_status]{get_task_status()}} to
+check current status before resetting, \code{\link[=get_task_history]{get_task_history()}} to view
+execution history
+}

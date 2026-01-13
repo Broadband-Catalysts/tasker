@@ -55,3 +55,8 @@ subtask_update(status = "RUNNING", percent = 50, items_complete = 28,
 subtask_update(status = "RUNNING", percent = 50)
 }
 }
+\seealso{
+\code{\link[=subtask_increment]{subtask_increment()}} for atomic counter updates safe for parallel
+workers, \code{\link[=subtask_start]{subtask_start()}} to start tracking a subtask,
+\code{\link[=get_subtask_progress]{get_subtask_progress()}} to query subtask progress
+}

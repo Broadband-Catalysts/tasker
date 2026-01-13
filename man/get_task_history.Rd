@@ -21,3 +21,8 @@ Data frame with task execution history
 \description{
 Get task execution history
 }
+\seealso{
+\code{\link[=get_task_status]{get_task_status()}} to view current status, \code{\link[=get_active_tasks]{get_active_tasks()}}
+to see running tasks, \code{\link[=get_subtask_progress]{get_subtask_progress()}} to view subtask details
+for a run
+}

@@ -116,8 +116,16 @@ task_progress_html <- function(task_data) {
   show_dual <- (items_total > 1 && task_status != "COMPLETED")
   
   # Calculate effective progress - prioritize subtask-based calculation when available
+  # Use completed subtasks count, not current_subtask number
   effective_progress <- if (total_subtasks > 0 && current_subtask >= 0) {
-    round(100 * current_subtask / total_subtasks, 1)
+    # Count completed subtasks from task_data if available
+    completed_count <- if (!is.null(task_data$completed_subtasks) && !is.na(task_data$completed_subtasks)) {
+      task_data$completed_subtasks
+    } else {
+      # Fallback: Assume subtasks before current are complete
+      max(0, current_subtask - 1)
+    }
+    round(100 * completed_count / total_subtasks, 1)
   } else if (!is.na(task_progress)) {
     task_progress
   } else {
@@ -595,6 +603,7 @@ server <- function(input, output, session) {
           run_id = NA,
           current_subtask = 0,
           total_subtasks = 0,
+          completed_subtasks = 0,
           items_total = 0,
           items_complete = 0,
           log_path = task$log_path,
@@ -689,6 +698,7 @@ server <- function(input, output, session) {
               run_id = NA,
               current_subtask = 0,
               total_subtasks = 0,
+              completed_subtasks = 0,
               items_total = 0,
               items_complete = 0,
               current_subtask_name = "",
@@ -717,9 +727,14 @@ server <- function(input, output, session) {
       items_total <- 0
       items_complete <- 0
       subtask_info <- NULL
+      completed_subtasks <- 0
       if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
         subtask_info <- tryCatch({
           subs <- tasker::get_subtask_progress(task_status$run_id)
+          # Count completed subtasks
+          if (!is.null(subs) && nrow(subs) > 0) {
+            completed_subtasks <- sum(subs$status == "COMPLETED", na.rm = TRUE)
+          }
           if (!is.null(subs) && nrow(subs) > 0) {
             # Get most recently updated active subtask (RUNNING or STARTED)
             active <- subs[subs$status %in% c("RUNNING", "STARTED"), ]
@@ -798,6 +813,7 @@ server <- function(input, output, session) {
           task_order = if (!is.null(current_val)) current_val$task_order else NA,
           items_total = items_total,
           items_complete = items_complete,
+          completed_subtasks = completed_subtasks,
           current_subtask_name = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_name)) subtask_info$subtask_name else "",
           current_subtask_number = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_number)) subtask_info$subtask_number else 0
         ) %>%
@@ -2285,7 +2301,8 @@ server <- function(input, output, session) {
     # Trigger refresh
     input$log_refresh
     
-    if (input$log_auto_refresh) {
+    # Only auto-refresh if checkbox is checked
+    if (isTruthy(input$log_auto_refresh)) {
       invalidateLater(3000)  # Refresh every 3 seconds
     }
     
@@ -2589,6 +2606,7 @@ server <- function(input, output, session) {
       username = character(0),
       query = character(0),
       state = character(0),
+      Actions = character(0),
       stringsAsFactors = FALSE
     )
     
@@ -2600,10 +2618,14 @@ server <- function(input, output, session) {
         scrollY = "60vh",
         scrollCollapse = TRUE,
         dom = 'frtip',
-        ordering = TRUE
+        ordering = TRUE,
+        columnDefs = list(
+          list(targets = ncol(initial_data) - 1, orderable = FALSE)
+        )
       ),
       rownames = FALSE,
       filter = 'none',
+      escape = FALSE,
       class = 'cell-border stripe'
     )
   })
@@ -2612,11 +2634,91 @@ server <- function(input, output, session) {
   observe({
     queries <- sql_queries_data()
     
+    # Add action buttons column with kill button for each row
+    if (nrow(queries) > 0) {
+      queries$Actions <- sapply(seq_len(nrow(queries)), function(i) {
+        sprintf(
+          '<button class="btn btn-danger btn-sm kill-query-btn" data-pid="%s" data-username="%s" style="padding: 2px 8px; font-size: 12px;">Kill</button>',
+          queries$pid[i],
+          htmltools::htmlEscape(queries$username[i])
+        )
+      })
+    } else {
+      queries$Actions <- character(0)
+    }
+    
     # Use proxy to update data without recreating the table
     proxy <- dataTableProxy('sql_queries_table')
     
     # Always pass queries (which has proper column structure)
     replaceData(proxy, queries, resetPaging = FALSE, rownames = FALSE)
+  })
+  
+  # Handle kill button clicks
+  observeEvent(input$kill_query_pid, {
+    pid <- input$kill_query_pid
+    username <- input$kill_query_username
+    
+    if (!is.null(pid) && !is.null(username)) {
+      # Show confirmation modal
+      showModal(modalDialog(
+        title = "Confirm Kill Query",
+        sprintf("Are you sure you want to kill query with PID %s (user: %s)?", pid, username),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton("confirm_kill_query", "Kill Query", class = "btn-danger")
+        ),
+        easyClose = TRUE
+      ))
+      
+      # Store PID for confirmation handler
+      rv$pending_kill_pid <- pid
+    }
+  })
+  
+  # Handle confirmed kill action
+  observeEvent(input$confirm_kill_query, {
+    pid <- rv$pending_kill_pid
+    
+    if (!is.null(pid)) {
+      tryCatch({
+        config <- getOption("tasker.config")
+        if (is.null(config)) {
+          showNotification("Tasker configuration not loaded", type = "error", duration = 5)
+          removeModal()
+          return()
+        }
+        
+        # Get database connection
+        con <- tasker::get_monitor_connection(config, rv$monitor_connection)
+        rv$monitor_connection <- con
+        
+        # Kill the query using bbcDB::dbKillQuery
+        result <- bbcDB::dbKillQuery(con, as.numeric(pid))
+        
+        # Show success notification
+        showNotification(
+          sprintf("Query PID %s killed successfully", pid),
+          type = "message",
+          duration = 3
+        )
+        
+        # Refresh the query list
+        rv$sql_trigger <- Sys.time()
+        
+      }, error = function(e) {
+        showNotification(
+          sprintf("Error killing query: %s", conditionMessage(e)),
+          type = "error",
+          duration = 10
+        )
+      })
+      
+      # Clear pending kill PID
+      rv$pending_kill_pid <- NULL
+    }
+    
+    removeModal()
   })
   
   # ============================================================================

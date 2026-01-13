@@ -48,3 +48,8 @@ subtask_start("Transform data")                # Subtask 2
 subtask_start("Save data")                     # Subtask 3
 }
 }
+\seealso{
+\code{\link[=subtask_update]{subtask_update()}} to update subtask status, \code{\link[=subtask_increment]{subtask_increment()}}
+for atomic counter updates in parallel workers, \code{\link[=task_start]{task_start()}} to start
+the parent task, \code{\link[=get_subtask_progress]{get_subtask_progress()}} to query subtask progress
+}

@@ -56,3 +56,9 @@ subtask_complete()
 task_complete()
 }
 }
+\seealso{
+\code{\link[=task_update]{task_update()}} to update task status, \code{\link[=task_mark_complete]{task_mark_complete()}} to
+mark task complete, \code{\link[=task_reset]{task_reset()}} to reset task state,
+\code{\link[=subtask_start]{subtask_start()}} to start tracking subtasks, \code{\link[=get_task_status]{get_task_status()}} to
+query task status
+}

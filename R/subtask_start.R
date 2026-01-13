@@ -65,10 +65,14 @@ subtask_start <- function(subtask_name, items_total = NULL, message = NULL,
     subtask_number <- get_next_subtask(run_id)
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   config <- getOption("tasker.config")
@@ -90,6 +94,21 @@ subtask_start <- function(subtask_name, items_total = NULL, message = NULL,
                JOIN {tasks_table} t ON tr.task_id = t.task_id
                WHERE tr.run_id = {run_id}", .con = conn)
     )
+    
+    # Auto-complete previous subtask if it's still STARTED
+    # This handles the case where a subtask started but never received progress updates
+    if (subtask_number > 1) {
+      DBI::dbExecute(
+        conn,
+        glue::glue_sql("UPDATE {subtask_progress_table}
+                 SET status = 'COMPLETED',
+                     end_time = {time_func*},
+                     percent_complete = 100
+                 WHERE run_id = {run_id} 
+                   AND subtask_number = {subtask_number - 1}
+                   AND status = 'STARTED'", .con = conn)
+      )
+    }
     
     progress_id <- DBI::dbGetQuery(
       conn,

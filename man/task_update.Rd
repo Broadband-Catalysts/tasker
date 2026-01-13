@@ -51,3 +51,8 @@ task_start("STAGE", "Task")
 task_update(status = "RUNNING", overall_percent = 50)
 }
 }
+\seealso{
+\code{\link[=task_start]{task_start()}} to start tracking a task, \code{\link[=task_mark_complete]{task_mark_complete()}} to
+mark task complete, \code{\link[=subtask_update]{subtask_update()}} to update subtask progress,
+\code{\link[=get_task_status]{get_task_status()}} to query current status
+}

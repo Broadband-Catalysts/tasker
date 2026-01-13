@@ -37,3 +37,7 @@ Get subtask progress for a task run
 get_subtask_progress(run_id)
 }
 }
+\seealso{
+\code{\link[=subtask_start]{subtask_start()}} to start tracking subtasks, \code{\link[=subtask_update]{subtask_update()}}
+to update subtask status, \code{\link[=get_task_status]{get_task_status()}} to view parent task status
+}

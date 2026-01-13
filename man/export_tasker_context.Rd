@@ -32,3 +32,8 @@ results <- parLapply(cl, items, function(x) {
 })
 }
 }
+\seealso{
+\code{\link[=tasker_cluster]{tasker_cluster()}} for simplified cluster creation with automatic
+context setup, \code{\link[=subtask_increment]{subtask_increment()}} for atomic progress updates in
+parallel workers, \code{\link[=task_start]{task_start()}} to create the context
+}

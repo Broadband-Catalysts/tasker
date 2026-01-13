@@ -39,6 +39,13 @@ tasker_context <- function(run_id = NULL) {
         warning("'run_id' does not appear to be a valid UUID format", call. = FALSE)
       }
     }
+    
+    # Close old connection if context is changing
+    old_run_id <- .tasker_env$active_run_id
+    if (!is.null(old_run_id) && !identical(old_run_id, run_id)) {
+      close_connection(old_run_id)
+    }
+    
     .tasker_env$active_run_id <- run_id
     
     # Reset subtask counter when context changes
@@ -51,4 +58,83 @@ tasker_context <- function(run_id = NULL) {
     # Getting context
     return(.tasker_env$active_run_id)
   }
+}
+
+
+#' Store a database connection for a run_id
+#'
+#' Internal function to associate a database connection with a run_id.
+#' The connection will be reused by all tasker functions for that run.
+#'
+#' @param run_id Character UUID of the task run
+#' @param conn Database connection object
+#' @keywords internal
+#' @noRd
+store_connection <- function(run_id, conn) {
+  if (is.null(.tasker_env$connections)) {
+    .tasker_env$connections <- list()
+  }
+  .tasker_env$connections[[run_id]] <- conn
+  invisible(conn)
+}
+
+
+#' Get the database connection for a run_id
+#'
+#' Internal function to retrieve the stored database connection for a run_id.
+#' If no connection is stored, returns NULL.
+#'
+#' @param run_id Character UUID of the task run, or NULL to use active context
+#' @return Database connection object or NULL
+#' @keywords internal
+#' @noRd
+get_connection <- function(run_id = NULL) {
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
+  if (is.null(run_id)) {
+    return(NULL)
+  }
+  
+  if (is.null(.tasker_env$connections)) {
+    return(NULL)
+  }
+  
+  conn <- .tasker_env$connections[[run_id]]
+  
+  # Validate connection is still valid
+  if (!is.null(conn) && !DBI::dbIsValid(conn)) {
+    # Connection is invalid, remove it
+    .tasker_env$connections[[run_id]] <- NULL
+    return(NULL)
+  }
+  
+  return(conn)
+}
+
+
+#' Close and remove the database connection for a run_id
+#'
+#' Internal function to properly close and remove a stored database connection.
+#' Called when a task completes or context changes.
+#'
+#' @param run_id Character UUID of the task run
+#' @keywords internal
+#' @noRd
+close_connection <- function(run_id) {
+  if (is.null(.tasker_env$connections)) {
+    return(invisible(NULL))
+  }
+  
+  conn <- .tasker_env$connections[[run_id]]
+  
+  if (!is.null(conn)) {
+    if (DBI::dbIsValid(conn)) {
+      DBI::dbDisconnect(conn)
+    }
+    .tasker_env$connections[[run_id]] <- NULL
+  }
+  
+  invisible(NULL)
 }

@@ -25,11 +25,11 @@ test_that("subtask_increment atomically updates counter", {
   # Register and start task
   register_task(stage = "TEST", name = "atomic_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "atomic_test", total_subtasks = 1)
-  subtask_start(run_id, 1, "Atomic increment test", items_total = 100)
+  subtask_start("Atomic increment test", items_total = 100, run_id = run_id, subtask_number = 1)
   
   # Increment counter 100 times sequentially
   for (i in 1:100) {
-    subtask_increment(run_id, 1, increment = 1, quiet = TRUE)
+    subtask_increment(increment = 1, quiet = TRUE, run_id = run_id, subtask_number = 1)
   }
   
   # Check final count
@@ -56,7 +56,7 @@ test_that("subtask_increment works from parallel workers", {
   # Register and start task
   register_task(stage = "TEST", name = "parallel_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "parallel_test", total_subtasks = 1)
-  subtask_start(run_id, 1, "Parallel increment test", items_total = 10)
+  subtask_start("Parallel increment test", items_total = 10, run_id = run_id, subtask_number = 1)
   
   # Create parallel cluster with 2 workers
   library(parallel)

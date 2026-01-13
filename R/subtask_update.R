@@ -61,10 +61,14 @@ subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
     }
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   config <- getOption("tasker.config")
@@ -75,12 +79,17 @@ subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
   tryCatch({
     # Atomic increment using database-level operation
     # COALESCE handles NULL case (first increment)
+    # Auto-transition from STARTED to RUNNING on first progress
     DBI::dbExecute(
       conn,
       glue::glue_sql(
         "UPDATE {subtask_progress_table} 
          SET items_complete = COALESCE(items_complete, 0) + {increment},
-             last_update = {time_func*}
+             last_update = {time_func*},
+             status = CASE 
+               WHEN status = 'STARTED' AND COALESCE(items_complete, 0) = 0 THEN 'RUNNING'
+               ELSE status 
+             END
          WHERE run_id = {run_id} AND subtask_number = {subtask_number}",
         .con = conn
       )
@@ -185,10 +194,14 @@ subtask_update <- function(status, percent = NULL, items_complete = NULL,
     }
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   config <- getOption("tasker.config")
@@ -218,6 +231,11 @@ subtask_update <- function(status, percent = NULL, items_complete = NULL,
     
     if (!is.na(items_complete)) {
       update_clauses <- c(update_clauses, "items_complete = {items_complete}")
+      # Auto-transition from STARTED to RUNNING when progress occurs
+      if (items_complete > 0 && status == "STARTED") {
+        status <- "RUNNING"
+        update_clauses[1] <- "status = 'RUNNING'"
+      }
     }
     
     if (!is.na(message)) {

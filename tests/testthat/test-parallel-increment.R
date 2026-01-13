@@ -13,7 +13,7 @@ test_that("subtask_increment works in parallel workers", {
   )
   
   # Start a subtask with items
-  subtask_start(run_id, 1, "Process items in parallel", items_total = 10)
+  subtask_start("Process items in parallel", items_total = 10, run_id = run_id, subtask_number = 1)
   
   # Simulate parallel processing with 2 workers
   library(parallel)
@@ -58,7 +58,7 @@ test_that("subtask_increment works in parallel workers", {
     max_attempts <- 5
     for (attempt in 1:max_attempts) {
       result <- tryCatch({
-        tasker::subtask_increment(run_id, 1, increment = 1, quiet = TRUE)
+        tasker::subtask_increment(increment = 1, quiet = TRUE, run_id = run_id, subtask_number = 1)
         TRUE
       }, error = function(e) {
         if (grepl("database is locked", e$message) && attempt < max_attempts) {

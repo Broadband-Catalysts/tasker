@@ -36,3 +36,8 @@ get_task_status(status = "RUNNING")
 get_task_status(stage = "DAILY")
 }
 }
+\seealso{
+\code{\link[=get_active_tasks]{get_active_tasks()}} to get only running tasks,
+\code{\link[=get_task_history]{get_task_history()}} to view detailed execution history,
+\code{\link[=get_subtask_progress]{get_subtask_progress()}} to view subtask details for a run
+}

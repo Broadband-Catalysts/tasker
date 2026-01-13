@@ -74,3 +74,8 @@ task_mark_complete(
 )
 }
 }
+\seealso{
+\code{\link[=task_start]{task_start()}} to start tracking a task normally, \code{\link[=task_update]{task_update()}}
+to update running task status, \code{\link[=task_reset]{task_reset()}} to reset task state,
+\code{\link[=get_task_history]{get_task_history()}} to view execution history
+}
