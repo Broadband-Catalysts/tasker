@@ -1,3 +1,12 @@
+/* Sidebar Styles - Keep sidebar fixed when scrolling */
+.bslib-sidebar-layout > .sidebar {
+  position: sticky !important;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+}
+
 /* Page Title Styles */
 h2 {
   color: #2c3e50;
