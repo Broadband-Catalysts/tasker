@@ -527,9 +527,10 @@ server <- function(input, output, session) {
   
   # Cleanup database connection when session ends
   onSessionEnded(function() {
-    if (!is.null(rv$monitor_connection) && DBI::dbIsValid(rv$monitor_connection)) {
+    con <- isolate(rv$monitor_connection)
+    if (!is.null(con) && DBI::dbIsValid(con)) {
       try({
-        DBI::dbDisconnect(rv$monitor_connection)
+        DBI::dbDisconnect(con)
         message("Disconnected monitor database connection")
       }, silent = TRUE)
     }
@@ -537,6 +538,26 @@ server <- function(input, output, session) {
   
   # Get pipeline structure (stages + registered tasks) - this rarely changes
   pipeline_structure <- reactiveVal(NULL)
+  
+  # Force structure refresh when button clicked
+  observeEvent(input$refresh_structure, {
+    structure <- tryCatch({
+      stages <- tasker::get_stages()
+      if (!is.null(stages) && nrow(stages) > 0) {
+        stages <- stages[stages$stage_name != "TEST" & stages$stage_order != 999, ]
+      }
+      
+      registered_tasks <- tasker::get_registered_tasks()
+      
+      list(stages = stages, tasks = registered_tasks)
+    }, error = function(e) {
+      showNotification(paste("Error loading structure:", e$message), type = "error")
+      NULL
+    })
+    
+    pipeline_structure(structure)
+    showNotification("Pipeline structure refreshed", type = "message", duration = 2)
+  })
   
   # Initialize structure
   observe({
@@ -560,6 +581,31 @@ server <- function(input, output, session) {
     shinyjs::delay(100, {
       rv$initial_render_trigger <- rv$initial_render_trigger + 1
     })
+  })
+  
+  # Manual refresh of pipeline structure
+  observeEvent(input$refresh_structure, {
+    structure <- tryCatch({
+      stages <- tasker::get_stages()
+      if (!is.null(stages) && nrow(stages) > 0) {
+        stages <- stages[stages$stage_name != "TEST" & stages$stage_order != 999, ]
+      }
+      
+      registered_tasks <- tasker::get_registered_tasks()
+      
+      list(stages = stages, tasks = registered_tasks)
+    }, error = function(e) {
+      showNotification(paste("Error loading structure:", e$message), type = "error", duration = 5)
+      NULL
+    })
+    
+    if (!is.null(structure)) {
+      pipeline_structure(structure)
+      showNotification("Pipeline structure refreshed", type = "message", duration = 2)
+      
+      # Trigger DOM re-render
+      rv$initial_render_trigger <- rv$initial_render_trigger + 1
+    }
   })
   
   # ============================================================================
@@ -1612,10 +1658,9 @@ server <- function(input, output, session) {
               )
             }
             
-            # Update the output with the no-log message
-            output[[paste0("log_text_", task_id_local)]] <- renderUI({
-              HTML(no_log_message)
-            })
+            # Update the output with the no-log message using shinyjs::html
+            log_text_id <- paste0("log_text_", task_id_local)
+            shinyjs::html(log_text_id, no_log_message)
             return()
           }
           
@@ -1781,617 +1826,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Remove the old pipeline_data reactive and related code below this point
-  
-  # Main task table - initial render
-  output$task_table <- renderDT({
-    # Only render the initial table structure
-    empty_df <- data.frame(
-      Stage = character(0),
-      Task = character(0),
-      Status = character(0),
-      Progress = character(0),
-      `Overall Progress` = character(0),
-      Started = character(0),
-      Duration = character(0),
-      Host = character(0),
-      Details = character(0),
-      stage_order_hidden = numeric(0),
-      stringsAsFactors = FALSE,
-      check.names = FALSE
-    )
-    
-    datatable(empty_df,
-              escape = FALSE,
-              selection = 'none',
-              options = list(
-                pageLength = 25,
-                order = list(list(9, 'asc')),  # Order by hidden stage_order column (index 9) - task_order already included in SQL ORDER BY
-                columnDefs = list(
-                  list(targets = 9, visible = FALSE)  # Hide the stage_order_hidden column
-                ),
-                rowCallback = JS(
-                  "function(row, data) {",
-                  "  var status = data[2];",
-                  "  $(row).addClass('status-' + status);",
-                  "}"
-                )
-              )) %>%
-      formatStyle('Status', fontWeight = 'bold')
-  })
-  
-  # Update task table data using proxy to avoid flickering
-  observe({
-    data <- task_data()
-    
-    # Prepare display columns
-    if (!is.null(data) && nrow(data) > 0) {
-      # Get subtask info for running tasks
-      subtask_info <- lapply(data$run_id, function(rid) {
-        if (data[data$run_id == rid, "status"] %in% c("RUNNING", "STARTED")) {
-          st <- tryCatch({
-            subs <- tasker::get_subtask_progress(rid)
-            if (!is.null(subs) && nrow(subs) > 0) {
-              # Find currently running subtask or last updated one
-              running <- subs[subs$status == "RUNNING", ]
-              if (nrow(running) > 0) {
-                running[1, ]
-              } else {
-                subs[order(subs$last_update, decreasing = TRUE), ][1, ]
-              }
-            } else {
-              NULL
-            }
-          }, error = function(e) NULL)
-          st
-        } else {
-          NULL
-        }
-      })
-      
-      # Build progress column with subtask info
-      progress_col <- sapply(seq_len(nrow(data)), function(i) {
-        st <- subtask_info[[i]]
-        base_prog <- if (is.na(data$current_subtask[i])) {
-          "--"
-        } else {
-          sprintf("%d/%d", data$current_subtask[i], data$total_subtasks[i])
-        }
-        
-        if (!is.null(st) && !is.na(st$subtask_name)) {
-          # Add subtask name and items if available
-          if (!is.na(st$items_total) && st$items_total > 0) {
-            items_complete <- if (!is.na(st$items_complete)) st$items_complete else 0
-            items_pct <- round(100 * items_complete / st$items_total, 1)
-            sprintf("%s<br/><small>%s</small><br/><span class='item-progress'>%d / %d items<span class='item-progress-pct'>(%.1f%%)</span></span>", 
-                   base_prog, st$subtask_name, items_complete, st$items_total, items_pct)
-          } else {
-            sprintf("%s<br/><small>%s</small>", base_prog, st$subtask_name)
-          }
-        } else {
-          base_prog
-        }
-      })
-      
-      display_data <- data.frame(
-        Stage    = paste(data$stage_order, ": ", data$stage_name, sep = ""),
-        Task     = data$task_name,
-        Status   = data$status,
-        Progress = progress_col,
-        "Overall Progress" = sprintf("%.1f%%", ifelse(is.na(data$overall_percent_complete), 0, data$overall_percent_complete)),
-        Started  = format(data$start_time, "%Y-%m-%d %H:%M:%S"),
-        Duration = format_duration(data$start_time, data$last_update),
-        Host     = ifelse(is.na(data$hostname), "-", data$hostname),
-        Details  = sprintf('<button class="btn btn-sm btn-info detail-btn" data-id="%s">View</button>', 
-                         data$run_id),
-        stage_order_hidden = data$stage_order,
-        stringsAsFactors = FALSE,
-        check.names = FALSE
-      )
-    } else {
-      display_data <- data.frame(
-        Stage = character(0),
-        Task = character(0),
-        Status = character(0),
-        Progress = character(0),
-        `Overall Progress` = character(0),
-        Started = character(0),
-        Duration = character(0),
-        Host = character(0),
-        Details = character(0),
-        stage_order_hidden = numeric(0),
-        stringsAsFactors = FALSE,
-        check.names = FALSE
-      )
-    }
-    
-    # Use proxy to update data without recreating the table
-    proxy <- dataTableProxy('task_table')
-    replaceData(proxy, display_data, resetPaging = FALSE, rownames = FALSE)
-  })
-  
-  # Handle detail button clicks
-  observeEvent(input$task_table_cell_clicked, {
-    info <- input$task_table_cell_clicked
-    if (!is.null(info$value) && grepl("detail-btn", info$value)) {
-      task_id <- gsub('.*data-id="([^"]+)".*', '\\1', info$value)
-      rv$selected_task_id <- task_id
-    }
-  })
-  
-  # Detail panel - renderUI is acceptable here since it's user-initiated, not auto-updating
-  output$detail_panel <- renderUI({
-    if (is.null(rv$selected_task_id)) {
-      return(NULL)
-    }
-    
-    # Get fresh data from database, not filtered data
-    data <- tryCatch({
-      tasker::get_task_status()
-    }, error = function(e) {
-      showNotification(paste("Error fetching task details:", e$message), type = "error")
-      return(NULL)
-    })
-    
-    if (is.null(data) || nrow(data) == 0) {
-      return(div(class = "alert alert-warning", "No task data available"))
-    }
-    
-    task <- data[data$run_id == rv$selected_task_id, ]
-    
-    if (nrow(task) == 0) {
-      return(NULL)
-    }
-    
-    # Get subtask progress details
-    subtasks <- tryCatch({
-      tasker::get_subtask_progress(rv$selected_task_id)
-    }, error = function(e) {
-      NULL
-    })
-    
-    div(class = "detail-box",
-        h3("Task Details"),
-        actionButton("close_detail", "Close", class = "btn-sm btn-secondary pull-right"),
-        hr(),
-        fluidRow(
-          column(6,
-                 h4("Identification"),
-                 tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Run ID:"),    tags$td(task$run_id)),
-                           tags$tr(tags$th("Stage:"),     tags$td(task$stage_name)),
-                           tags$tr(tags$th("Task Name:"), tags$td(task$task_name)),
-                           tags$tr(tags$th("Type:"),      tags$td(task$task_type)),
-                           tags$tr(tags$th("Status:"),    tags$td(task$status))
-                 )
-          ),
-          column(6,
-                 h4("Execution Info"),
-                 tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Hostname:"),    tags$td(task$hostname)),
-                           tags$tr(tags$th("PID:"),         tags$td(task$process_id)),
-                           tags$tr(tags$th("Started:"),     tags$td(format(task$start_time, "%Y-%m-%d %H:%M:%S"))),
-                           tags$tr(tags$th("Last Update:"), tags$td(format(task$last_update, "%Y-%m-%d %H:%M:%S"))),
-                           tags$tr(tags$th("Duration:"),    tags$td(format_duration(task$start_time, task$last_update)))
-                 )
-          )
-        ),
-        fluidRow(
-          column(12,
-                 h4("Progress"),
-                 tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Overall:"), 
-                                  tags$td(sprintf("%.1f%% - %s", 
-                                                task$overall_percent_complete,
-                                                ifelse(is.na(task$overall_progress_message), "", task$overall_progress_message)))),
-                           tags$tr(tags$th("Subtasks:"), 
-                                  tags$td(ifelse(is.na(task$total_subtasks), "N/A",
-                                                sprintf("%s / %d", 
-                                                       ifelse(is.na(task$current_subtask), "0", task$current_subtask),
-                                                       task$total_subtasks))))
-                 )
-          )
-        ),
-        if (!is.null(subtasks) && nrow(subtasks) > 0) {
-          fluidRow(
-            column(12,
-                   h4("Subtask Details"),
-                   tags$table(class = "table table-sm table-striped",
-                             tags$thead(
-                               tags$tr(
-                                 tags$th("#"),
-                                 tags$th("Subtask Name"),
-                                 tags$th("Status"),
-                                 tags$th("Progress"),
-                                 tags$th("Items"),
-                                 tags$th("Message"),
-                                 tags$th("Started"),
-                                 tags$th("Duration")
-                               )
-                             ),
-                             tags$tbody(
-                               lapply(seq_len(nrow(subtasks)), function(i) {
-                                 st <- subtasks[i, ]
-                                 progress_pct <- if (!is.na(st$percent_complete)) {
-                                   sprintf("%.1f%%", st$percent_complete)
-                                 } else if (!is.na(st$items_total) && st$items_total > 0 && !is.na(st$items_complete)) {
-                                   sprintf("%.1f%%", 100 * st$items_complete / st$items_total)
-                                 } else {
-                                   "--"
-                                 }
-                                 
-                                 items_str <- if (!is.na(st$items_total) && st$items_total > 0) {
-                                   complete <- if (!is.na(st$items_complete)) st$items_complete else 0
-                                   sprintf("%d / %d", complete, st$items_total)
-                                 } else {
-                                   "--"
-                                 }
-                                 
-                                 duration <- if (!is.na(st$start_time)) {
-                                   end_time <- if (!is.na(st$end_time)) st$end_time else st$last_update
-                                   if (!is.na(end_time)) {
-                                     format_duration(st$start_time, end_time)
-                                   } else {
-                                     "--"
-                                   }
-                                 } else {
-                                   "--"
-                                 }
-                                 
-                                 status_class <- paste0("status-", st$status)
-                                 
-                                 tags$tr(
-                                   tags$td(st$subtask_number),
-                                   tags$td(st$subtask_name),
-                                   tags$td(tags$span(class = paste("task-status-badge", status_class), st$status)),
-                                   tags$td(progress_pct),
-                                   tags$td(items_str),
-                                   tags$td(style = "max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
-                                          title = if (!is.na(st$progress_message)) st$progress_message else "",
-                                          if (!is.na(st$progress_message)) st$progress_message else "--"),
-                                   tags$td(if (!is.na(st$start_time)) format(st$start_time, "%H:%M:%S") else "--"),
-                                   tags$td(duration)
-                                 )
-                               })
-                             )
-                   )
-            )
-          )
-        },
-        fluidRow(
-          column(12,
-                 h4("Files"),
-                 tags$table(class = "table table-sm",
-                           tags$tr(tags$th("Script Path:"), tags$td(ifelse(is.na(task$script_path), "N/A", task$script_path))),
-                           tags$tr(tags$th("Script File:"), tags$td(ifelse(is.na(task$script_filename), "N/A", task$script_filename))),
-                           tags$tr(tags$th("Log Path:"),    tags$td(ifelse(is.na(task$log_path), "N/A", task$log_path))),
-                           tags$tr(tags$th("Log File:"),    tags$td(ifelse(is.na(task$log_filename), "N/A", task$log_filename)))
-                 )
-          )
-        ),
-        fluidRow(
-          column(12,
-                 h4("Error Message"),
-                 tags$div(ifelse(is.na(task$error_message) || task$error_message == "", 
-                                "No errors", task$error_message))
-          )
-        )
-    )
-  })
-  
-  # Close detail panel
-  observeEvent(input$close_detail, {
-    rv$selected_task_id <- NULL
-  })
-  
-  # Stage summary table
-  output$stage_summary_table <- renderDT({
-    # Get all stages from database (exclude TEST)
-    stages_data <- tryCatch({
-      stages_data_raw <- tasker::get_stages()
-      # Exclude TEST stage
-      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
-        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
-      } else {
-        stages_data_raw
-      }
-    }, error = function(e) NULL)
-    
-    if (is.null(stages_data) || nrow(stages_data) == 0) {
-      return(datatable(data.frame(Message = "No stages configured")))
-    }
-    
-    # Get task data
-    data <- task_data()
-    
-    # If no task data, show all stages with zero counts
-    if (is.null(data) || nrow(data) == 0) {
-      summary_table <- stages_data[, c("stage_name", "stage_order")]
-      summary_table$Total <- 0
-      return(datatable(summary_table, options = list(
-        pageLength = 10,
-        order = list(list(1, 'asc'))  # Order by stage_order column
-      )))
-    }
-    
-    # Include stage_order in the aggregation
-    summary <- aggregate(
-      cbind(Total = run_id) ~ stage_name + stage_order + status, 
-      data = data, 
-      FUN = length)
-    
-    wide_summary <- reshape(summary, 
-                           idvar = c("stage_name", "stage_order"), 
-                           timevar = "status", 
-                           direction = "wide")
-    
-    # Merge with all stages to include stages with no tasks
-    all_stages_summary <- merge(
-      stages_data[, c("stage_name", "stage_order")],
-      wide_summary,
-      by = c("stage_name", "stage_order"),
-      all.x = TRUE
-    )
-    
-    # Fill NA values with 0
-    status_cols <- grep("^Total\\.", names(all_stages_summary), value = TRUE)
-    for (col in status_cols) {
-      all_stages_summary[[col]] <- ifelse(is.na(all_stages_summary[[col]]), 0, all_stages_summary[[col]])
-    }
-    
-    # Order by stage_order
-    all_stages_summary <- all_stages_summary[order(all_stages_summary$stage_order), ]
-    
-    datatable(all_stages_summary, options = list(
-      pageLength = 10,
-      order = list(list(1, 'asc'))  # Order by stage_order column
-    ))
-  })
-  
-  # Stage progress plot
-  output$stage_progress_plot <- renderPlot({
-    # Get all stages from database (exclude TEST)
-    stages_data <- tryCatch({
-      stages_data_raw <- tasker::get_stages()
-      # Exclude TEST stage
-      if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
-        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
-      } else {
-        stages_data_raw
-      }
-    }, error = function(e) NULL)
-    
-    if (is.null(stages_data) || nrow(stages_data) == 0) {
-      return(NULL)
-    }
-    
-    # Get task data
-    data <- task_data()
-    
-    library(ggplot2)
-    
-    # If no task data, show all stages with 0% progress
-    if (is.null(data) || nrow(data) == 0) {
-      stage_progress <- stages_data[, c("stage_name", "stage_order")]
-      stage_progress$overall_percent_complete <- 0
-    } else {
-      # Calculate progress for stages with data
-      stage_progress <- aggregate(
-        cbind(overall_percent_complete, stage_order) ~ stage_name, 
-        data = data,
-        FUN = function(x) if(length(x) > 0) mean(x, na.rm = TRUE) else NA
-      )
-      
-      # Merge with all stages to include stages with no tasks
-      stage_progress <- merge(
-        stages_data[, c("stage_name", "stage_order")],
-        stage_progress,
-        by = c("stage_name", "stage_order"),
-        all.x = TRUE
-      )
-      
-      # Fill NA with 0
-      stage_progress$overall_percent_complete <- ifelse(
-        is.na(stage_progress$overall_percent_complete), 
-        0, 
-        stage_progress$overall_percent_complete
-      )
-    }
-    
-    # Order by stage_order
-    stage_progress <- stage_progress[order(stage_progress$stage_order), ]
-    
-    # Convert stage_name to factor with levels in stage_order
-    stage_progress$stage_name <- factor(stage_progress$stage_name, 
-                                        levels = stage_progress$stage_name)
-    
-    ggplot(stage_progress, aes(x = stage_name, y = overall_percent_complete)) +
-      geom_bar(stat = "identity", fill = "steelblue") +
-      geom_text(aes(label = sprintf("%.1f%%", overall_percent_complete)), 
-               vjust = -0.5) +
-      ylim(0, 110) +
-      labs(title = "Average Progress by Stage",
-           x = "Stage",
-           y = "Progress (%)") +
-      theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  })
-  
-  # Timeline plot
-  output$timeline_plot <- renderPlot({
-    data <- task_data()
-    
-    if (is.null(data) || nrow(data) == 0) {
-      return(NULL)
-    }
-    
-    library(ggplot2)
-    
-    # Prepare timeline data
-    data$end_display <- ifelse(is.na(data$end_time), 
-                           as.numeric(Sys.time()), 
-                           as.numeric(data$end_time))
-    data$start_display <- as.numeric(data$start_time)
-    
-    # Order by stage_order and convert stage_name to factor for proper facet ordering
-    data <- data[order(data$stage_order), ]
-    data$stage_name <- factor(data$stage_name, levels = unique(data$stage_name))
-    
-    ggplot(data, aes(y = task_name, color = status)) +
-      geom_segment(aes(x = as.POSIXct(start_display, origin = "1970-01-01"),
-                      xend = as.POSIXct(end_display, origin = "1970-01-01"),
-                      yend = task_name),
-                  size = 8) +
-      facet_grid(stage_name ~ ., scales = "free_y", space = "free_y") +
-      labs(title = "Task Timeline",
-           x = "Time",
-           y = "Task",
-           color = "Status") +
-      theme_minimal() +
-      theme(
-        axis.text.y = element_text(size = 12),
-        axis.text.x = element_text(size = 11),
-        axis.title = element_text(size = 13, face = "bold"),
-        strip.text = element_text(size = 12, face = "bold"),
-        plot.title = element_text(size = 14, face = "bold")
-      )
-  })
-  
-  # Log Viewer Tab
-  output$log_viewer_ui <- renderUI({
-    data <- task_data()
-    
-    if (is.null(data) || nrow(data) == 0) {
-      return(div(class = "alert alert-info", "No tasks available. Please select a task with a log file."))
-    }
-    
-    # Get tasks that have log files
-    tasks_with_logs <- data[!is.na(data$log_path) & data$log_path != "" & !is.na(data$log_filename), ]
-    
-    if (nrow(tasks_with_logs) == 0) {
-      return(div(class = "alert alert-info", "No tasks with log files found."))
-    }
-    
-    # Create choices for selectInput
-    log_choices <- setNames(
-      tasks_with_logs$run_id,
-      paste0(tasks_with_logs$stage_name, " > ", tasks_with_logs$task_name, " (", tasks_with_logs$status, ")")
-    )
-    
-    tagList(
-      div(class = "log-header",
-          selectInput("log_task_select", "Select Task:", 
-                     choices = log_choices,
-                     width = "400px"),
-          numericInput("log_lines", "Lines to show:", 
-                      value = 100, min = 10, max = 5000, step = 50,
-                      width = "150px"),
-          checkboxInput("log_tail", "Tail mode (show last lines)", value = TRUE),
-          checkboxInput("log_auto_refresh", "Auto-refresh", value = TRUE),
-          actionButton("log_refresh", "Refresh", class = "btn-primary btn-sm")
-      ),
-      div(class = "log-output",
-          uiOutput("log_content")
-      )
-    )
-  })
-  
-  # Log content display
-  output$log_content <- renderUI({
-    # Trigger refresh
-    input$log_refresh
-    
-    # Only auto-refresh if checkbox is checked
-    if (isTruthy(input$log_auto_refresh)) {
-      invalidateLater(3000)  # Refresh every 3 seconds
-    }
-    
-    if (is.null(input$log_task_select) || input$log_task_select == "") {
-      return(HTML("<div class='log-line'>No task selected</div>"))
-    }
-    
-    tryCatch({
-      # Get task info
-      data <- task_data()
-      
-      if (is.null(data) || nrow(data) == 0) {
-        return(HTML("<div class='log-line log-line-error'>No task data available</div>"))
-      }
-      
-      task <- data[data$run_id == input$log_task_select, ]
-      
-      if (nrow(task) == 0) {
-        return(HTML("<div class='log-line log-line-error'>Task not found</div>"))
-      }
-      
-      # Construct log file path
-      log_file <- file.path(task$log_path, task$log_filename)
-      
-      if (!file.exists(log_file)) {
-        return(HTML(paste0(
-          "<div class='log-line log-line-warning'>Log file not found: ", 
-          htmltools::htmlEscape(log_file), "</div>"
-        )))
-      }
-      
-      # Read log file
-      num_lines <- if (!is.null(input$log_lines)) input$log_lines else 100
-      tail_mode <- if (!is.null(input$log_tail)) input$log_tail else TRUE
-      
-      if (tail_mode) {
-        # Read last N lines
-        all_lines <- readLines(log_file, warn = FALSE)
-        total_lines <- length(all_lines)
-        start_line <- max(1, total_lines - num_lines + 1)
-        lines <- all_lines[start_line:total_lines]
-      } else {
-        # Read first N lines
-        lines <- readLines(log_file, n = num_lines, warn = FALSE)
-      }
-      
-      if (length(lines) == 0) {
-        return(HTML("<div class='log-line'>Log file is empty</div>"))
-      }
-      
-      # Format lines with syntax highlighting
-      formatted_lines <- sapply(lines, function(line) {
-        # Escape HTML
-        line <- htmltools::htmlEscape(line)
-        
-        # Apply coloring based on content
-        class_attr <- ""
-        if (grepl("ERROR|Error|error|FAIL|Failed|failed", line, ignore.case = FALSE)) {
-          class_attr <- " log-line-error"
-        } else if (grepl("WARN|Warning|warning", line, ignore.case = FALSE)) {
-          class_attr <- " log-line-warning"
-        } else if (grepl("INFO|Info", line, ignore.case = FALSE)) {
-          class_attr <- " log-line-info"
-        }
-        
-        paste0("<div class='log-line", class_attr, "'>", line, "</div>")
-      })
-      
-      # Add header info
-      header <- paste0(
-        "<div class='log-line log-line-info'>",
-        "File: ", htmltools::htmlEscape(log_file), 
-        " | Lines: ", length(lines),
-        if (tail_mode) paste0(" (last ", num_lines, ")") else paste0(" (first ", num_lines, ")"),
-        " | Updated: ", format(Sys.time(), "%H:%M:%S"),
-        "</div><div class='log-line'>─────────────────────────────────────────────────────────────────────</div>"
-      )
-      
-      HTML(paste0(header, paste(formatted_lines, collapse = "")))
-      
-    }, error = function(e) {
-      HTML(paste0(
-        "<div class='log-line log-line-error'>Error reading log file: ",
-        htmltools::htmlEscape(e$message),
-        "</div>"
-      ))
-    })
-  })
-  
   # Last update time
   output$last_update <- renderText({
     if (!is.null(rv$last_update)) {
@@ -2461,6 +1895,8 @@ server <- function(input, output, session) {
       shinyjs::show(paste0("log_pane_", task_id))
       # Add expanded class to button
       shinyjs::addClass(paste0("btn_expand_log_", task_id), "expanded")
+      # Force log refresh for this task
+      rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
     }
   })
   
@@ -2617,7 +2053,7 @@ server <- function(input, output, session) {
         scrollX = TRUE,
         scrollY = "60vh",
         scrollCollapse = TRUE,
-        dom = 'frtip',
+        dom = 'lfrtip',
         ordering = TRUE,
         columnDefs = list(
           list(targets = ncol(initial_data) - 1, orderable = FALSE)

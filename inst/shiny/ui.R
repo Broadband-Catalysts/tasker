@@ -32,9 +32,11 @@ ui <- page_fluid(
     sprintf("Branch: %s", GIT_BRANCH), br(),
     sprintf("Build: %s", BUILD_TIME)
   ),
-  sidebarLayout(
-    sidebarPanel(
-      width = 2,
+  layout_sidebar(
+    sidebar = sidebar(
+      title = "Filters & Controls",
+      open = "desktop",
+      width = 250,
       selectInput("stage_filter", "Filter by Stage:", 
                   choices = c("All" = ""), multiple = TRUE),
       selectInput("status_filter", "Filter by Status:",
@@ -47,46 +49,44 @@ ui <- page_fluid(
       checkboxInput("show_script_name", "Show script names", value = FALSE),
       hr(),
       actionButton("refresh", "Refresh Now", class = "btn-primary"),
+      actionButton("refresh_structure", "Refresh Structure", class = "btn-secondary btn-sm",
+                   title = "Reload pipeline stages and registered tasks"),
       hr(),
       actionButton("start_debugger", "DEBUG", class = "btn-warning btn-sm", 
                    title = "Start R debugger (browser()) for troubleshooting"),
       hr(),
       textOutput("last_update")
     ),
-    
-    mainPanel(
-      width = 10,
-      # Error message banner
-      conditionalPanel(
-        condition = "output.has_error",
-        div(class = "alert alert-danger", style = "margin: 10px;",
-            tags$strong("Error: "),
-            tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
-                    textOutput("error_display", inline = FALSE))
-        )
+    # Error message banner
+    conditionalPanel(
+      condition = "output.has_error",
+      div(class = "alert alert-danger", style = "margin: 10px;",
+          tags$strong("Error: "),
+          tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
+                  textOutput("error_display", inline = FALSE))
+      )
+    ),
+    tabsetPanel(
+      id = "main_tabs",
+      tabPanel("Pipeline Status",
+               div(class = "pipeline-status-container",
+                   # Accordion structure built dynamically with proper Shiny UI elements
+                   uiOutput("pipeline_stages_accordion")
+               )
       ),
-      tabsetPanel(
-        id = "main_tabs",
-        tabPanel("Pipeline Status",
-                 div(class = "pipeline-status-container",
-                     # Accordion structure built dynamically with proper Shiny UI elements
-                     uiOutput("pipeline_stages_accordion")
-                 )
-        ),
-        tabPanel("SQL Queries",
-                 div(class = "sql-queries-container", style = "padding: 15px;",
-                     fluidRow(
-                       column(12,
-                              actionButton("sql_refresh_now", "Refresh Now", 
-                                         class = "btn-primary")
-                       )
-                     ),
-                     hr(),
-                     div(style = "overflow: auto;",
-                         DTOutput("sql_queries_table")
+      tabPanel("SQL Queries",
+               div(class = "sql-queries-container", style = "padding: 15px;",
+                   fluidRow(
+                     column(12,
+                            actionButton("sql_refresh_now", "Refresh Now", 
+                                       class = "btn-primary")
                      )
-                 )
-        )
+                   ),
+                   hr(),
+                   div(style = "overflow: auto;",
+                       DTOutput("sql_queries_table")
+                   )
+               )
       )
     )
   )
