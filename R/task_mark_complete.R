@@ -59,10 +59,18 @@ task_mark_complete <- function(stage,
                               conn = NULL) {
   ensure_configured()
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    # Check if there's an active context with connection
+    run_id_context <- tasker_context()
+    if (!is.null(run_id_context)) {
+      conn <- get_connection(run_id_context)
+    }
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   on.exit({

@@ -65,10 +65,14 @@ subtask_start <- function(subtask_name, items_total = NULL, message = NULL,
     subtask_number <- get_next_subtask(run_id)
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   config <- getOption("tasker.config")

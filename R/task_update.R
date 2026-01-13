@@ -60,10 +60,14 @@ task_update <- function(status, current_subtask = NULL,
     run_id <- get_active_run_id()
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   # Ensure cleanup on exit
@@ -177,8 +181,18 @@ task_update <- function(status, current_subtask = NULL,
 #' task_complete(message = "All done")
 #' }
 task_complete <- function(message = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
-  task_update(status = "COMPLETED", overall_percent = 100,
-              message = message, quiet = quiet, conn = conn, run_id = run_id)
+  # Resolve run_id if needed
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
+  result <- task_update(status = "COMPLETED", overall_percent = 100,
+                        message = message, quiet = quiet, conn = conn, run_id = run_id)
+  
+  # Close and remove the connection for this run_id
+  close_connection(run_id)
+  
+  result
 }
 
 
@@ -192,12 +206,22 @@ task_complete <- function(message = NULL, quiet = FALSE, conn = NULL, run_id = N
 #' @return TRUE on success
 #' @export
 task_fail <- function(error_message, error_detail = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
-  task_update(status = "FAILED", 
-              error_message = error_message,
-              error_detail = error_detail,
-              quiet = quiet,
-              conn = conn,
-              run_id = run_id)
+  # Resolve run_id if needed
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
+  result <- task_update(status = "FAILED", 
+                        error_message = error_message,
+                        error_detail = error_detail,
+                        quiet = quiet,
+                        conn = conn,
+                        run_id = run_id)
+  
+  # Close and remove the connection for this run_id
+  close_connection(run_id)
+  
+  result
 }
 
 
@@ -217,6 +241,11 @@ task_fail <- function(error_message, error_detail = NULL, quiet = FALSE, conn = 
 #' @export
 task_end <- function(status, message = NULL, 
                      error_message = NULL, error_detail = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
+  # Resolve run_id if needed
+  if (is.null(run_id)) {
+    run_id <- get_active_run_id()
+  }
+  
   if (status == "COMPLETED") {
     task_complete(message = message, quiet = quiet, conn = conn, run_id = run_id)
   } else if (status == "FAILED") {
@@ -224,8 +253,16 @@ task_end <- function(status, message = NULL,
     task_fail(error_message = error_message, 
               error_detail = error_detail, quiet = quiet, conn = conn, run_id = run_id)
   } else {
-    task_update(status = status, message = message,
-                error_message = error_message, error_detail = error_detail,
-                quiet = quiet, conn = conn, run_id = run_id)
+    # For CANCELLED, SKIPPED, or other terminal statuses
+    result <- task_update(status = status, message = message,
+                          error_message = error_message, error_detail = error_detail,
+                          quiet = quiet, conn = conn, run_id = run_id)
+    
+    # Close connection for terminal statuses
+    if (status %in% c("CANCELLED", "SKIPPED")) {
+      close_connection(run_id)
+    }
+    
+    result
   }
 }

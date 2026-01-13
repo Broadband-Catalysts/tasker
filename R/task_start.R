@@ -63,6 +63,7 @@ task_start <- function(stage, task, total_subtasks = NULL,
   
   ensure_configured()
   
+  # Create or get connection
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()
@@ -132,11 +133,18 @@ task_start <- function(stage, task, total_subtasks = NULL,
       tasker_context(run_id)
     }
     
+    # Store connection for reuse if we created it
+    if (close_on_exit) {
+      store_connection(run_id, conn)
+    }
+    
     run_id
     
-  }, finally = {
-    if (close_on_exit) {
+  }, error = function(e) {
+    # Clean up connection on error
+    if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
       DBI::dbDisconnect(conn)
     }
+    stop(e)
   })
 }

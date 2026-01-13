@@ -61,10 +61,14 @@ subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
     }
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   config <- getOption("tasker.config")
@@ -190,10 +194,14 @@ subtask_update <- function(status, percent = NULL, items_complete = NULL,
     }
   }
   
+  # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
   if (is.null(conn)) {
-    conn <- get_db_connection()
-    close_on_exit <- TRUE
+    conn <- get_connection(run_id)
+    if (is.null(conn)) {
+      conn <- get_db_connection()
+      close_on_exit <- TRUE
+    }
   }
   
   config <- getOption("tasker.config")
