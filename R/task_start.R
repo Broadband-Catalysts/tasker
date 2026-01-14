@@ -1,7 +1,10 @@
 #' Start tracking a task execution
 #'
-#' @param stage Stage name
-#' @param task Task name
+#' Automatically detects the executing script and looks up stage/task from the
+#' database, or accepts explicit stage/task parameters for backward compatibility.
+#'
+#' @param stage Stage name (optional - will auto-detect from script filename)
+#' @param task Task name (optional - will auto-detect from script filename)
 #' @param total_subtasks Total number of subtasks (optional)
 #' @param message Initial progress message (optional)
 #' @param version Version string (optional)
@@ -23,26 +26,58 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Old style - explicit run_id
-#' run_id <- task_start("STATIC", "Process FCC Data")
+#' # New style - automatic detection (zero configuration!)
+#' task_start()  # Auto-detects script, looks up stage/task from database
+#' subtask_start("Load files")
+#' subtask_complete()
+#' task_complete()
 #'
-#' # New style - automatic context (run_id optional in subsequent calls)
+#' # Old style - explicit parameters (still supported)
 #' task_start("STATIC", "Process FCC Data")
-#' subtask_start("Load files")  # No run_id needed!
+#' subtask_start("Load files")
 #' subtask_complete()
 #' task_complete()
 #' }
-task_start <- function(stage, task, total_subtasks = NULL, 
+task_start <- function(stage = NULL, task = NULL, total_subtasks = NULL, 
                       message = NULL, version = NULL, 
                       git_commit = NULL, quiet = FALSE, conn = NULL,
                       .active = TRUE) {
   
+  # Auto-detect stage and task from script filename if not provided
+  if (is.null(stage) || is.null(task)) {
+    script_filename <- get_script_filename()
+    
+    if (!is.null(script_filename)) {
+      task_info <- lookup_task_by_script(script_filename, conn)
+      
+      if (!is.null(task_info)) {
+        if (is.null(stage)) stage <- task_info$stage
+        if (is.null(task)) task <- task_info$task
+        
+        if (!quiet) {
+          message(sprintf("Auto-detected from script '%s': %s / %s", 
+                         script_filename, stage, task))
+        }
+      } else if (is.null(stage) || is.null(task)) {
+        stop("Could not auto-detect stage/task from script '", script_filename, 
+             "'. Either:\n",
+             "  1. Register the task with register_task() including script_filename, or\n",
+             "  2. Provide stage and task parameters explicitly",
+             call. = FALSE)
+      }
+    } else if (is.null(stage) || is.null(task)) {
+      stop("Could not auto-detect script filename and stage/task not provided.\n",
+           "Provide stage and task parameters explicitly or ensure script is run via Rscript/R CMD BATCH",
+           call. = FALSE)
+    }
+  }
+  
   # Input validation
-  if (missing(stage) || !is.character(stage) || length(stage) != 1 || nchar(trimws(stage)) == 0) {
+  if (!is.character(stage) || length(stage) != 1 || nchar(trimws(stage)) == 0) {
     stop("'stage' must be a non-empty character string", call. = FALSE)
   }
   
-  if (missing(task) || !is.character(task) || length(task) != 1 || nchar(trimws(task)) == 0) {
+  if (!is.character(task) || length(task) != 1 || nchar(trimws(task)) == 0) {
     stop("'task' must be a non-empty character string", call. = FALSE)
   }
   

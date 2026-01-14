@@ -34,7 +34,15 @@ CREATE INDEX IF NOT EXISTS idx_tasks_name ON tasks(task_name);
 CREATE INDEX IF NOT EXISTS idx_tasks_order ON tasks(task_order);
 
 CREATE TABLE IF NOT EXISTS task_runs (
-    run_id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    run_id TEXT PRIMARY KEY DEFAULT (
+        lower(
+            substr(hex(randomblob(16)), 1, 8) || '-' ||
+            substr(hex(randomblob(16)), 9, 4) || '-' ||
+            substr(hex(randomblob(16)), 13, 4) || '-' ||
+            substr(hex(randomblob(16)), 17, 4) || '-' ||
+            substr(hex(randomblob(16)), 21, 12)
+        )
+    ),
     task_id INTEGER NOT NULL REFERENCES tasks(task_id),
     
     -- Execution identification

@@ -5,8 +5,8 @@
 \title{Start tracking a task execution}
 \usage{
 task_start(
-  stage,
-  task,
+  stage = NULL,
+  task = NULL,
   total_subtasks = NULL,
   message = NULL,
   version = NULL,
@@ -17,9 +17,9 @@ task_start(
 )
 }
 \arguments{
-\item{stage}{Stage name}
+\item{stage}{Stage name (optional - will auto-detect from script filename)}
 
-\item{task}{Task name}
+\item{task}{Task name (optional - will auto-detect from script filename)}
 
 \item{total_subtasks}{Total number of subtasks (optional)}
 
@@ -42,16 +42,20 @@ overwriting the user's active context.}
 run_id (UUID) to track this execution
 }
 \description{
-Start tracking a task execution
+Automatically detects the executing script and looks up stage/task from the
+database, or accepts explicit stage/task parameters for backward compatibility.
 }
 \examples{
 \dontrun{
-# Old style - explicit run_id
-run_id <- task_start("STATIC", "Process FCC Data")
+# New style - automatic detection (zero configuration!)
+task_start()  # Auto-detects script, looks up stage/task from database
+subtask_start("Load files")
+subtask_complete()
+task_complete()
 
-# New style - automatic context (run_id optional in subsequent calls)
+# Old style - explicit parameters (still supported)
 task_start("STATIC", "Process FCC Data")
-subtask_start("Load files")  # No run_id needed!
+subtask_start("Load files")
 subtask_complete()
 task_complete()
 }

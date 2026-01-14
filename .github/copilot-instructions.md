@@ -330,6 +330,60 @@ subtask_increment <- function(run_id, subtask_number, increment = 1, quiet = TRU
 }
 ```
 
+## Unit Tests
+
+**Always create or update unit tests when creating or modifying functions:**
+
+- **New functions**: Create test file in `tests/testthat/test-{function_name}.R`
+- **Modified functions**: Update existing tests to cover new behavior
+- **Bug fixes**: Add test case that reproduces the bug before fixing
+
+**Test structure using testthat:**
+```r
+# tests/testthat/test-my_function.R
+test_that("my_function validates input", {
+  expect_error(my_function(NULL), "input.*required")
+  expect_error(my_function("invalid"), "must be numeric")
+})
+
+test_that("my_function handles edge cases", {
+  expect_equal(my_function(0), expected_result)
+  expect_equal(my_function(c()), numeric(0))
+})
+
+test_that("my_function produces correct output", {
+  result <- my_function(valid_input)
+  expect_true(is.numeric(result))
+  expect_equal(length(result), expected_length)
+  expect_equal(result, expected_value)
+})
+```
+
+**What to test:**
+- **Input validation**: Invalid/missing parameters, type checking, boundary conditions
+- **Edge cases**: Empty inputs, NULL values, single element vectors, large datasets
+- **Core functionality**: Expected outputs for typical inputs
+- **Error handling**: Proper error messages and graceful failures
+- **Side effects**: Database operations, file I/O (use mocking when appropriate)
+
+**Test coverage guidelines:**
+- All exported functions must have tests
+- Critical internal functions should have tests
+- Bug fixes must include regression tests
+- Aim for >80% code coverage on new code
+
+**Run tests before committing:**
+```r
+# Run all tests
+devtools::test()
+
+# Run specific test file
+testthat::test_file("tests/testthat/test-my_function.R")
+
+# Check test coverage
+covr::package_coverage()
+```
+
 ## Git Commit Messages
 
 ### Summarizing Changes
@@ -361,10 +415,11 @@ Update R/subtask_update.R
 
 ## Common Gotchas
 
-1. **Don't use renderUI() for content updates** - Use reactive data + renderText/renderUI for structure only
-2. **Don't serialize connection objects** - Always return `NULL` from `clusterEvalQ()` when creating connections
-3. **Use atomic increments** - `subtask_increment()` for parallel workers, not `subtask_update()`
-4. **Cast COUNT() to INTEGER** - Avoid bigint conversion issues
-5. **Run from project root** - Ensure renv and .Renviron are loaded
-6. **Single quote shell commands** - Prevent shell variable expansion
-7. **Export all needed variables** - Use `clusterExport()` for global variables needed by workers
+1. **Register tasks with script_filename** - Required for auto-detection to work
+2. **Don't use renderUI() for content updates** - Use reactive data + renderText/renderUI for structure only
+3. **Don't serialize connection objects** - Always return `NULL` from `clusterEvalQ()` when creating connections
+4. **Use atomic increments** - `subtask_increment()` for parallel workers, not `subtask_update()`
+5. **Cast COUNT() to INTEGER** - Avoid bigint conversion issues
+6. **Run from project root** - Ensure renv and .Renviron are loaded
+7. **Single quote shell commands** - Prevent shell variable expansion
+8. **Export all needed variables** - Use `clusterExport()` for global variables needed by workers
