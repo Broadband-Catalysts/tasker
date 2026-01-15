@@ -1,5 +1,9 @@
 # Tests for Process Reporter functions
 
+# Load all package functions for testing
+# Note: These functions are internal and not exported
+library(tasker)
+
 test_that("setup_process_reporter_schema creates tables", {
   skip_if_not_installed("RSQLite")
   
@@ -101,7 +105,7 @@ test_that("get_previous_start_times returns empty list for empty input", {
     )
   ")
   
-  result <- get_previous_start_times(con, character(0))
+  result <- tasker:::get_previous_start_times(con, character(0))
   expect_equal(result, list())
   
   DBI::dbDisconnect(con)
@@ -128,7 +132,7 @@ test_that("get_previous_start_times returns NULL for run_ids with no metrics", {
   run_id1 <- "00000000-0000-0000-0000-000000000001"
   run_id2 <- "00000000-0000-0000-0000-000000000002"
   
-  result <- get_previous_start_times(con, c(run_id1, run_id2))
+  result <- tasker:::get_previous_start_times(con, c(run_id1, run_id2))
   expect_equal(length(result), 0)
   
   DBI::dbDisconnect(con)
@@ -157,16 +161,16 @@ test_that("get_previous_start_times returns latest start time for each run", {
   
   # Insert metrics with different timestamps
   DBI::dbExecute(con, "
-    INSERT INTO process_metrics (run_id, timestamp, process_start_time)
+    INSERT INTO process_metrics (run_id, timestamp, process_id, hostname, is_alive, process_start_time)
     VALUES 
-      (?, '2026-01-14 10:00:00', '2026-01-14 09:00:00'),
-      (?, '2026-01-14 10:01:00', '2026-01-14 09:00:00'),
-      (?, '2026-01-14 10:02:00', '2026-01-14 09:00:00'),
-      (?, '2026-01-14 10:00:00', '2026-01-14 09:30:00'),
-      (?, '2026-01-14 10:01:00', '2026-01-14 09:30:00')
+      (?, '2026-01-14 10:00:00', 1001, 'test-host', 1, '2026-01-14 09:00:00'),
+      (?, '2026-01-14 10:01:00', 1001, 'test-host', 1, '2026-01-14 09:00:00'),
+      (?, '2026-01-14 10:02:00', 1001, 'test-host', 1, '2026-01-14 09:00:00'),
+      (?, '2026-01-14 10:00:00', 1002, 'test-host', 1, '2026-01-14 09:30:00'),
+      (?, '2026-01-14 10:01:00', 1002, 'test-host', 1, '2026-01-14 09:30:00')
   ", params = list(run_id1, run_id1, run_id1, run_id2, run_id2))
   
-  result <- get_previous_start_times(con, c(run_id1, run_id2))
+  result <- tasker:::get_previous_start_times(con, c(run_id1, run_id2))
   
   expect_equal(length(result), 2)
   expect_true(run_id1 %in% names(result))
@@ -201,13 +205,13 @@ test_that("get_previous_start_times handles mixed existing and non-existing runs
   
   # Insert metrics only for run_id1 and run_id2
   DBI::dbExecute(con, "
-    INSERT INTO process_metrics (run_id, timestamp, process_start_time)
+    INSERT INTO process_metrics (run_id, timestamp, process_id, hostname, is_alive, process_start_time)
     VALUES 
-      (?, '2026-01-14 10:00:00', '2026-01-14 09:00:00'),
-      (?, '2026-01-14 10:01:00', '2026-01-14 09:30:00')
+      (?, '2026-01-14 10:00:00', 1001, 'test-host', 1, '2026-01-14 09:00:00'),
+      (?, '2026-01-14 10:01:00', 1002, 'test-host', 1, '2026-01-14 09:30:00')
   ", params = list(run_id1, run_id2))
   
-  result <- get_previous_start_times(con, c(run_id1, run_id2, run_id3))
+  result <- tasker:::get_previous_start_times(con, c(run_id1, run_id2, run_id3))
   
   expect_equal(length(result), 2)
   expect_true(run_id1 %in% names(result))
@@ -242,7 +246,7 @@ test_that("register_reporter creates new reporter entry", {
   pid <- 12345
   version <- "1.0.0"
   
-  register_reporter(con, hostname, pid, version)
+  tasker:::register_reporter(con, hostname, pid, version)
   
   result <- DBI::dbGetQuery(con, "
     SELECT * FROM process_reporter_status WHERE hostname = ?
@@ -285,7 +289,7 @@ test_that("register_reporter updates existing reporter (UPSERT)", {
   version2 <- "1.1.0"
   
   # Register first time
-  register_reporter(con, hostname, pid1, version1)
+  tasker:::register_reporter(con, hostname, pid1, version1)
   
   result1 <- DBI::dbGetQuery(con, "
     SELECT * FROM process_reporter_status WHERE hostname = ?
@@ -296,7 +300,7 @@ test_that("register_reporter updates existing reporter (UPSERT)", {
   expect_equal(result1$version, version1)
   
   # Register again with different PID and version (should update)
-  register_reporter(con, hostname, pid2, version2)
+  tasker:::register_reporter(con, hostname, pid2, version2)
   
   result2 <- DBI::dbGetQuery(con, "
     SELECT * FROM process_reporter_status WHERE hostname = ?
@@ -336,7 +340,7 @@ test_that("update_reporter_heartbeat updates timestamp", {
   version <- "1.0.0"
   
   # Register reporter
-  register_reporter(con, hostname, pid, version)
+  tasker:::register_reporter(con, hostname, pid, version)
   
   result1 <- DBI::dbGetQuery(con, "
     SELECT last_heartbeat FROM process_reporter_status WHERE hostname = ?
@@ -348,7 +352,7 @@ test_that("update_reporter_heartbeat updates timestamp", {
   Sys.sleep(0.1)
   
   # Update heartbeat
-  update_reporter_heartbeat(con, hostname)
+  tasker:::update_reporter_heartbeat(con, hostname)
   
   result2 <- DBI::dbGetQuery(con, "
     SELECT last_heartbeat FROM process_reporter_status WHERE hostname = ?
@@ -385,7 +389,7 @@ test_that("get_process_reporter_status returns NULL when no reporter", {
   
   DBI::dbDisconnect(con)
   
-  result <- get_process_reporter_status(hostname = "nonexistent-host")
+  result <- tasker:::get_process_reporter_status(hostname = "nonexistent-host")
   expect_null(result)
   
   cleanup_test_db()
@@ -415,10 +419,10 @@ test_that("get_process_reporter_status returns reporter info when exists", {
   pid <- 12345
   version <- "1.0.0"
   
-  register_reporter(con, hostname, pid, version)
+  tasker:::register_reporter(con, hostname, pid, version)
   DBI::dbDisconnect(con)
   
-  result <- get_process_reporter_status(hostname = hostname)
+  result <- tasker:::get_process_reporter_status(hostname = hostname)
   
   expect_false(is.null(result))
   expect_equal(result$hostname, hostname)
@@ -453,7 +457,7 @@ test_that("stop_process_reporter sets shutdown flag", {
   version <- "1.0.0"
   
   # Register reporter
-  register_reporter(con, hostname, pid, version)
+  tasker:::register_reporter(con, hostname, pid, version)
   
   result1 <- DBI::dbGetQuery(con, "
     SELECT shutdown_requested FROM process_reporter_status WHERE hostname = ?
@@ -464,7 +468,7 @@ test_that("stop_process_reporter sets shutdown flag", {
   DBI::dbDisconnect(con)
   
   # Request shutdown
-  stop_process_reporter(hostname = hostname, timeout = 1)
+  tasker:::stop_process_reporter(hostname = hostname, timeout = 1)
   
   con <- get_test_db_connection()
   result2 <- DBI::dbGetQuery(con, "
@@ -485,7 +489,7 @@ test_that("collect_process_metrics handles current process", {
   hostname <- Sys.info()[["nodename"]]
   run_id <- "00000000-0000-0000-0000-000000000001"
   
-  metrics <- collect_process_metrics(
+  metrics <- tasker:::collect_process_metrics(
     run_id = run_id,
     process_id = pid,
     hostname = hostname,
@@ -515,7 +519,7 @@ test_that("collect_process_metrics detects dead process", {
   hostname <- Sys.info()[["nodename"]]
   run_id <- "00000000-0000-0000-0000-000000000001"
   
-  metrics <- collect_process_metrics(
+  metrics <- tasker:::collect_process_metrics(
     run_id = run_id,
     process_id = pid,
     hostname = hostname,
@@ -564,7 +568,7 @@ test_that("write_process_metrics inserts successful metrics", {
   hostname <- Sys.info()[["nodename"]]
   run_id <- "00000000-0000-0000-0000-000000000001"
   
-  metrics <- collect_process_metrics(
+  metrics <- tasker:::collect_process_metrics(
     run_id = run_id,
     process_id = pid,
     hostname = hostname,
@@ -573,7 +577,7 @@ test_that("write_process_metrics inserts successful metrics", {
   )
   
   # Write metrics
-  metric_id <- write_process_metrics(metrics, con = con)
+  metric_id <- tasker:::write_process_metrics(metrics, con = con)
   
   expect_false(is.null(metric_id))
   expect_true(is.numeric(metric_id))
@@ -624,7 +628,7 @@ test_that("write_process_metrics inserts error metrics", {
   pid <- 999999
   hostname <- Sys.info()[["nodename"]]
   
-  metrics <- collect_process_metrics(
+  metrics <- tasker:::collect_process_metrics(
     run_id = run_id,
     process_id = pid,
     hostname = hostname,
@@ -633,7 +637,7 @@ test_that("write_process_metrics inserts error metrics", {
   )
   
   # Write error metrics
-  metric_id <- write_process_metrics(metrics, con = con)
+  metric_id <- tasker:::write_process_metrics(metrics, con = con)
   
   expect_false(is.null(metric_id))
   

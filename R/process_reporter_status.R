@@ -80,17 +80,30 @@ register_reporter <- function(
     version = as.character(packageVersion("tasker"))
 ) {
   
-  sql <- "
-    INSERT INTO tasker.process_reporter_status 
+# Generate parameter placeholders based on database type  
+  db_class <- class(con)[1]
+  if (db_class == "PqConnection") {
+    # PostgreSQL uses $1, $2, etc.
+    placeholders <- c("$1", "$2", "$3")
+  } else {
+    # SQLite, MySQL, and others use ?
+    placeholders <- c("?", "?", "?")
+  }
+  
+  sql <- paste0("
+    INSERT INTO ", get_table_name('process_reporter_status', con, char = TRUE), "
       (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
-    VALUES ($1, $2, NOW(), NOW(), $3, FALSE)
+    VALUES (", placeholders[1], ", ", placeholders[2], ", ", 
+           if (db_class == "SQLiteConnection") "datetime('now')" else "NOW()", ", ",
+           if (db_class == "SQLiteConnection") "datetime('now')" else "NOW()", ", ",
+           placeholders[3], ", ", if (db_class == "SQLiteConnection") "0" else "FALSE", ")
     ON CONFLICT (hostname) DO UPDATE SET
       process_id = EXCLUDED.process_id,
       started_at = EXCLUDED.started_at,
       last_heartbeat = EXCLUDED.last_heartbeat,
       version = EXCLUDED.version,
-      shutdown_requested = FALSE
-  "
+      shutdown_requested = ", if (db_class == "SQLiteConnection") "0" else "FALSE", "
+  ")
   
   DBI::dbExecute(con, sql, params = list(hostname, process_id, version))
   

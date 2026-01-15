@@ -51,7 +51,7 @@ collect_process_metrics <- function(
       p <- tryCatch(
         ps::ps_handle(process_id),
         error = function(e) {
-          if (grepl("No such process", e$message, ignore.case = TRUE)) {
+          if (grepl("No such (process|file|directory)", e$message, ignore.case = TRUE)) {
             result$collection_error <<- TRUE
             result$error_type <<- "PROCESS_DIED"
             result$error_message <<- sprintf("Process %d no longer exists", process_id)
@@ -112,8 +112,8 @@ collect_process_metrics <- function(
       # Memory usage
       mem_info <- tryCatch(ps::ps_memory_info(p), error = function(e) NULL)
       if (!is.null(mem_info)) {
-        result$memory_mb <- mem_info$rss / 1024^2
-        result$memory_vms_mb <- mem_info$vms / 1024^2
+        result$memory_mb <- mem_info["rss"] / 1024^2
+        result$memory_vms_mb <- mem_info["vms"] / 1024^2
       }
       
       # Memory percent
@@ -159,7 +159,7 @@ collect_process_metrics <- function(
           child_mem <- sapply(children, function(c) {
             tryCatch({
               mem <- ps::ps_memory_info(c)
-              mem$rss / 1024^2
+              mem["rss"] / 1024^2
             }, error = function(e) 0)
           })
           result$child_total_memory_mb <- sum(child_mem, na.rm = TRUE)
