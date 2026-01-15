@@ -585,6 +585,9 @@ process_reporter_main_loop <- function(interval_seconds = 10) {
       
       # Collect metrics for each active run with timeout
       if (nrow(active_runs) > 0) {
+        # Batch query: Get previous start times for all runs at once
+        prev_start_times <- get_previous_start_times(con, active_runs$run_id)
+        
         for (i in seq_len(nrow(active_runs))) {
           run <- active_runs[i, ]
           
@@ -594,42 +597,17 @@ process_reporter_main_loop <- function(interval_seconds = 10) {
             next
           }
           
-          # Get previous metrics to check for process start time changes
-          prev_metrics <- tryCatch({
-            dbGetQuery(con, "
-              SELECT process_start_time 
-              FROM process_metrics 
-              WHERE run_id = $1 
-              ORDER BY timestamp DESC 
-              LIMIT 1
-            ", params = list(run$run_id))
-          }, error = function(e) NULL)
+          # Get previous start time from batch result
+          prev_start_time <- prev_start_times[[run$run_id]]
           
           metrics <- collect_process_metrics(
             run_id = run$run_id,
             process_id = run$process_id,
             hostname = run$hostname,
             include_children = TRUE,
-            timeout_seconds = 5
+            timeout_seconds = 5,
+            prev_start_time = prev_start_time
           )
-          
-          # Validate process start time hasn't changed (PID reuse detection)
-          if (!is.null(metrics) && !is.null(prev_metrics) && 
-              nrow(prev_metrics) > 0 && !is.na(prev_metrics$process_start_time[1])) {
-            if (!is.null(metrics$process_start_time) && 
-                metrics$process_start_time != prev_metrics$process_start_time[1]) {
-              # PID was reused - mark as error
-              metrics$collection_error <- TRUE
-              metrics$error_type <- "PID_REUSED"
-              metrics$error_message <- sprintf(
-                "Process PID %d was reused (start time changed from %s to %s)",
-                metrics$process_id,
-                prev_metrics$process_start_time[1],
-                metrics$process_start_time
-              )
-              metrics$is_alive <- FALSE
-            }
-          }
           
           # Always write metrics, even if collection failed
           # run_id is included in metrics_data

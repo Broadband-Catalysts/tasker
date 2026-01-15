@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS tasker.process_metrics (
 CREATE INDEX IF NOT EXISTS idx_process_metrics_run_id ON tasker.process_metrics(run_id);
 CREATE INDEX IF NOT EXISTS idx_process_metrics_timestamp ON tasker.process_metrics(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_process_metrics_hostname ON tasker.process_metrics(hostname);
+CREATE INDEX IF NOT EXISTS idx_process_metrics_run_timestamp ON tasker.process_metrics(run_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_process_metrics_errors ON tasker.process_metrics(run_id, timestamp) WHERE collection_error = TRUE;
 CREATE INDEX IF NOT EXISTS idx_process_metrics_cleanup ON tasker.process_metrics(timestamp) WHERE is_alive = FALSE;
 
