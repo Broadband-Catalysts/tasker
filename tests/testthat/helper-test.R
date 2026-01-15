@@ -15,7 +15,7 @@ setup_test_db <- function() {
   }
   
   # Configure tasker to use SQLite
-  tasker_config(
+  tasker::tasker_config(
     driver = "sqlite",
     dbname = db_path,
     schema = "",  # SQLite doesn't use schemas
@@ -23,7 +23,7 @@ setup_test_db <- function() {
   )
   
   # Create schema
-  setup_tasker_db(force = TRUE)
+  tasker::setup_tasker_db(force = TRUE)
   
   invisible(db_path)
 }

@@ -35,7 +35,8 @@ get_process_reporter_status <- function(hostname = NULL, con = NULL) {
   })
   
   result <- tryCatch({
-    DBI::dbGetQuery(con, "
+    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    sql <- sprintf("
       SELECT 
         hostname,
         process_id,
@@ -43,9 +44,10 @@ get_process_reporter_status <- function(hostname = NULL, con = NULL) {
         last_heartbeat,
         version,
         shutdown_requested
-      FROM tasker.process_reporter_status
-      WHERE hostname = $1
-    ", params = list(hostname))
+      FROM %s
+      WHERE hostname = ?
+    ", table_name)
+    DBI::dbGetQuery(con, sql, params = list(hostname))
   }, error = function(e) {
     warning("Failed to query reporter status: ", e$message)
     return(NULL)
@@ -107,11 +109,23 @@ register_reporter <- function(
 #' @keywords internal
 update_reporter_heartbeat <- function(con, hostname) {
   
-  sql <- "
-    UPDATE tasker.process_reporter_status
-    SET last_heartbeat = NOW()
-    WHERE hostname = $1
-  "
+  table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+  
+  # Database-specific NOW() function
+  config <- getOption("tasker.config")
+  if (!is.null(config) && config$database$driver == "sqlite") {
+    sql <- sprintf("
+      UPDATE %s
+      SET last_heartbeat = datetime('now')
+      WHERE hostname = ?
+    ", table_name)
+  } else {
+    sql <- sprintf("
+      UPDATE %s
+      SET last_heartbeat = NOW()
+      WHERE hostname = $1
+    ", table_name)
+  }
   
   DBI::dbExecute(con, sql, params = list(hostname))
 }
@@ -159,12 +173,24 @@ stop_process_reporter <- function(
   })
   
   # Set shutdown flag
-  DBI::dbExecute(con, "
-    UPDATE tasker.process_reporter_status 
-    SET shutdown_requested = TRUE
-    WHERE hostname = $1
-  ", params = list(hostname))
+  table_name <- get_table_name("process_reporter_status", con, char = TRUE)
   
+  config <- getOption("tasker.config")
+  if (!is.null(config) && config$database$driver == "sqlite") {
+    sql <- sprintf("
+      UPDATE %s
+      SET shutdown_requested = 1
+      WHERE hostname = ?
+    ", table_name)
+  } else {
+    sql <- sprintf("
+      UPDATE %s
+      SET shutdown_requested = TRUE
+      WHERE hostname = $1
+    ", table_name)
+  }
+  
+  DBI::dbExecute(con, sql, params = list(hostname))
   # Wait for reporter to exit
   start_time <- Sys.time()
   while (difftime(Sys.time(), start_time, units = "secs") < timeout) {

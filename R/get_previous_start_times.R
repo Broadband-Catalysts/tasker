@@ -32,18 +32,20 @@ get_previous_start_times <- function(con, run_ids) {
   # Build database-specific query
   if (any(grepl("Postgres", db_class, ignore.case = TRUE))) {
     # PostgreSQL: Use DISTINCT ON (most efficient)
-    sql <- "
+    table_name <- get_table_name("process_metrics", con, char = TRUE)
+    sql <- sprintf("
       SELECT DISTINCT ON (run_id) 
         run_id, 
         process_start_time
-      FROM tasker.process_metrics
+      FROM %s
       WHERE run_id = ANY($1)
       ORDER BY run_id, timestamp DESC
-    "
+    ", table_name)
     params <- list(run_ids)
     
   } else if (any(grepl("MySQL|MariaDB", db_class, ignore.case = TRUE))) {
     # MySQL/MariaDB: Use window functions
+    table_name <- get_table_name("process_metrics", con, char = TRUE)
     placeholders <- paste(rep("?", length(run_ids)), collapse = ", ")
     sql <- sprintf("
       SELECT run_id, process_start_time
@@ -52,41 +54,43 @@ get_previous_start_times <- function(con, run_ids) {
           run_id, 
           process_start_time,
           ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY timestamp DESC) as rn
-        FROM tasker.process_metrics
+        FROM %s
         WHERE run_id IN (%s)
       ) ranked
       WHERE rn = 1
-    ", placeholders)
+    ", table_name, placeholders)
     params <- as.list(run_ids)
     
   } else if (any(grepl("SQLite", db_class, ignore.case = TRUE))) {
     # SQLite: Use subquery with MAX/GROUP BY
+    table_name <- get_table_name("process_metrics", con, char = TRUE)
     placeholders <- paste(rep("?", length(run_ids)), collapse = ", ")
     sql <- sprintf("
       SELECT pm1.run_id, pm1.process_start_time
-      FROM tasker.process_metrics pm1
+      FROM %s pm1
       INNER JOIN (
         SELECT run_id, MAX(timestamp) as max_timestamp
-        FROM tasker.process_metrics
+        FROM %s
         WHERE run_id IN (%s)
         GROUP BY run_id
       ) pm2 ON pm1.run_id = pm2.run_id AND pm1.timestamp = pm2.max_timestamp
-    ", placeholders)
+    ", table_name, table_name, placeholders)
     params <- as.list(run_ids)
     
   } else {
     # Generic fallback: Correlated subquery (works on all SQL databases)
+    table_name <- get_table_name("process_metrics", con, char = TRUE)
     placeholders <- paste(rep("?", length(run_ids)), collapse = ", ")
     sql <- sprintf("
       SELECT pm1.run_id, pm1.process_start_time
-      FROM tasker.process_metrics pm1
+      FROM %s pm1
       WHERE pm1.run_id IN (%s)
         AND pm1.timestamp = (
           SELECT MAX(pm2.timestamp)
-          FROM tasker.process_metrics pm2
+          FROM %s pm2
           WHERE pm2.run_id = pm1.run_id
         )
-    ", placeholders)
+    ", table_name, placeholders, table_name)
     params <- as.list(run_ids)
   }
   
