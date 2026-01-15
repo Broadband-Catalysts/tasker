@@ -152,6 +152,16 @@ task_start <- function(stage = NULL, task = NULL, total_subtasks = NULL,
                RETURNING run_id", .con = conn)
     )$run_id
     
+    # Auto-start process reporter if needed (silent - no messages unless error)
+    tryCatch({
+      auto_start_process_reporter(hostname, conn)
+    }, error = function(e) {
+      # Don't fail task start if reporter auto-start fails
+      if (!quiet) {
+        warning("Failed to auto-start process reporter: ", e$message)
+      }
+    })
+    
     if (!quiet) {
       timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
       task_num <- if (!is.na(task_order)) paste0("Task ", task_order) else "Task"

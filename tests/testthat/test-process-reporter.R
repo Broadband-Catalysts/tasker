@@ -656,3 +656,199 @@ test_that("write_process_metrics inserts error metrics", {
   DBI::dbDisconnect(con)
   cleanup_test_db()
 })
+
+# ============================================================================
+# Phase 2 Tests: Reporter Service Implementation
+# ============================================================================
+
+test_that("should_auto_start returns FALSE when tables don't exist", {
+  skip_if_not_installed("RSQLite")
+  
+  # Setup minimal database without process reporter tables
+  db_path <- get_test_db_path()
+  if (file.exists(db_path)) unlink(db_path)
+  
+  tasker::tasker_config(
+    driver = "sqlite",
+    dbname = db_path,
+    schema = "",
+    reload = TRUE
+  )
+  
+  # Create only basic tasker schema (no process reporter tables)
+  tasker::setup_tasker_db(force = TRUE)
+  con <- get_test_db_connection()
+  
+  result <- tasker:::should_auto_start(con)
+  expect_false(result)
+  
+  DBI::dbDisconnect(con)
+  cleanup_test_db()
+})
+
+test_that("should_auto_start returns TRUE when tables exist", {
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  
+  result <- tasker:::should_auto_start(con)
+  expect_true(result)
+  
+  cleanup_test_db(con)
+})
+
+test_that("get_active_tasks returns empty list when no active tasks", {
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  hostname <- "test-host"
+  
+  result <- tasker:::get_active_tasks(con, hostname)
+  expect_equal(length(result), 0)
+  
+  cleanup_test_db(con)
+})
+
+test_that("get_active_tasks returns active tasks for hostname", {
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  hostname <- "test-host"
+  
+  # Insert test task runs
+  run_id1 <- "00000000-0000-0000-0000-000000000001"
+  run_id2 <- "00000000-0000-0000-0000-000000000002"
+  
+  # Need to create stages and tasks first
+  DBI::dbExecute(con, "
+    INSERT INTO stages (stage_id, stage_name) VALUES (1, 'TEST')
+  ")
+  
+  DBI::dbExecute(con, "
+    INSERT INTO tasks (task_id, stage_id, task_name) VALUES (1, 1, 'Test Task')
+  ")
+  
+  DBI::dbExecute(con, "
+    INSERT INTO task_runs (run_id, task_id, hostname, process_id, start_time, status)
+    VALUES 
+      (?, 1, ?, 1001, datetime('now'), 'RUNNING'),
+      (?, 1, ?, 1002, datetime('now'), 'STARTED'),
+      (?, 1, 'other-host', 1003, datetime('now'), 'RUNNING')
+  ", params = list(run_id1, hostname, run_id2, hostname, "00000000-0000-0000-0000-000000000003"))
+  
+  result <- tasker:::get_active_tasks(con, hostname)
+  
+  expect_equal(length(result), 2)
+  expect_equal(result[[1]]$run_id, run_id1)
+  expect_equal(result[[1]]$process_id, 1001)
+  expect_equal(result[[2]]$run_id, run_id2)
+  expect_equal(result[[2]]$process_id, 1002)
+  
+  cleanup_test_db(con)
+})
+
+test_that("should_shutdown returns FALSE when no shutdown requested", {
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  hostname <- "test-host"
+  
+  # Register reporter without shutdown request
+  tasker:::register_reporter(con, hostname, 12345)
+  
+  result <- tasker:::should_shutdown(con, hostname)
+  expect_false(result)
+  
+  cleanup_test_db(con)
+})
+
+test_that("should_shutdown returns TRUE when shutdown requested", {
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  hostname <- "test-host"
+  
+  # Register reporter and request shutdown
+  tasker:::register_reporter(con, hostname, 12345)
+  
+  DBI::dbExecute(con, "
+    UPDATE process_reporter_status SET shutdown_requested = 1 WHERE hostname = ?
+  ", params = list(hostname))
+  
+  result <- tasker:::should_shutdown(con, hostname)
+  expect_true(result)
+  
+  cleanup_test_db(con)
+})
+
+test_that("is_reporter_alive detects dead process", {
+  skip_if_not_installed("ps")
+  
+  # Use a PID that definitely doesn't exist
+  result <- tasker:::is_reporter_alive(999999, "test-host")
+  expect_false(result)
+})
+
+test_that("is_reporter_alive detects live process", {
+  skip_if_not_installed("ps")
+  
+  # Use current process PID
+  current_pid <- Sys.getpid()
+  result <- tasker:::is_reporter_alive(current_pid, "test-host")
+  expect_true(result)
+})
+
+test_that("auto_start_process_reporter returns FALSE when tables don't exist", {
+  skip_if_not_installed("RSQLite")
+  
+  # Setup minimal database without process reporter tables
+  db_path <- get_test_db_path()
+  if (file.exists(db_path)) unlink(db_path)
+  
+  tasker::tasker_config(
+    driver = "sqlite",
+    dbname = db_path,
+    schema = "",
+    reload = TRUE
+  )
+  
+  tasker::setup_tasker_db(force = TRUE)
+  con <- get_test_db_connection()
+  
+  result <- tasker:::auto_start_process_reporter("test-host", con)
+  expect_false(result)
+  
+  DBI::dbDisconnect(con)
+  cleanup_test_db()
+})
+
+test_that("task_start integrates with auto_start_process_reporter", {
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  
+  # Create test stage and task
+  DBI::dbExecute(con, "
+    INSERT INTO stages (stage_id, stage_name) VALUES (1, 'TEST')
+  ")
+  
+  DBI::dbExecute(con, "
+    INSERT INTO tasks (task_id, stage_id, task_name) VALUES (1, 1, 'Test Auto-start Task')
+  ")
+  
+  DBI::dbDisconnect(con)
+  
+  # Start a task (this should trigger auto-start attempt)
+  run_id <- tasker::task_start(
+    stage = "TEST",
+    task = "Test Auto-start Task",
+    quiet = TRUE,
+    .active = FALSE
+  )
+  
+  # Verify task was created
+  expect_true(!is.null(run_id))
+  expect_true(nchar(run_id) > 0)
+  
+  cleanup_test_db()
+})
