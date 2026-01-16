@@ -66,18 +66,29 @@ start_process_reporter <- function(
     Sys.sleep(2)  # Brief pause for clean shutdown
   }
   
+  # Get current tasker configuration to pass to background process
+  ensure_configured()
+  current_config <- getOption("tasker.config")
+  if (is.null(current_config)) {
+    stop("tasker configuration not loaded. Call tasker_config() first.", call. = FALSE)
+  }
+  
   # Prepare arguments for background process
   args <- list(
     collection_interval_seconds = collection_interval,
-    hostname = hostname
+    hostname = hostname,
+    config = current_config
   )
   
   # Start background R process using callr::r_bg()
   tryCatch({
     bg_process <- callr::r_bg(
-      func = function(collection_interval_seconds, hostname) {
+      func = function(collection_interval_seconds, hostname, config) {
         # Load the package in background process
         library(tasker)
+        
+        # Set the tasker configuration in background process
+        options(tasker.config = config)
         
         # Register this reporter process
         con <- tasker::get_db_connection()
