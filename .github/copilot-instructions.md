@@ -1,5 +1,43 @@
 # GitHub Copilot Instructions for tasker-dev
 
+## ⚠️ CRITICAL WORKFLOW CHECKLIST
+
+**Before implementing ANY code changes, verify you will:**
+
+1. ✅ **Create/update unit tests** - Code changes and tests must be implemented together
+2. ✅ **Follow anti-patterns** - Check relevant sections below before coding
+3. ✅ **Review changes** - Use systematic code review before finalizing
+4. ✅ **Update documentation** - Regenerate docs if modifying exported functions
+
+**After making changes, verify you have:**
+
+1. ✅ **Tests passing** - All new/modified code has passing tests
+2. ✅ **Documentation updated** - roxygen2 comments and .Rd files current
+3. ✅ **No anti-patterns** - Reviewed against project-specific warnings
+4. ✅ **User informed** - Confirmed completion to user
+
+## Cross-Project Development
+
+**When making changes in other project directories, always check for and use project-specific guidance:**
+
+- **`.github/copilot-instructions.md`** - Project-specific instructions, anti-patterns, and critical warnings
+- **`.github/skills/`** - Agent Skills with step-by-step procedural patterns
+
+These files contain critical project-specific context including:
+- Database patterns and anti-patterns
+- Technology-specific considerations (Shiny, R, Python, etc.)
+- Code review standards
+- Common gotchas and error patterns
+- Development workflows
+
+**Example workflow:**
+```bash
+# Before modifying fccData code from tasker-dev context:
+1. Read /home/warnes/src/fccData/.github/copilot-instructions.md
+2. Check /home/warnes/src/fccData/.github/skills/ for relevant patterns
+3. Apply project-specific rules when making changes
+```
+
 ## Shiny Application Development
 
 ### Critical: Avoid renderUI() Anti-Pattern

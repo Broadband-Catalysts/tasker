@@ -80,20 +80,39 @@ subtask_increment <- function(increment = 1, quiet = TRUE, conn = NULL,
     # Atomic increment using database-level operation
     # COALESCE handles NULL case (first increment)
     # Auto-transition from STARTED to RUNNING on first progress
-    DBI::dbExecute(
-      conn,
-      glue::glue_sql(
-        "UPDATE {subtask_progress_table} 
-         SET items_complete = COALESCE(items_complete, 0) + {increment},
-             last_update = {time_func*},
-             status = CASE 
-               WHEN status = 'STARTED' AND COALESCE(items_complete, 0) = 0 THEN 'RUNNING'
-               ELSE status 
-             END
-         WHERE run_id = {run_id} AND subtask_number = {subtask_number}",
-        .con = conn
-      )
-    )
+    # Attempt the atomic increment with retries to handle transient SQLite locking
+    max_attempts <- 6L
+    attempt <- 1L
+    repeat {
+      tryCatch({
+        DBI::dbExecute(
+          conn,
+          glue::glue_sql(
+            "UPDATE {subtask_progress_table} 
+             SET items_complete = COALESCE(items_complete, 0) + {increment},
+                 last_update = {time_func*},
+                 status = CASE 
+                   WHEN status = 'STARTED' AND COALESCE(items_complete, 0) = 0 THEN 'RUNNING'
+                   ELSE status 
+                 END
+             WHERE run_id = {run_id} AND subtask_number = {subtask_number}",
+            .con = conn
+          )
+        )
+        break
+      }, error = function(e) {
+        msg <- conditionMessage(e)
+        # Retry on transient SQLite locking errors
+        if (grepl("database is locked", msg, ignore.case = TRUE) && attempt < max_attempts) {
+          backoff <- 0.01 * (2 ^ (attempt - 1)) + runif(1, 0, 0.01)
+          Sys.sleep(backoff)
+          attempt <<- attempt + 1L
+          invisible(NULL)
+        } else {
+          stop(e)
+        }
+      })
+    }
     
     if (!quiet) {
       # Get current count for display

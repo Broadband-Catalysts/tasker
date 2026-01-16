@@ -8,6 +8,8 @@
 #' @param force Force restart if reporter already running (default: FALSE)
 #' @param quiet Suppress startup messages (default: FALSE)
 #' @param conn Database connection (NULL = get default)
+#' @param supervise If FALSE (default), reporter persists after parent process exits.
+#'   If TRUE, reporter is automatically terminated when parent R process exits.
 #'
 #' @return List with process handle and status information
 #' @export
@@ -28,7 +30,8 @@ start_process_reporter <- function(
     hostname = Sys.info()["nodename"],
     force = FALSE,
     quiet = FALSE,
-    conn = NULL
+    conn = NULL,
+    supervise = FALSE
 ) {
   
   if (!quiet) {
@@ -91,7 +94,8 @@ start_process_reporter <- function(
       args = args,
       package = TRUE,  # Ensure package environment is available
       stdout = tempfile("process_reporter_", fileext = ".log"),
-      stderr = tempfile("process_reporter_err_", fileext = ".log")
+      stderr = tempfile("process_reporter_err_", fileext = ".log"),
+      supervise = supervise
     )
     
     # Give the process a moment to start and register
@@ -104,6 +108,10 @@ start_process_reporter <- function(
       if (!quiet) {
         message("[Process Reporter] Background reporter started successfully (PID: ", bg_pid, ")")
         message("[Process Reporter] Collection interval: ", collection_interval, " seconds")
+        if (!supervise) {
+          message("[Process Reporter] Reporter will persist after parent process exits")
+          message("[Process Reporter] To stop: tasker::stop_process_reporter() or kill PID ", bg_pid)
+        }
         message("[Process Reporter] Stdout log: ", bg_process$get_output_file())
         message("[Process Reporter] Stderr log: ", bg_process$get_error_file())
       }
@@ -168,6 +176,14 @@ is_reporter_alive <- function(process_id, hostname) {
 #' @return TRUE if auto-start should be enabled, FALSE otherwise
 #' @keywords internal
 should_auto_start <- function(con = NULL) {
+
+  # Allow disabling auto-start (e.g., in unit tests)
+  if (isTRUE(getOption("tasker.process_reporter.auto_start", TRUE)) == FALSE) {
+    return(FALSE)
+  }
+  if (Sys.getenv("TASKER_PROCESS_REPORTER_AUTO_START") %in% c("0", "false", "FALSE", "no", "NO")) {
+    return(FALSE)
+  }
   
   close_con <- FALSE
   if (is.null(con)) {
@@ -209,6 +225,13 @@ should_auto_start <- function(con = NULL) {
 #' @return TRUE if reporter is running (or started), FALSE if unable to start
 #' @keywords internal
 auto_start_process_reporter <- function(hostname = Sys.info()["nodename"], con = NULL) {
+
+  if (isTRUE(getOption("tasker.process_reporter.auto_start", TRUE)) == FALSE) {
+    return(FALSE)
+  }
+  if (Sys.getenv("TASKER_PROCESS_REPORTER_AUTO_START") %in% c("0", "false", "FALSE", "no", "NO")) {
+    return(FALSE)
+  }
   
   # Check if auto-start is enabled
   if (!should_auto_start(con)) {

@@ -14,7 +14,8 @@
 #' @param stage Stage name (e.g., "STATIC", "DAILY")
 #' @param task Task name
 #' @param message Completion message (optional)
-#' @param total_subtasks Number of subtasks to mark complete (optional)
+#' @param total_subtasks Number of subtasks to mark complete (optional). Use
+#'   zero to indicate the task has no subtasks.
 #' @param version Version string (optional)
 #' @param git_commit Git commit hash (optional)
 #' @param timestamp Timestamp to use for start/end (optional, defaults to current time)

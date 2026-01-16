@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS tasker.tasks (
     log_path TEXT,
     log_filename VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(stage_id, task_name)
 );
 
@@ -43,6 +44,8 @@ CREATE TABLE IF NOT EXISTS tasker.task_runs (
     
     -- Timing information
     start_time TIMESTAMPTZ,
+    end_time TIMESTAMPTZ,
+    last_update TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status VARCHAR(20) NOT NULL,
     
     -- Overall task progress
@@ -190,14 +193,14 @@ ORDER BY stage_order, task_order;
 CREATE OR REPLACE VIEW tasker.current_task_status_with_metrics AS
 SELECT 
     cts.*,
-    pm.cpu_percent,
-    pm.memory_mb,
-    pm.memory_percent,
-    pm.child_count,
-    pm.child_total_cpu_percent,
-    pm.child_total_memory_mb,
-    pm.is_alive,
-    pm.collection_error,
+    pm.cpu_percent AS metrics_cpu_percent,
+    pm.memory_mb AS metrics_memory_mb,
+    pm.memory_percent AS metrics_memory_percent,
+    pm.child_count AS metrics_child_count,
+    pm.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm.is_alive AS metrics_is_alive,
+    pm.collection_error AS metrics_collection_error,
     pm.error_message AS metrics_error_message,
     pm.error_type AS metrics_error_type,
     pm.timestamp AS metrics_timestamp,

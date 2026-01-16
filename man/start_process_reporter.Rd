@@ -9,7 +9,8 @@ start_process_reporter(
   hostname = Sys.info()["nodename"],
   force = FALSE,
   quiet = FALSE,
-  conn = NULL
+  conn = NULL,
+  supervise = FALSE
 )
 }
 \arguments{
@@ -22,6 +23,9 @@ start_process_reporter(
 \item{quiet}{Suppress startup messages (default: FALSE)}
 
 \item{conn}{Database connection (NULL = get default)}
+
+\item{supervise}{If FALSE (default), reporter persists after parent process exits.
+If TRUE, reporter is automatically terminated when parent R process exits.}
 }
 \value{
 List with process handle and status information

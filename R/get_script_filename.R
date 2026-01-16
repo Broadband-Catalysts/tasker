@@ -1,9 +1,7 @@
 #' Get the filename of the currently executing script
 #'
-#' Detects the script filename using the this.path package, which handles
+#' Uses the this.path package to detect the script filename, which handles
 #' various execution contexts (Rscript, source, RStudio, R CMD BATCH, etc.).
-#' Falls back to basename extraction from command line arguments if this.path
-#' is not available.
 #'
 #' @return Character string with script filename (basename only), or NULL if
 #'   script cannot be detected (e.g., interactive session)
@@ -17,19 +15,7 @@
 #' }
 get_script_filename <- function() {
   
-  # Try this.path package (most robust)
-  if (requireNamespace("this.path", quietly = TRUE)) {
-    tryCatch({
-      script_path <- this.path::this.path()
-      if (!is.null(script_path) && !is.na(script_path) && nchar(script_path) > 0) {
-        return(basename(script_path))
-      }
-    }, error = function(e) {
-      # Fall through to alternative methods
-    })
-  }
-  
-  # Fallback 1: Check command line arguments (works for Rscript and R CMD BATCH)
+  # Method 1: Check command line arguments (most reliable for Rscript)
   args <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
   
@@ -38,21 +24,21 @@ get_script_filename <- function() {
     return(basename(script_path))
   }
   
-  # Fallback 2: Try sys.frames for sourced scripts
-  if (sys.nframe() > 0) {
-    for (i in seq_len(sys.nframe())) {
-      script_path <- tryCatch({
-        path <- getSrcFilename(sys.frame(i), full.names = TRUE)
-        if (is.na(path)) "" else path
-      }, error = function(e) "")
-      
-      if (!is.null(script_path) && nchar(script_path) > 0) {
-        return(basename(script_path))
+  # Method 2: Try this.path package for other execution contexts (source, RStudio, etc.)
+  tryCatch({
+    script_path <- this.path::this.path()
+    if (!is.null(script_path) && !is.na(script_path) && nchar(script_path) > 0) {
+      filename <- basename(script_path)
+      # Skip if we're detecting our own function file
+      if (filename != "get_script_filename.R") {
+        return(filename)
       }
     }
-  }
+  }, error = function(e) {
+    # Continue to fallback method
+  })
   
-  # Unable to detect script name (likely interactive session)
+  # Return NULL if script cannot be detected
   return(NULL)
 }
 

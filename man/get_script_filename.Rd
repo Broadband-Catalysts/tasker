@@ -11,10 +11,8 @@ Character string with script filename (basename only), or NULL if
 script cannot be detected (e.g., interactive session)
 }
 \description{
-Detects the script filename using the this.path package, which handles
+Uses the this.path package to detect the script filename, which handles
 various execution contexts (Rscript, source, RStudio, R CMD BATCH, etc.).
-Falls back to basename extraction from command line arguments if this.path
-is not available.
 }
 \examples{
 \dontrun{

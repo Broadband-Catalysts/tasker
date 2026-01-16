@@ -21,7 +21,8 @@ task_start(
 
 \item{task}{Task name (optional - will auto-detect from script filename)}
 
-\item{total_subtasks}{Total number of subtasks (optional)}
+\item{total_subtasks}{Total number of subtasks (optional). Zero is allowed
+for tasks that have no subtasks.}
 
 \item{message}{Initial progress message (optional)}
 

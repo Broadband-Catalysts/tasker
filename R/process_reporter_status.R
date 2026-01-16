@@ -36,6 +36,9 @@ get_process_reporter_status <- function(hostname = NULL, con = NULL) {
   
   result <- tryCatch({
     table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    # Choose parameter placeholder according to DB driver
+    db_class <- class(con)[1]
+    placeholder <- if (db_class == "PqConnection") "$1" else "?"
     sql <- sprintf("
       SELECT 
         hostname,
@@ -45,8 +48,8 @@ get_process_reporter_status <- function(hostname = NULL, con = NULL) {
         version,
         shutdown_requested
       FROM %s
-      WHERE hostname = ?
-    ", table_name)
+      WHERE hostname = %s
+    ", table_name, placeholder)
     DBI::dbGetQuery(con, sql, params = list(hostname))
   }, error = function(e) {
     warning("Failed to query reporter status: ", e$message)

@@ -120,16 +120,16 @@ CREATE INDEX IF NOT EXISTS idx_task_runs_active_host ON tasker.task_runs(hostnam
 CREATE OR REPLACE VIEW tasker.task_runs_with_latest_metrics AS
 SELECT 
     tr.*,
-    pm.cpu_percent,
-    pm.memory_mb,
-    pm.memory_percent,
-    pm.child_count,
-    pm.child_total_cpu_percent,
-    pm.child_total_memory_mb,
-    pm.is_alive,
-    pm.collection_error,
-    pm.error_message,
-    pm.error_type,
+    pm.cpu_percent AS metrics_cpu_percent,
+    pm.memory_mb AS metrics_memory_mb,
+    pm.memory_percent AS metrics_memory_percent,
+    pm.child_count AS metrics_child_count,
+    pm.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm.is_alive AS metrics_is_alive,
+    pm.collection_error AS metrics_collection_error,
+    pm.error_message AS metrics_error_message,
+    pm.error_type AS metrics_error_type,
     pm.timestamp AS metrics_timestamp,
     EXTRACT(EPOCH FROM (NOW() - pm.timestamp))::INTEGER AS metrics_age_seconds
 FROM tasker.task_runs tr

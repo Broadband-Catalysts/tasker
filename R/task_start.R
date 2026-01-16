@@ -5,7 +5,8 @@
 #'
 #' @param stage Stage name (optional - will auto-detect from script filename)
 #' @param task Task name (optional - will auto-detect from script filename)
-#' @param total_subtasks Total number of subtasks (optional)
+#' @param total_subtasks Total number of subtasks (optional). Zero is allowed
+#'   for tasks that have no subtasks.
 #' @param message Initial progress message (optional)
 #' @param version Version string (optional)
 #' @param git_commit Git commit hash (optional)
@@ -82,8 +83,8 @@ task_start <- function(stage = NULL, task = NULL, total_subtasks = NULL,
   }
   
   if (!is.null(total_subtasks)) {
-    if (!is.numeric(total_subtasks) || length(total_subtasks) != 1 || total_subtasks < 1) {
-      stop("'total_subtasks' must be a positive integer if provided", call. = FALSE)
+    if (!is.numeric(total_subtasks) || length(total_subtasks) != 1 || total_subtasks < 0) {
+      stop("'total_subtasks' must be a non-negative integer if provided", call. = FALSE)
     }
     total_subtasks <- as.integer(total_subtasks)
   }

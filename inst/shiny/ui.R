@@ -57,14 +57,10 @@ ui <- page_fluid(
       hr(),
       textOutput("last_update")
     ),
-    # Error message banner
+    # Error/Info message banner
     conditionalPanel(
       condition = "output.has_error",
-      div(class = "alert alert-danger", style = "margin: 10px;",
-          tags$strong("Error: "),
-          tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
-                  textOutput("error_display", inline = FALSE))
-      )
+      uiOutput("error_banner")
     ),
     tabsetPanel(
       id = "main_tabs",
@@ -75,7 +71,7 @@ ui <- page_fluid(
                )
       ),
       tabPanel("SQL Queries",
-               div(class = "sql-queries-container", style = "padding: 15px;",
+               div(class = "sql-queries-container", style = "padding: 8px;",
                    fluidRow(
                      column(12,
                             actionButton("sql_refresh_now", "Refresh Now", 
