@@ -1,5 +1,34 @@
 # GitHub Copilot Instructions for tasker-dev
 
+# ⚠️ MANDATORY: Before ANY Code Changes
+
+**STOP - Check this list before proceeding:**
+
+□ Read relevant sections of copilot-instructions.md for the task type
+□ Check if any Agent Skills apply (list skills explicitly in response) 
+□ If modifying code: Will use #code-review skill before finalizing
+□ If multi-step work: Will use #manage_todo_list for tracking
+□ State which procedures you're following in your response
+
+**If you cannot check all boxes, STOP and ask for clarification.**
+
+**CRITICAL REQUIREMENT:** You MUST explicitly state which copilot-instructions.md sections and/or Agent Skills you are following in every response that involves code changes or multi-step work.
+
+## Token Usage Checkpoints
+
+**At 50K+ tokens:** Remind user you're still following documented procedures
+**At 75K+ tokens:** Explicitly review which procedures you've been following
+**At 90K+ tokens:** Warning about context limits affecting procedure adherence
+
+## Quick Skill Reference
+
+- **#code-review** - REQUIRED before finalizing any code changes
+- **#git-commit-message** - For commit message generation  
+- **#shiny-patterns** - For Shiny application development patterns
+- **#parallel-processing** - For database connection handling in parallel workers
+- **#unit-testing** - For creating and maintaining test coverage
+- **#manage_todo_list** - For multi-step task tracking and planning
+
 ## ⚠️ CRITICAL WORKFLOW CHECKLIST
 
 **Before implementing ANY code changes, verify you will:**
