@@ -37,6 +37,7 @@ get_database_queries <- function(con, status = "active", db_type = NULL) {
       FROM pg_stat_activity
       WHERE backend_type != 'parallel worker'
         AND pid != pg_backend_pid()
+        AND state IS NOT NULL
       ORDER BY query_start
     "
     queries <- DBI::dbGetQuery(con, query_sql)

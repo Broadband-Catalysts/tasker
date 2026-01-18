@@ -19,7 +19,7 @@ test_that("get_task_status returns metrics columns", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema (creates views)
+  # Setup reporter schema (creates views)
   
   # Register and start a running task
   register_task(stage = "TEST", name = "Test Task", type = "R")
@@ -73,7 +73,7 @@ test_that("get_task_status handles NULL metrics gracefully", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema (creates views)
+  # Setup reporter schema (creates views)
   
   # Register and start task WITHOUT metrics
   register_task(stage = "TEST", name = "Task Without Metrics", type = "R")
@@ -110,7 +110,7 @@ test_that("get_task_status calculates metrics_age_seconds correctly", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema
+  # Setup reporter schema
   
   # Register and start task
   register_task(stage = "TEST", name = "Test Task", type = "R")
@@ -141,7 +141,7 @@ test_that("get_task_status returns latest metrics when multiple exist", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema
+  # Setup reporter schema
   
   # Register and start task
   register_task(stage = "TEST", name = "Test Task", type = "R")

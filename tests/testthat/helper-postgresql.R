@@ -54,7 +54,7 @@ setup_postgresql_test <- function() {
     reload = TRUE
   )
   
-  # Disable auto-start of process reporter
+  # Disable auto-start of reporter
   options(tasker.process_reporter.auto_start = FALSE)
   
   # Setup tasker schema in temporary schema

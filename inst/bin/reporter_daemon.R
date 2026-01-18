@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# Process Reporter Daemon
+# Reporter Daemon
 # Background service that monitors and reports process metrics to database
 # 
 # This script is launched by tasker::start_reporter() as a standalone

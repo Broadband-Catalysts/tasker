@@ -1,6 +1,6 @@
-#' Check Process Reporter Status
+#' Check Reporter Status
 #'
-#' Displays information about all running process reporters in the database.
+#' Displays information about all running reporters in the database.
 #' Shows hostname, PID, version, heartbeat status, and whether the process
 #' is still alive.
 #'
@@ -12,13 +12,13 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Display all process reporters
-#' check_process_reporter()
+#' #' # Display all reporters
+#' check_reporter()
 #' 
 #' # Get data without printing
-#' reporters <- check_process_reporter(quiet = TRUE)
+#' reporters <- check_reporter(quiet = TRUE)
 #' }
-check_process_reporter <- function(con = NULL, quiet = FALSE) {
+check_reporter <- function(con = NULL, quiet = FALSE) {
   
   close_con <- FALSE
   if (is.null(con)) {
@@ -36,7 +36,7 @@ check_process_reporter <- function(con = NULL, quiet = FALSE) {
     }
   })
   
-  # Query all process reporters
+  # Query all reporters
   result <- tryCatch({
     table_name <- get_table_name("reporter_status", con, char = TRUE)
     
@@ -78,7 +78,7 @@ check_process_reporter <- function(con = NULL, quiet = FALSE) {
   })
   
   if (is.null(result) || nrow(result) == 0) {
-    if (!quiet) message("No process reporters found in database")
+    if (!quiet) message("No reporters found in database")
     return(NULL)
   }
   
@@ -116,13 +116,13 @@ check_process_reporter <- function(con = NULL, quiet = FALSE) {
   if (!quiet) {
     cat("\n")
     cat("================================================================================\n")
-    cat("Process Reporter Status\n")
+    cat("Reporter Status\n")
     cat("================================================================================\n\n")
     
     if (nrow(result) == 1) {
-      cat("Found 1 process reporter:\n\n")
+      cat("Found 1 reporter:\n\n")
     } else {
-      cat("Found", nrow(result), "process reporters:\n\n")
+      cat("Found", nrow(result), "reporters:\n\n")
     }
     
     for (i in seq_len(nrow(result))) {

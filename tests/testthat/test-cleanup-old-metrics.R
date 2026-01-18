@@ -8,7 +8,7 @@ test_that("cleanup_old_metrics dry_run mode works", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema
+  # Setup reporter schema
   
   # Register and start old task
   register_task(stage = "TEST", name = "Old Task", type = "R")
@@ -73,7 +73,7 @@ test_that("cleanup_old_metrics deletes old metrics", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema
+  # Setup reporter schema
   
   # Register and start old task
   register_task(stage = "TEST", name = "Old Task", type = "R")
@@ -156,7 +156,7 @@ test_that("cleanup_old_metrics records retention info", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema
+  # Setup reporter schema
   
   # Register and start old task
   register_task(stage = "TEST", name = "Old Task", type = "R")
@@ -211,7 +211,7 @@ test_that("schedule_metrics_retention creates retention record", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema to create retention table
+  # Setup reporter schema to create retention table
   
   # Test schedule_metrics_retention
   run_id <- "test-run-id-12345"
@@ -253,7 +253,7 @@ test_that("cleanup_old_metrics handles empty database", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema (creates tables but no data)
+  # Setup reporter schema (creates tables but no data)
   
   # Should not error on empty database
   result <- cleanup_old_metrics(retention_days = 30, conn = con, dry_run = FALSE, quiet = TRUE)
@@ -271,7 +271,7 @@ test_that("cleanup_old_metrics respects retention_days parameter", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Setup process reporter schema
+  # Setup reporter schema
   
   # Register and start task completed 15 days ago
   register_task(stage = "TEST", name = "Medium Old Task", type = "R")

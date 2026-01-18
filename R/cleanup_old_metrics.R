@@ -70,7 +70,7 @@ cleanup_old_metrics <- function(retention_days = 30,
 	eligible_tasks <- DBI::dbGetQuery(conn, eligible_tasks_sql, params = list(retention_days))
 
 	if (nrow(eligible_tasks) == 0) {
-		if (!quiet) message("[Process Reporter] No old metrics found to cleanup")
+		if (!quiet) message("[Reporter] No old metrics found to cleanup")
 		return(data.frame(run_id = character(0), task_name = character(0), metrics_deleted_count = integer(0), completed_at = character(0), deleted_at = character(0), stringsAsFactors = FALSE))
 	}
 
@@ -120,7 +120,7 @@ cleanup_old_metrics <- function(retention_days = 30,
 	}
 
 	result <- do.call(rbind, result_list)
-	if (!quiet) message(sprintf("[Process Reporter] Cleanup complete: deleted %d metrics from %d tasks", sum(result$metrics_deleted_count, na.rm = TRUE), nrow(result)))
+	if (!quiet) message(sprintf("[Reporter] Cleanup complete: deleted %d metrics from %d tasks", sum(result$metrics_deleted_count, na.rm = TRUE), nrow(result)))
 	return(result)
 }
 

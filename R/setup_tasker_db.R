@@ -122,7 +122,7 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
         message("Creating new schema '", schema_name, "'...")
         DBI::dbExecute(conn, paste0("CREATE SCHEMA ", schema_name))
 
-        # Execute combined schema (includes process reporter tables and all views)
+        # Execute combined schema (includes reporter tables and all views)
         sql_file <- if (!is.null(schema_sql_file)) {
           schema_sql_file
         } else {
@@ -138,7 +138,7 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
         # views that reference them. The canonical create_schema.sql contains
         # table definitions and views; to guarantee ordering we split the file
         # at the "-- Views for easier querying" marker (if present), execute
-        # the pre-view portion, then execute the process_reporter_schema (if
+        # the pre-view portion, then execute the reporter_schema (if
         # present), and finally execute the remaining views portion.
         if (driver == "postgresql") {
           sql_text <- paste(readLines(sql_file, warn = FALSE), collapse = "\n")
@@ -156,8 +156,8 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
             # Execute pre-views (creates task_runs, etc.)
             bbcDB::dbExecuteScript(conn, tmp_pre, .open = "", .close = "", .quiet = FALSE)
 
-            # Execute process reporter schema if present
-            proc_file <- system.file("sql", "postgresql", "process_reporter_schema.sql", package = "tasker")
+            # Execute reporter schema if present
+            proc_file <- system.file("sql", "postgresql", "reporter_schema.sql", package = "tasker")
             if (file.exists(proc_file) && nzchar(proc_file)) {
               bbcDB::dbExecuteScript(conn, proc_file, .open = "", .close = "", .quiet = FALSE)
             }

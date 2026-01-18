@@ -14,7 +14,7 @@ test_that("setup_tasker_db creates SQLite schema", {
   expect_true(DBI::dbExistsTable(con, "subtask_progress"))
 
   expect_true(DBI::dbExistsTable(con, "process_metrics"))
-  expect_true(DBI::dbExistsTable(con, "process_reporter_status"))
+  expect_true(DBI::dbExistsTable(con, "reporter_status"))
   expect_true(DBI::dbExistsTable(con, "process_metrics_retention"))
 
   # Views

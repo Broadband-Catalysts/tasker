@@ -1,18 +1,18 @@
-# Manual test script for Process Reporter Monitor Integration
+# Manual test script for Reporter Monitor Integration
 # Run this to verify the monitor integration works correctly
 
 library(tasker)
 
 # This script tests the complete flow:
-# 1. Setup process reporter schema (if not already done)
+# 1. Setup reporter schema (if not already done)
 # 2. Create a test task
-# 3. Start process reporter
+# 3. Start reporter
 # 4. Verify monitor can read metrics
 
-message("=== Testing Process Reporter Monitor Integration ===\n")
+message("=== Testing Reporter Monitor Integration ===\n")
 
-# Step 1: Ensure process reporter schema exists
-message("1. Setting up process reporter schema...")
+# Step 1: Ensure reporter schema exists
+message("1. Setting up reporter schema...")
 tryCatch({
   tasker::setup_process_reporter_schema()
   message("   ✓ Schema setup complete\n")
@@ -98,9 +98,9 @@ tryCatch({
 
 message("")
 
-# Step 4: Check process reporter status
-message("4. Checking process reporter status...")
-reporter_status <- tasker::get_process_reporter_status()
+# Step 4: Check reporter status
+message("4. Checking reporter status...")
+reporter_status <- tasker::get_reporter_status()
 
 if (!is.null(reporter_status) && nrow(reporter_status) > 0) {
   message(sprintf("   ✓ Process reporter running on %s (PID: %d)", 

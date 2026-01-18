@@ -1226,3 +1226,17 @@ hr {
   margin-bottom: 2px !important;
 }
 
+/* highlight alternating rows in data tables */
+.table>:not(caption)>*>* {
+  background-color: transparent;
+}
+
+table.dataTable tr.odd {
+  background-color: #037bc242;
+  /* Your custom light blue */
+}
+
+table.dataTable tr.even {
+  background-color: white;
+  /* Your custom white/light color */
+}

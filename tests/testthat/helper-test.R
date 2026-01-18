@@ -25,7 +25,7 @@ setup_test_db <- function() {
   # Avoid callr background processes during unit tests
   options(tasker.process_reporter.auto_start = FALSE)
   
-  # Create full schema (tables + process reporter tables + views)
+  # Create full schema (tables + reporter tables + views)
   tasker::setup_tasker_db(force = TRUE, quiet = TRUE)
 
   # Persist the path for callers that need it

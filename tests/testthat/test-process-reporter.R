@@ -1,4 +1,4 @@
-# Tests for Process Reporter functions
+# Tests for Reporter functions
 
 # Load all package functions for testing
 # Note: These functions are internal and not exported
@@ -11,7 +11,7 @@ test_that("setup_reporter_schema creates tables", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Load process reporter schema (need to adapt for SQLite)
+  # Load reporter schema (need to adapt for SQLite)
   schema_file <- system.file("sql/postgresql/process_reporter_schema.sql", package = "tasker")
   
   # Create tables manually for SQLite (simplified)
@@ -54,7 +54,7 @@ test_that("setup_reporter_schema creates tables", {
   ")
   
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -81,7 +81,7 @@ test_that("setup_reporter_schema creates tables", {
   # Verify tables exist
   tables <- DBI::dbListTables(con)
   expect_true("process_metrics" %in% tables)
-  expect_true("process_reporter_status" %in% tables)
+  expect_true("reporter_status" %in% tables)
   expect_true("process_metrics_retention" %in% tables)
   
   DBI::dbDisconnect(con)
@@ -98,17 +98,17 @@ test_that("setup_reporter_schema with force=TRUE recreates tables", {
   # Setup tasker database first
   setup_tasker_db(conn = con, force = TRUE, quiet = TRUE)
   
-  # Create process reporter schema
+  # Create reporter schema
   setup_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
   
   # Insert test data
   DBI::dbExecute(con, "
-    INSERT INTO process_reporter_status (hostname, process_id, started_at)
+    INSERT INTO reporter_status (hostname, process_id, started_at)
     VALUES ('test-host', 12345, datetime('now'))
   ")
   
   # Verify data exists
-  count_before <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_reporter_status")$n
+  count_before <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM reporter_status")$n
   expect_equal(count_before, 1)
   
   # Recreate with force=TRUE (should drop and recreate)
@@ -117,11 +117,11 @@ test_that("setup_reporter_schema with force=TRUE recreates tables", {
   # Verify tables still exist
   tables <- DBI::dbListTables(con)
   expect_true("process_metrics" %in% tables)
-  expect_true("process_reporter_status" %in% tables)
+  expect_true("reporter_status" %in% tables)
   expect_true("process_metrics_retention" %in% tables)
   
   # Verify data was cleared (tables recreated)
-  count_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_reporter_status")$n
+  count_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM reporter_status")$n
   expect_equal(count_after, 0)
 })
 
@@ -166,12 +166,12 @@ test_that("setup_reporter_schema without force=TRUE preserves data", {
   # Setup tasker database first
   setup_tasker_db(conn = con, force = TRUE, quiet = TRUE)
   
-  # Create process reporter schema
+  # Create reporter schema
   setup_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
   
   # Insert test data
   DBI::dbExecute(con, "
-    INSERT INTO process_reporter_status (hostname, process_id, started_at)
+    INSERT INTO reporter_status (hostname, process_id, started_at)
     VALUES ('test-host', 12345, datetime('now'))
   ")
   
@@ -181,7 +181,7 @@ test_that("setup_reporter_schema without force=TRUE preserves data", {
   ")
   
   # Verify data exists
-  status_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_reporter_status")$n
+  status_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM reporter_status")$n
   metrics_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_metrics")$n
   expect_equal(status_count, 1)
   expect_equal(metrics_count, 1)
@@ -190,7 +190,7 @@ test_that("setup_reporter_schema without force=TRUE preserves data", {
   setup_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
   
   # Verify data is preserved
-  status_count_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_reporter_status")$n
+  status_count_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM reporter_status")$n
   metrics_count_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_metrics")$n
   expect_equal(status_count_after, 1)
   expect_equal(metrics_count_after, 1)
@@ -371,9 +371,9 @@ test_that("register_reporter creates new reporter entry", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Create process_reporter_status table
+  # Create reporter_status table
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -392,7 +392,7 @@ test_that("register_reporter creates new reporter entry", {
   tasker:::register_reporter(con, hostname, pid, version)
   
   result <- DBI::dbGetQuery(con, "
-    SELECT * FROM process_reporter_status WHERE hostname = ?
+    SELECT * FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   expect_equal(nrow(result), 1)
@@ -411,9 +411,9 @@ test_that("register_reporter updates existing reporter (UPSERT)", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Create process_reporter_status table
+  # Create reporter_status table
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -435,7 +435,7 @@ test_that("register_reporter updates existing reporter (UPSERT)", {
   tasker:::register_reporter(con, hostname, pid1, version1)
   
   result1 <- DBI::dbGetQuery(con, "
-    SELECT * FROM process_reporter_status WHERE hostname = ?
+    SELECT * FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   expect_equal(nrow(result1), 1)
@@ -446,7 +446,7 @@ test_that("register_reporter updates existing reporter (UPSERT)", {
   tasker:::register_reporter(con, hostname, pid2, version2)
   
   result2 <- DBI::dbGetQuery(con, "
-    SELECT * FROM process_reporter_status WHERE hostname = ?
+    SELECT * FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   expect_equal(nrow(result2), 1)  # Still only one row
@@ -467,9 +467,9 @@ test_that("update_reporter_heartbeat updates timestamp", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Create process_reporter_status table
+  # Create reporter_status table
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -489,7 +489,7 @@ test_that("update_reporter_heartbeat updates timestamp", {
   tasker:::register_reporter(con, hostname, pid, version)
   
   result1 <- DBI::dbGetQuery(con, "
-    SELECT last_heartbeat FROM process_reporter_status WHERE hostname = ?
+    SELECT last_heartbeat FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   initial_heartbeat <- result1$last_heartbeat[1]
@@ -501,7 +501,7 @@ test_that("update_reporter_heartbeat updates timestamp", {
   tasker:::update_reporter_heartbeat(con, hostname)
   
   result2 <- DBI::dbGetQuery(con, "
-    SELECT last_heartbeat FROM process_reporter_status WHERE hostname = ?
+    SELECT last_heartbeat FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   updated_heartbeat <- result2$last_heartbeat[1]
@@ -515,15 +515,126 @@ test_that("update_reporter_heartbeat updates timestamp", {
   cleanup_test_db()
 })
 
+test_that("update_reporter_heartbeat deletes row for different PID on same hostname", {
+  skip_if_not_installed("RSQLite")
+  skip_on_cran()  # Skip on CRAN since this test starts actual processes
+  
+  db_path <- setup_test_db()
+  con <- get_test_db_connection()
+  
+  # Create reporter_status table (note: name changed from reporter_status)
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS reporter_status (
+      reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hostname TEXT NOT NULL UNIQUE,
+      process_id INTEGER NOT NULL,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_heartbeat TEXT NOT NULL DEFAULT (datetime('now')),
+      version TEXT,
+      config TEXT DEFAULT '{}',
+      shutdown_requested INTEGER DEFAULT 0
+    )
+  ")
+  
+  hostname <- Sys.info()[["nodename"]]
+  
+  # Start first reporter process
+  reporter1_proc <- callr::r_bg(
+    function(hostname, db_path) {
+      library(tasker)
+      
+      # Set test database path
+      options(tasker.config = list(
+        database = list(
+          driver = "sqlite",
+          db_file = db_path
+        )
+      ))
+      
+      con <- tasker:::get_tasker_db_connection()
+      tasker:::update_reporter_heartbeat(con, hostname)
+      DBI::dbDisconnect(con)
+      Sys.sleep(2)  # Keep it alive briefly
+      "done"
+    },
+    args = list(hostname = hostname, db_path = db_path),
+    supervise = TRUE
+  )
+  
+  # Wait for first reporter to register
+  Sys.sleep(1)
+  
+  # Verify first reporter exists
+  result1 <- DBI::dbGetQuery(con, "
+    SELECT process_id, started_at FROM reporter_status WHERE hostname = ?
+  ", params = list(hostname))
+  
+  expect_equal(nrow(result1), 1)
+  first_pid <- result1$process_id[1]
+  first_started_at <- result1$started_at[1]
+  
+  # Kill first reporter
+  reporter1_proc$kill()
+  
+  # Wait a moment for timestamps to differ
+  Sys.sleep(1)
+  
+  # Start second reporter process
+  reporter2_proc <- callr::r_bg(
+    function(hostname, db_path) {
+      library(tasker)
+      
+      # Set test database path
+      options(tasker.config = list(
+        database = list(
+          driver = "sqlite",
+          db_file = db_path
+        )
+      ))
+      
+      con <- tasker:::get_tasker_db_connection()
+      tasker:::update_reporter_heartbeat(con, hostname)
+      DBI::dbDisconnect(con)
+      "done"
+    },
+    args = list(hostname = hostname, db_path = db_path),
+    supervise = TRUE
+  )
+  
+  # Wait for second reporter to register  
+  Sys.sleep(1)
+  
+  # Verify old row was deleted and new row created
+  result2 <- DBI::dbGetQuery(con, "
+    SELECT process_id, started_at FROM reporter_status WHERE hostname = ?
+  ", params = list(hostname))
+  
+  expect_equal(nrow(result2), 1)
+  second_pid <- result2$process_id[1]
+  second_started_at <- result2$started_at[1]
+  
+  # Should be different PID and later timestamp
+  expect_true(second_pid != first_pid, 
+              info = sprintf("Expected different PIDs: %d vs %d", first_pid, second_pid))
+  expect_true(second_started_at > first_started_at,
+              info = "New reporter should have later started_at timestamp")
+  
+  # Clean up second reporter
+  reporter2_proc$kill()
+  
+  DBI::dbDisconnect(con)
+  cleanup_test_db()
+})
+
 test_that("get_reporter_database_status returns NULL when no reporter", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Create process_reporter_status table
+  # Create reporter_status table
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -549,9 +660,9 @@ test_that("get_reporter_database_status returns reporter info when exists", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Create process_reporter_status table
+  # Create reporter_status table
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -586,9 +697,9 @@ test_that("stop_reporter sets shutdown flag", {
   db_path <- setup_test_db()
   con <- get_test_db_connection()
   
-  # Create process_reporter_status table
+  # Create reporter_status table
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS process_reporter_status (
+    CREATE TABLE IF NOT EXISTS reporter_status (
       reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
       hostname TEXT NOT NULL UNIQUE,
       process_id INTEGER NOT NULL,
@@ -608,7 +719,7 @@ test_that("stop_reporter sets shutdown flag", {
   tasker:::register_reporter(con, hostname, pid, version)
   
   result1 <- DBI::dbGetQuery(con, "
-    SELECT shutdown_requested FROM process_reporter_status WHERE hostname = ?
+    SELECT shutdown_requested FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   expect_equal(result1$shutdown_requested[1], 0)
@@ -620,7 +731,7 @@ test_that("stop_reporter sets shutdown flag", {
   
   con <- get_test_db_connection()
   result2 <- DBI::dbGetQuery(con, "
-    SELECT shutdown_requested FROM process_reporter_status WHERE hostname = ?
+    SELECT shutdown_requested FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
   expect_equal(result2$shutdown_requested[1], 1)
@@ -845,7 +956,7 @@ test_that("get_active_tasks returns empty list when no active tasks", {
   con <- setup_test_db()
   hostname <- "test-host"
   
-  result <- tasker:::get_active_tasks(con, hostname)
+  result <- tasker:::get_active_tasks_for_reporter(con, hostname)
   expect_equal(length(result), 0)
   
   cleanup_test_db(con)
@@ -878,7 +989,7 @@ test_that("get_active_tasks returns active tasks for hostname", {
       (?, 1, 'other-host', 1003, datetime('now'), 'RUNNING')
   ", params = list(run_id1, hostname, run_id2, hostname, "00000000-0000-0000-0000-000000000003"))
   
-  result <- tasker:::get_active_tasks(con, hostname)
+  result <- tasker:::get_active_tasks_for_reporter(con, hostname)
   
   expect_equal(length(result), 2)
   expect_equal(result[[1]]$run_id, run_id1)
@@ -914,7 +1025,7 @@ test_that("should_shutdown returns TRUE when shutdown requested", {
   tasker:::register_reporter(con, hostname, 12345)
   
   DBI::dbExecute(con, "
-    UPDATE process_reporter_status SET shutdown_requested = 1 WHERE hostname = ?
+    UPDATE reporter_status SET shutdown_requested = 1 WHERE hostname = ?
   ", params = list(hostname))
   
   result <- tasker:::should_shutdown(con, hostname)
@@ -928,7 +1039,7 @@ test_that("get_reporter_status detects dead process", {
   
   # Use a PID that definitely doesn't exist
   result <- tasker:::get_reporter_status(999999, "test-host")
-  expect_false(result)
+  expect_false(result$is_alive)
 })
 
 test_that("get_reporter_status detects live process", {
@@ -937,13 +1048,13 @@ test_that("get_reporter_status detects live process", {
   # Use current process PID
   current_pid <- Sys.getpid()
   result <- tasker:::get_reporter_status(current_pid, "test-host")
-  expect_true(result)
+  expect_true(result$is_alive)
 })
 
 test_that("auto_start_reporter returns FALSE when tables don't exist", {
   skip_if_not_installed("RSQLite")
   
-  # Setup minimal database without process reporter tables
+  # Setup minimal database without reporter tables
   db_path <- get_test_db_path()
   if (file.exists(db_path)) unlink(db_path)
   
@@ -1063,7 +1174,7 @@ test_that("start_reporter checks for existing reporter", {
   expect_equal(status$process_id, fake_pid)
   
   # Check if reporter is alive (should be FALSE for fake PID)
-  is_alive <- tasker:::get_reporter_status(fake_pid, hostname)
+  is_alive <- tasker:::get_reporter_status(fake_pid, hostname)$is_alive
   expect_false(is_alive)
   
   DBI::dbDisconnect(con)
@@ -1082,7 +1193,7 @@ test_that("start_reporter handles dead process detection", {
   tasker:::register_reporter(con, hostname, dead_pid, version = "1.0.0")
   
   # get_reporter_status should return FALSE
-  expect_false(tasker:::get_reporter_status(dead_pid, hostname))
+  expect_false(tasker:::get_reporter_status(dead_pid, hostname)$is_alive)
   
   DBI::dbDisconnect(con)
   cleanup_test_db()
@@ -1104,7 +1215,7 @@ test_that("start_reporter respects force parameter", {
   status <- tasker:::get_reporter_database_status(hostname, con = con)
   expect_false(is.null(status))
   expect_equal(status$process_id, live_pid)
-  expect_true(tasker:::get_reporter_status(live_pid, hostname))
+  expect_true(tasker:::get_reporter_status(live_pid, hostname)$is_alive)
   
   # With force=FALSE and live reporter, returns "already_running" (does not error)
   # NOTE: Implementation returns status object, doesn't throw error
@@ -1233,7 +1344,7 @@ test_that("process_reporter_main_loop helper: get_active_tasks works", {
   ")
   
   # No active tasks initially
-  tasks <- tasker:::get_active_tasks(con, hostname)
+  tasks <- tasker:::get_active_tasks_for_reporter(con, hostname)
   expect_equal(length(tasks), 0)
   
   # Add a running task
@@ -1252,7 +1363,7 @@ test_that("process_reporter_main_loop helper: get_active_tasks works", {
   ", run_id, hostname, current_pid))
   
   # Now should find the task
-  tasks <- tasker:::get_active_tasks(con, hostname)
+  tasks <- tasker:::get_active_tasks_for_reporter(con, hostname)
   expect_equal(length(tasks), 1)
   expect_equal(tasks[[1]]$run_id, run_id)
   expect_equal(tasks[[1]]$process_id, current_pid)
@@ -1272,7 +1383,7 @@ test_that("process_reporter_main_loop handles no active tasks", {
   tasker:::register_reporter(con, hostname, reporter_pid)
   
   # Get active tasks - should be empty
-  active_tasks <- tasker:::get_active_tasks(con, hostname)
+  active_tasks <- tasker:::get_active_tasks_for_reporter(con, hostname)
   expect_equal(length(active_tasks), 0)
   
   # Update heartbeat should work even with no tasks
@@ -1315,7 +1426,7 @@ test_that("process_reporter_main_loop components handle errors gracefully", {
   ", run_id, hostname, invalid_pid))
   
   # Get active tasks should work
-  active_tasks <- tasker:::get_active_tasks(con, hostname)
+  active_tasks <- tasker:::get_active_tasks_for_reporter(con, hostname)
   expect_equal(length(active_tasks), 1)
   
   # collect_process_metrics should handle invalid PID gracefully
@@ -1411,7 +1522,7 @@ test_that("check_reporter detects stale reporters", {
   
   # Register reporter with old heartbeat (2 minutes ago)
   DBI::dbExecute(con, "
-    INSERT INTO process_reporter_status 
+    INSERT INTO reporter_status 
       (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
     VALUES (?, ?, datetime('now', '-2 minutes'), datetime('now', '-2 minutes'), '0.7.0', 0)
   ", params = list(hostname, pid))
@@ -1439,7 +1550,7 @@ test_that("check_reporter detects shutdown_requested flag", {
   
   # Set shutdown flag
   DBI::dbExecute(con, "
-    UPDATE process_reporter_status 
+    UPDATE reporter_status 
     SET shutdown_requested = 1
     WHERE hostname = ?
   ", params = list(hostname))

@@ -46,7 +46,7 @@ ui <- page_fluid(
       numericInput("refresh_interval", "Auto-refresh (seconds):", 
                    value = 5, min = 1, max = 60),
       checkboxInput("auto_refresh", "Auto-refresh", value = TRUE),
-      checkboxInput("show_script_name", "Show script names", value = FALSE),
+      checkboxInput("show_script_name", "Show script names", value = TRUE),
       hr(),
       actionButton("refresh", "Refresh Now", class = "btn-primary"),
       actionButton("refresh_structure", "Refresh Structure", class = "btn-secondary btn-sm",
@@ -78,9 +78,16 @@ ui <- page_fluid(
       tabPanel("SQL Queries",
                div(class = "sql-queries-container", style = "padding: 8px;",
                    fluidRow(
-                     column(12,
+                     column(6,
                             actionButton("sql_refresh_now", "Refresh Now", 
                                        class = "btn-primary")
+                     ),
+                     column(6,
+                            div(style = "margin-top: 5px;",
+                                checkboxInput("exclude_tasker_queries", 
+                                            "Exclude tasker queries", 
+                                            value = TRUE)
+                            )
                      )
                    ),
                    hr(),

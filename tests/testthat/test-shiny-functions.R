@@ -315,7 +315,7 @@ test_that("active task monitoring functions are available", {
   task_complete(run_id = run_id3)
   
   # Verify get_active_tasks function exists and is callable
-  # This is an internal function used by process reporter
+  # This is an internal function used by reporter
   # It requires connection and hostname parameters
   expect_true(exists("get_active_tasks", where = "package:tasker", mode = "function"))
   

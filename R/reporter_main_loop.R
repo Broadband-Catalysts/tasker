@@ -168,20 +168,16 @@ update_reporter_heartbeat <- function(con, hostname) {
     }
     
     # Insert or update reporter record
-    # For different PID: We already deleted the old row, so this will be a fresh INSERT
-    # For same PID: This will be an UPDATE (heartbeat)
+    # Use UPSERT for same PID (heartbeat updates), but we've already deleted different PIDs above
     if (!is.null(config) && config$database$driver == "sqlite") {
-      # For SQLite: Since we deleted different PIDs above, this will either INSERT (new PID) or UPDATE (same PID)
       sql <- sprintf("
-        INSERT INTO %s (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
-        VALUES (?, ?, ?, ?, ?, FALSE)
-        ON CONFLICT(hostname) 
-        DO UPDATE SET 
-          last_heartbeat = excluded.last_heartbeat,
-          version = excluded.version,
-          shutdown_requested = FALSE
-      ", table_name)
-      params <- list(hostname, current_pid, current_time, current_time, as.character(version))
+        INSERT OR REPLACE INTO %s 
+        (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
+        VALUES (?, ?, 
+                COALESCE((SELECT started_at FROM %s WHERE hostname = ? AND process_id = ?), ?),
+                ?, ?, FALSE)
+      ", table_name, table_name)
+      params <- list(hostname, current_pid, hostname, current_pid, current_time, current_time, as.character(version))
     } else {
       # PostgreSQL UPSERT - since we deleted different PIDs above, this will only
       # update for same PID (heartbeats) or insert for new PID (new reporter)

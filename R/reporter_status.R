@@ -64,7 +64,7 @@ get_reporter_database_status <- function(hostname = NULL, con = NULL) {
 }
 
 
-#' Register or update process reporter in database
+#' Register or update reporter in database
 #'
 #' Internal function to register a reporter or update its registration.
 #' Uses UPSERT to handle concurrent starts.

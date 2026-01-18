@@ -375,7 +375,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       html_parts <- c(html_parts, sprintf(
         "<div class='process-warning-banner'>
           <i class='fa fa-exclamation-circle'></i>
-          <div class='warning-text'>WARNING: Metrics are stale (%d seconds old) - Process Reporter may not be running</div>
+          <div class='warning-text'>WARNING: Metrics are stale (%d seconds old) - Reporter may not be running</div>
         </div>",
         as.integer(task_data$metrics_age_seconds)
       ))
@@ -2448,6 +2448,11 @@ server <- function(input, output, session) {
     rv$sql_trigger <- Sys.time()
   })
   
+  # Checkbox change triggers refresh
+  observeEvent(input$exclude_tasker_queries, {
+    rv$sql_trigger <- Sys.time()
+  }, ignoreInit = TRUE)
+  
   # Fetch SQL queries
   sql_queries_data <- reactive({
     # Only fetch when SQL Queries tab is active
@@ -2478,7 +2483,12 @@ server <- function(input, output, session) {
       rv$monitor_connection <- con
       
       # Get active queries using utility function
-      queries <- tasker::get_database_queries(con, config$database$driver %||% "postgresql")
+      queries <- tasker::get_database_queries(con, status = "active", db_type = config$database$driver %||% "postgresql")
+      
+      # Filter tasker queries if checkbox is checked (default: exclude)
+      if (!is.null(input$exclude_tasker_queries) && input$exclude_tasker_queries && !is.null(queries) && nrow(queries) > 0) {
+        queries <- queries[!grepl("tasker\\.", queries$query, ignore.case = TRUE), ]
+      }
       
       # Show notification if no queries
       if (is.null(queries) || nrow(queries) == 0) {
@@ -2504,38 +2514,7 @@ server <- function(input, output, session) {
     })
   })
   
-  # Render SQL queries table - initial render with proper column structure
-  output$sql_queries_table <- renderDT({
-    # Start with empty data frame with proper columns
-    initial_data <- data.frame(
-      pid = integer(0),
-      duration = character(0),
-      username = character(0),
-      query = character(0),
-      state = character(0),
-      Actions = character(0),
-      stringsAsFactors = FALSE
-    )
-    
-    datatable(
-      initial_data,
-      options = list(
-        pageLength = 25,
-        scrollX = TRUE,
-        scrollY = "60vh",
-        scrollCollapse = TRUE,
-        dom = 'lfrtip',
-        ordering = TRUE,
-        columnDefs = list(
-          list(targets = ncol(initial_data) - 1, orderable = FALSE)
-        )
-      ),
-      rownames = FALSE,
-      filter = 'none',
-      escape = FALSE,
-      class = 'cell-border stripe'
-    )
-  })
+  # SQL queries table will be rendered in the observe block below
   
   # Update SQL queries table content using proxy
   observe({
@@ -2550,15 +2529,74 @@ server <- function(input, output, session) {
           htmltools::htmlEscape(queries$username[i])
         )
       })
+      
+      # Add row index for alternating colors (1-based)
+      queries$row_index <- seq_len(nrow(queries))
     } else {
       queries$Actions <- character(0)
     }
     
-    # Use proxy to update data without recreating the table
-    proxy <- dataTableProxy('sql_queries_table')
-    
-    # Always pass queries (which has proper column structure)
-    replaceData(proxy, queries, resetPaging = FALSE, rownames = FALSE)
+    # Create new datatable with data and apply formatStyle
+    if (nrow(queries) > 0) {
+      # Create alternating color vectors
+      odd_indices <- queries$row_index[queries$row_index %% 2 == 1]
+      even_indices <- queries$row_index[queries$row_index %% 2 == 0]
+      
+      dt <- datatable(
+        queries,
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          scrollY = "60vh",
+          scrollCollapse = TRUE,
+          dom = 'lfrtip',
+          ordering = TRUE,
+          columnDefs = list(
+            list(targets = ncol(queries) - 1, orderable = FALSE), # Actions column
+            list(targets = ncol(queries) - 2, visible = FALSE)    # Hide row_index column
+          )
+        ),
+        rownames = FALSE,
+        filter = 'none',
+        escape = FALSE,
+        class = 'cell-border compact'
+      ) 
+      
+      # Replace the entire output
+      output$sql_queries_table <- renderDT({ dt })
+    } else {
+      # Empty table case
+      empty_data <- data.frame(
+        pid = integer(0),
+        duration = character(0),
+        username = character(0),
+        query = character(0),
+        state = character(0),
+        Actions = character(0),
+        stringsAsFactors = FALSE
+      )
+      
+      output$sql_queries_table <- renderDT({
+        datatable(
+          empty_data,
+          options = list(
+            pageLength = 25,
+            scrollX = TRUE,
+            scrollY = "60vh",
+            scrollCollapse = TRUE,
+            dom = 'lfrtip',
+            ordering = TRUE,
+            columnDefs = list(
+              list(targets = ncol(empty_data) - 1, orderable = FALSE)
+            )
+          ),
+          rownames = FALSE,
+          filter = 'none',
+          escape = FALSE,
+          class = 'cell-border compact'
+        )
+      })
+    }
   })
   
   # Handle kill button clicks
