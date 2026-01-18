@@ -90,78 +90,54 @@ start_reporter <- function(
                                           hostname, 
                                           format(Sys.time(), "%Y%m%d_%H%M%S")))
   
-  # Prepare arguments for background process
-  args <- list(
-    collection_interval_seconds = collection_interval,
-    hostname = hostname,
-    config = current_config
-  )
+  # Get path to the daemon script in the installed package
+  daemon_script <- system.file("bin", "process_reporter_daemon.R", package = "tasker")
   
-  # Start background R process using callr::r_bg()
+  if (!file.exists(daemon_script)) {
+    stop("Cannot find process reporter daemon script. Package may not be properly installed.", call. = FALSE)
+  }
+  
+  # Prepare environment variables to pass library paths to daemon process
+  # This ensures the daemon can load tasker and its dependencies
+  lib_paths <- paste(.libPaths(), collapse = .Platform$path.sep)
+  env_vars <- sprintf("R_LIBS_USER='%s'", lib_paths)
+  
+  # Start truly independent background R process using system() with nohup
   tryCatch({
-    bg_process <- callr::r_bg(
-      func = function(collection_interval_seconds, hostname, config, working_dir) {
-        # Set working directory first to ensure config can be found
-        setwd(working_dir)
-        
-        # Load the package in background process
-        library(tasker)
-        
-        # Load configuration explicitly (since auto-load was removed)
-        tasker_config()
-        
-        # Verify configuration loaded
-        if (is.null(getOption("tasker.config"))) {
-          stop("Failed to load tasker configuration in background process")
-        }
-        
-        # Register this reporter process
-        con <- tasker::get_db_connection()
-        reporter_pid <- Sys.getpid()
-        tasker:::register_reporter(con, hostname, reporter_pid)
-        DBI::dbDisconnect(con)
-        
-        # Run main loop (this will handle its own database connection)
-        tasker:::reporter_main_loop(
-          collection_interval_seconds = collection_interval_seconds,
-          hostname = hostname
-        )
-      },
-      args = list(
-        collection_interval_seconds = collection_interval,
-        hostname = hostname,
-        config = current_config,
-        working_dir = getwd()
-      ),
-      package = TRUE,  # Ensure package environment is available
-      stdout = log_file,
-      stderr = log_file,  # Same file for both stdout and stderr
-      supervise = supervise
-    )
+    # Use nohup to make process completely independent
+    r_cmd <- file.path(R.home("bin"), "Rscript")
+    cmd <- sprintf("nohup env %s %s '%s' --interval %d --hostname '%s' > '%s' 2>&1 </dev/null & echo $!", 
+                   env_vars, r_cmd, daemon_script, collection_interval, hostname, log_file)
+    
+    bg_pid <- as.integer(system(cmd, intern = TRUE))
+    
+    if (is.na(bg_pid) || bg_pid <= 0) {
+      stop("Failed to start background process - got invalid PID")
+    }
     
     # Give the process a moment to start and register
     Sys.sleep(1)
     
-    # Verify it started successfully
-    if (bg_process$is_alive()) {
-      bg_pid <- bg_process$get_pid()
-      
+    # Verify it started successfully by checking if PID exists
+    pid_check <- system2("ps", args = c("-p", bg_pid), stdout = FALSE, stderr = FALSE)
+    process_alive <- (pid_check == 0)
+    process_alive <- (pid_check == 0)
+    
+    if (process_alive) {
       if (!quiet) {
         message("[Process Reporter] Background reporter started successfully (PID: ", bg_pid, ")")
         message("[Process Reporter] Collection interval: ", collection_interval, " seconds")
-        if (!supervise) {
-          message("[Process Reporter] Reporter will persist after parent process exits")
-          message("[Process Reporter] To stop: tasker::stop_reporter() or kill PID ", bg_pid)
-        }
+        message("[Process Reporter] Reporter will persist after parent process exits")
+        message("[Process Reporter] To stop: tasker::stop_reporter() or kill PID ", bg_pid)
         message("[Process Reporter] Stdout log: ", log_file)
-        message("[Process Reporter] Stderr log: ", log_file)  # Same file for both
+        message("[Process Reporter] Stderr log: ", log_file)
       }
       
       return(list(
         status = "started",
         process_id = bg_pid,
         started_at = Sys.time(),
-        process = bg_process,
+        process = NULL,  # No process handle - truly independent
         stdout_log = log_file,
         stderr_log = log_file
       ))

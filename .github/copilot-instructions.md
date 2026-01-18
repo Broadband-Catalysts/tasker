@@ -309,6 +309,58 @@ R --slave -e "result <- 2 + 2; print(result)"  # Variables like $var get expande
 
 Single quotes preserve the literal string, preventing shell interpretation and ensuring R code is passed exactly as written.
 
+### R Script Argument Handling
+
+**Always use the `argparse` package for handling command-line arguments in R scripts:**
+
+```r
+# ✅ CORRECT - Use argparse for robust argument handling
+library(argparse)
+
+# Create argument parser
+parser <- ArgumentParser(description = "Process data with configurable options")
+parser$add_argument("--input", type = "character", required = TRUE,
+                   help = "Input data file path")
+parser$add_argument("--output", type = "character", required = TRUE,
+                   help = "Output file path")
+parser$add_argument("--ncores", type = "integer", default = 4,
+                   help = "Number of parallel cores to use [default: 4]")
+parser$add_argument("--overwrite", action = "store_true", default = FALSE,
+                   help = "Overwrite existing output files")
+parser$add_argument("--verbose", action = "store_true", default = FALSE,
+                   help = "Enable verbose output")
+
+# Parse arguments
+args <- parser$parse_args()
+
+# Use parsed arguments
+if (args$verbose) {
+  cat("Processing", args$input, "with", args$ncores, "cores...\n")
+}
+
+# ❌ INCORRECT - Manual argument parsing (fragile and error-prone)
+args <- commandArgs(trailingOnly = TRUE)
+input_file <- args[1]  # No validation, unclear meaning
+ncores <- as.integer(args[2])  # May fail with no error handling
+```
+
+**Why use argparse:**
+- **Automatic help generation**: `--help` flag automatically works
+- **Type validation**: Ensures arguments are correct types
+- **Required argument checking**: Fails with clear error if required args missing
+- **Default values**: Clean handling of optional parameters
+- **Clear documentation**: Help text makes script usage obvious
+- **Standard conventions**: Follows common CLI patterns (`--flag`, `-f`)
+
+**Example usage:**
+```bash
+# Script provides helpful usage information
+Rscript my_script.R --help
+
+# Clear, self-documenting command lines
+Rscript my_script.R --input data.csv --output results.csv --ncores 8 --overwrite --verbose
+```
+
 ## Code Review Practices
 
 ### Review Modified Files

@@ -113,6 +113,66 @@ reporter_main_loop <- function(
 }
 
 
+#' Update Reporter Heartbeat
+#'
+#' Updates or inserts reporter status record with current heartbeat.
+#' Handles both initial registration and ongoing heartbeat updates.
+#'
+#' @param con Database connection
+#' @param hostname Reporter hostname
+#'
+#' @return TRUE if successful, FALSE otherwise
+#' @keywords internal
+update_reporter_heartbeat <- function(con, hostname) {
+  
+  tryCatch({
+    table_name <- get_table_name("reporter_status", con, char = TRUE)
+    current_pid <- Sys.getpid()
+    current_time <- Sys.time()
+    
+    # Get current package version
+    version <- utils::packageVersion("tasker")
+    
+    # Database-specific SQL for UPSERT operation
+    config <- getOption("tasker.config")
+    if (!is.null(config) && config$database$driver == "sqlite") {
+      sql <- sprintf("
+        INSERT OR REPLACE INTO %s 
+        (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
+        VALUES (?, ?, 
+                COALESCE((SELECT started_at FROM %s WHERE hostname = ? AND process_id = ?), ?),
+                ?, ?, FALSE)
+      ", table_name, table_name)
+      params <- list(hostname, current_pid, hostname, current_pid, current_time, current_time, as.character(version))
+    } else {
+      # PostgreSQL UPSERT
+      sql <- sprintf("
+        INSERT INTO %s (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
+        VALUES ($1, $2, $3, $4, $5, FALSE)
+        ON CONFLICT (hostname) 
+        DO UPDATE SET 
+          process_id = EXCLUDED.process_id,
+          started_at = CASE 
+            WHEN %s.process_id != EXCLUDED.process_id THEN EXCLUDED.started_at
+            ELSE %s.started_at
+          END,
+          last_heartbeat = EXCLUDED.last_heartbeat,
+          version = EXCLUDED.version,
+          shutdown_requested = FALSE
+      ", table_name, table_name, table_name)
+      params <- list(hostname, current_pid, current_time, current_time, as.character(version))
+    }
+    
+    DBI::dbExecute(con, sql, params = params)
+    return(TRUE)
+    
+  }, error = function(e) {
+    warning("Failed to update reporter heartbeat: ", e$message)
+    return(FALSE)
+  })
+}
+
+
 #' Check if reporter should shutdown
 #'
 #' Internal function to check shutdown flag in database.
@@ -126,30 +186,34 @@ should_shutdown <- function(con, hostname) {
   
   tryCatch({
     table_name <- get_table_name("reporter_status", con, char = TRUE)
+    current_pid <- Sys.getpid()
     
-    # Database-specific SQL
+    # Database-specific SQL - check for THIS process specifically
     config <- getOption("tasker.config")
     if (!is.null(config) && config$database$driver == "sqlite") {
       sql <- sprintf("
         SELECT shutdown_requested
         FROM %s
-        WHERE hostname = ?
+        WHERE hostname = ? AND process_id = ?
       ", table_name)
+      params <- list(hostname, current_pid)
     } else {
       sql <- sprintf("
         SELECT shutdown_requested
         FROM %s
-        WHERE hostname = $1
+        WHERE hostname = $1 AND process_id = $2
       ", table_name)
+      params <- list(hostname, current_pid)
     }
     
-    result <- DBI::dbGetQuery(con, sql, params = list(hostname))
+    result <- DBI::dbGetQuery(con, sql, params = params)
     
     if (nrow(result) > 0) {
       # SQLite uses INTEGER, PostgreSQL uses BOOLEAN
       return(result$shutdown_requested[1] == 1 || result$shutdown_requested[1] == TRUE)
     }
     
+    # If no record exists for this specific process, don't shutdown
     return(FALSE)
     
   }, error = function(e) {

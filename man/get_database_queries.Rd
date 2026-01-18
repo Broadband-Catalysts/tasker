@@ -4,10 +4,12 @@
 \alias{get_database_queries}
 \title{Get list of active database queries}
 \usage{
-get_database_queries(con, db_type = NULL)
+get_database_queries(con, status = "active", db_type = NULL)
 }
 \arguments{
 \item{con}{DBI database connection}
+
+\item{status}{Query state filter: "active" (default), "idle", "any", or other pg_stat_activity states}
 
 \item{db_type}{Database type: "postgresql", "mysql", or "sqlite" (default: from config)}
 }
@@ -24,6 +26,7 @@ SQLite returns empty data frame (does not support query monitoring).
 config <- tasker_config()
 con <- get_monitor_connection(config)
 queries <- get_database_queries(con)
+queries <- get_database_queries(con, status = "any")
 print(queries)
 }
 }

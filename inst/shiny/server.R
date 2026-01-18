@@ -128,12 +128,8 @@ calculate_task_progress <- function(task_data) {
     message(sprintf("DEBUG: Task with subtasks - status=%s, total=%d, completed=%s", 
                    task_status, total_subtasks, 
                    if(is.null(task_data$completed_subtasks)) "NULL" else as.character(task_data$completed_subtasks)))
-  } else {
-    message(sprintf("DEBUG: No subtasks detected - total_subtasks=%s, items_total=%s, items_complete=%s",
-                   if(is.null(total_subtasks)) "NULL" else as.character(total_subtasks),
-                   if(is.null(items_total)) "NULL" else as.character(items_total),
-                   if(is.null(items_complete)) "NULL" else as.character(items_complete)))
   }
+  # Note: Removed noisy debug message about no subtasks detected
   
   # Calculate effective progress - prioritize subtask completion when available
   # Count actual completed subtasks, not current_subtask number
@@ -750,6 +746,8 @@ server <- function(input, output, session) {
     initial_auto_expand_done = FALSE,
     # Track previous stage statuses to detect transitions
     stage_previous_statuses = list(),
+    # Track previous task statuses to detect transitions
+    task_previous_statuses = list(),
     # Database connection for SQL queries monitoring (reused)
     monitor_connection = NULL,
     # Trigger for forcing initial DOM renders
@@ -1210,6 +1208,11 @@ server <- function(input, output, session) {
                                      !(previous_status %in% c("RUNNING", "STARTED")) &&
                                      (current_status %in% c("RUNNING", "STARTED"))
         
+        # Auto-collapse if status CHANGED TO COMPLETED
+        status_changed_to_completed <- !is.null(previous_status) && 
+                                        (previous_status %in% c("RUNNING", "STARTED")) &&
+                                        (current_status == "COMPLETED")
+        
         # On initial load (previous_status is NULL), expand active stages
         initial_load_active <- is.null(previous_status) && 
                                (current_status %in% c("RUNNING", "STARTED"))
@@ -1229,6 +1232,25 @@ server <- function(input, output, session) {
                 button.classList.remove('collapsed');
                 button.setAttribute('aria-expanded', 'true');
                 collapse.classList.add('show');
+              }
+              ",
+              button_id, collapse_id
+            ))
+          })
+        } else if (status_changed_to_completed) {
+          # Collapse when completed
+          shinyjs::delay(100, {
+            collapse_id <- paste0("collapse_", stage_id)
+            button_id <- paste0("heading_", stage_id)
+            
+            shinyjs::runjs(sprintf(
+              "
+              var button = document.querySelector('#%s .accordion-button');
+              var collapse = document.getElementById('%s');
+              if (button && collapse && collapse.classList.contains('show')) {
+                button.classList.add('collapsed');
+                button.setAttribute('aria-expanded', 'false');
+                collapse.classList.remove('show');
               }
               ",
               button_id, collapse_id
@@ -2134,18 +2156,18 @@ server <- function(input, output, session) {
       status_items <- monitor_data %>%
         dplyr::mutate(
           color = dplyr::case_when(
-            !isTruthy(is_alive)          ~ "#d9534f", 
-            heartbeat_age_seconds <= 30  ~ "#5cb85c", 
-            heartbeat_age_seconds <= 120 ~ "#f0ad4e", 
-            heartbeat_age_seconds > 120  ~ "#d9534f", 
-            TRUE                         ~ "#777" 
+            heartbeat_age_seconds <= 30                      ~ "#5cb85c",  # Green: fresh heartbeat
+            heartbeat_age_seconds <= 120                     ~ "#f0ad4e",  # Yellow: aging
+            heartbeat_age_seconds > 120                      ~ "#d9534f",  # Red: stale
+            !isTruthy(is_alive) && !is.na(is_alive)          ~ "#d9534f",  # Red: confirmed dead
+            TRUE                                             ~ "#777"      # Gray: unknown
           ),
           icon = dplyr::case_when(
-            !isTruthy(is_alive)          ~ "⬤",
-            heartbeat_age_seconds <= 30  ~ "🟢",
-            heartbeat_age_seconds <= 120 ~ "🟡",
-            heartbeat_age_seconds > 120  ~ "🔴",
-            TRUE                         ~ "❓"
+            heartbeat_age_seconds <= 30                      ~ "🟢",
+            heartbeat_age_seconds <= 120                     ~ "🟡",
+            heartbeat_age_seconds > 120                      ~ "🔴",
+            !isTruthy(is_alive) && !is.na(is_alive)          ~ "⬤",
+            TRUE                                             ~ "❓"
           ),
           text = dplyr::case_when(
             !isTruthy(is_alive)          ~ "Dead",
@@ -2230,6 +2252,74 @@ server <- function(input, output, session) {
   # Dismiss info message
   observeEvent(input$dismiss_info, {
     rv$error_message <- NULL
+  })
+  
+  # ============================================================================
+  # AUTO-EXPAND: Automatically expand task process panes when status transitions
+  # ============================================================================
+  
+  observe({
+    struct <- pipeline_structure()
+    if (is.null(struct)) return()
+    
+    tasks <- struct$tasks
+    if (is.null(tasks) || nrow(tasks) == 0) return()
+    
+    # Trigger on any task_reactives change
+    task_reactives_list <- reactiveValuesToList(task_reactives)
+    
+    # Wait for task reactives to be populated
+    has_data <- any(sapply(task_reactives_list, function(x) !is.null(x)))
+    if (!has_data) return()
+    
+    # Check each task's status and compare with previous status
+    lapply(seq_len(nrow(tasks)), function(i) {
+      task <- tasks[i, ]
+      stage_name <- task$stage_name
+      task_name <- task$task_name
+      task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task_name, sep="_"))
+      task_key <- paste(stage_name, task_name, sep = "||")
+      
+      task_data <- task_reactives[[task_key]]
+      
+      if (!is.null(task_data)) {
+        current_status <- task_data$status
+        previous_status <- rv$task_previous_statuses[[task_key]]
+        
+        # Store current status for next comparison
+        rv$task_previous_statuses[[task_key]] <- current_status
+        
+        # Only auto-expand if status CHANGED TO RUNNING or STARTED
+        status_changed_to_active <- !is.null(previous_status) && 
+                                     !(previous_status %in% c("RUNNING", "STARTED")) &&
+                                     (current_status %in% c("RUNNING", "STARTED"))
+        
+        # Auto-collapse if status CHANGED TO COMPLETED
+        status_changed_to_completed <- !is.null(previous_status) && 
+                                        (previous_status %in% c("RUNNING", "STARTED")) &&
+                                        (current_status == "COMPLETED")
+        
+        # On initial load (previous_status is NULL), expand active tasks
+        initial_load_active <- is.null(previous_status) && 
+                               (current_status %in% c("RUNNING", "STARTED"))
+        
+        if (status_changed_to_active || initial_load_active) {
+          # Expand process pane
+          if (!(task_id %in% rv$expanded_process_panes)) {
+            rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
+            shinyjs::show(paste0("process_pane_", task_id))
+            shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
+          }
+        } else if (status_changed_to_completed) {
+          # Collapse process pane
+          if (task_id %in% rv$expanded_process_panes) {
+            rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
+            shinyjs::hide(paste0("process_pane_", task_id))
+            shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
+          }
+        }
+      }
+    })
   })
   
   # ============================================================================
