@@ -155,7 +155,7 @@ task_start <- function(stage = NULL, task = NULL, total_subtasks = NULL,
     
     # Auto-start process reporter if needed (silent - no messages unless error)
     tryCatch({
-      auto_start_process_reporter(hostname, conn)
+      auto_start_reporter(hostname, conn)
     }, error = function(e) {
       # Don't fail task start if reporter auto-start fails
       if (!quiet) {

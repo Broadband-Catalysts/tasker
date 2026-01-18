@@ -1,6 +1,6 @@
-#' Start Process Reporter Service
+#' Start Reporter Service
 #'
-#' Starts a background process reporter daemon to monitor running tasks.
+#' Starts a background reporter daemon to monitor running tasks.
 #' Uses callr::r_bg() to create a persistent background R process.
 #'
 #' @param collection_interval How often to collect metrics in seconds (default: 10)
@@ -16,16 +16,16 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Start process reporter
-#' reporter <- start_process_reporter()
+#' # Start reporter
+#' reporter <- start_reporter()
 #' 
 #' # Check if it's running
 #' reporter$process$is_alive()
 #' 
 #' # Stop reporter gracefully
-#' stop_process_reporter()
+#' stop_reporter()
 #' }
-start_process_reporter <- function(
+start_reporter <- function(
     collection_interval = 10,
     hostname = Sys.info()["nodename"],
     force = FALSE,
@@ -39,11 +39,11 @@ start_process_reporter <- function(
   }
   
   # Check if reporter is already running
-  existing_status <- get_process_reporter_status(hostname, con = conn)
+  existing_status <- get_reporter_database_status(hostname, con = conn)
   
   if (!is.null(existing_status) && !force) {
     # Check if the process is actually alive
-    if (is_reporter_alive(existing_status$process_id, hostname)) {
+    if (get_reporter_status(existing_status$process_id, hostname)$is_alive) {
       if (!quiet) {
         message("[Process Reporter] Reporter already running (PID: ", existing_status$process_id, ")")
       }
@@ -62,7 +62,7 @@ start_process_reporter <- function(
     if (!quiet) {
       message("[Process Reporter] Force restart requested, stopping existing reporter")
     }
-    stop_process_reporter(hostname, timeout = 10, con = conn)
+    stop_reporter(hostname, timeout = 10, con = conn)
     Sys.sleep(2)  # Brief pause for clean shutdown
   }
   
@@ -72,6 +72,23 @@ start_process_reporter <- function(
   if (is.null(current_config)) {
     stop("tasker configuration not loaded. Call tasker_config() first.", call. = FALSE)
   }
+  
+  # Determine log file path from config
+  log_path <- if (!is.null(current_config$logging$log_path)) {
+    current_config$logging$log_path
+  } else {
+    "/tmp"
+  }
+  
+  # Ensure log directory exists
+  if (!dir.exists(log_path)) {
+    dir.create(log_path, recursive = TRUE)
+  }
+  
+  # Create log file name with hostname and timestamp
+  log_file <- file.path(log_path, sprintf("process_reporter_%s_%s.log", 
+                                          hostname, 
+                                          format(Sys.time(), "%Y%m%d_%H%M%S")))
   
   # Prepare arguments for background process
   args <- list(
@@ -83,12 +100,20 @@ start_process_reporter <- function(
   # Start background R process using callr::r_bg()
   tryCatch({
     bg_process <- callr::r_bg(
-      func = function(collection_interval_seconds, hostname, config) {
+      func = function(collection_interval_seconds, hostname, config, working_dir) {
+        # Set working directory first to ensure config can be found
+        setwd(working_dir)
+        
         # Load the package in background process
         library(tasker)
         
-        # Set the tasker configuration in background process
-        options(tasker.config = config)
+        # Load configuration explicitly (since auto-load was removed)
+        tasker_config()
+        
+        # Verify configuration loaded
+        if (is.null(getOption("tasker.config"))) {
+          stop("Failed to load tasker configuration in background process")
+        }
         
         # Register this reporter process
         con <- tasker::get_db_connection()
@@ -97,15 +122,20 @@ start_process_reporter <- function(
         DBI::dbDisconnect(con)
         
         # Run main loop (this will handle its own database connection)
-        tasker:::process_reporter_main_loop(
+        tasker:::reporter_main_loop(
           collection_interval_seconds = collection_interval_seconds,
           hostname = hostname
         )
       },
-      args = args,
+      args = list(
+        collection_interval_seconds = collection_interval,
+        hostname = hostname,
+        config = current_config,
+        working_dir = getwd()
+      ),
       package = TRUE,  # Ensure package environment is available
-      stdout = tempfile("process_reporter_", fileext = ".log"),
-      stderr = tempfile("process_reporter_err_", fileext = ".log"),
+      stdout = log_file,
+      stderr = log_file,  # Same file for both stdout and stderr
       supervise = supervise
     )
     
@@ -121,10 +151,10 @@ start_process_reporter <- function(
         message("[Process Reporter] Collection interval: ", collection_interval, " seconds")
         if (!supervise) {
           message("[Process Reporter] Reporter will persist after parent process exits")
-          message("[Process Reporter] To stop: tasker::stop_process_reporter() or kill PID ", bg_pid)
+          message("[Process Reporter] To stop: tasker::stop_reporter() or kill PID ", bg_pid)
         }
-        message("[Process Reporter] Stdout log: ", bg_process$get_output_file())
-        message("[Process Reporter] Stderr log: ", bg_process$get_error_file())
+        message("[Process Reporter] Stdout log: ", log_file)
+        message("[Process Reporter] Stderr log: ", log_file)  # Same file for both
       }
       
       return(list(
@@ -132,8 +162,8 @@ start_process_reporter <- function(
         process_id = bg_pid,
         started_at = Sys.time(),
         process = bg_process,
-        stdout_log = bg_process$get_output_file(),
-        stderr_log = bg_process$get_error_file()
+        stdout_log = log_file,
+        stderr_log = log_file
       ))
       
     } else {
@@ -148,32 +178,131 @@ start_process_reporter <- function(
 
 #' Check if Process Reporter is alive
 #'
-#' Internal function to verify if a reporter process is actually running.
-#' Uses ps package to check process existence.
+#' Comprehensive function to determine if a reporter process is actually running.
+#' Uses ps package to check process existence if on the same machine,
+#' otherwise falls back to checking heartbeat age from database.
+#' Also validates hostname matching and heartbeat freshness.
 #'
 #' @param process_id Process ID to check
-#' @param hostname Hostname (for logging)
+#' @param hostname Hostname of the process
+#' @param max_heartbeat_age_seconds Maximum age for heartbeat to consider process alive (default: 60)
+#' @param con Database connection for heartbeat checking (optional)
 #'
-#' @return TRUE if process exists and is not zombie, FALSE otherwise
+#' @return List with is_alive (logical), status (character), heartbeat_age_seconds (integer)
 #' @keywords internal
-is_reporter_alive <- function(process_id, hostname) {
+get_reporter_status <- function(process_id, hostname, max_heartbeat_age_seconds = 60, con = NULL) {
   
+  # Get current machine hostname for comparison
+  current_hostname <- Sys.info()["nodename"]
+  is_same_machine <- (hostname == current_hostname)
+  
+  # Initialize return values
+  is_alive <- FALSE
+  status <- "UNKNOWN"
+  heartbeat_age_seconds <- NA
+  
+  # Get database connection and heartbeat info first
+  close_con <- FALSE
+  if (is.null(con)) {
+    con <- tryCatch(get_db_connection(), error = function(e) NULL)
+    if (is.null(con)) {
+      return(list(
+        is_alive = FALSE,
+        status = "DB_ERROR", 
+        heartbeat_age_seconds = NA,
+        same_machine = is_same_machine
+      ))
+    }
+    close_con <- TRUE
+  }
+  
+  on.exit({
+    if (close_con && !is.null(con)) {
+      tryCatch(DBI::dbDisconnect(con), error = function(e) NULL)
+    }
+  })
+  
+  # Get heartbeat info from database
   tryCatch({
-    # Check if process exists
-    p <- ps::ps_handle(process_id)
+    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
     
-    # Check if it's not a zombie
-    status <- ps::ps_status(p)
-    if (status %in% c("zombie", "defunct")) {
-      return(FALSE)
+    # Database-specific SQL for heartbeat age
+    config <- getOption("tasker.config")
+    if (!is.null(config) && config$database$driver == "sqlite") {
+      sql <- sprintf("
+        SELECT 
+          CAST((julianday('now') - julianday(last_heartbeat)) * 86400 AS INTEGER) as heartbeat_age_seconds,
+          shutdown_requested
+        FROM %s
+        WHERE hostname = ? AND process_id = ?
+      ", table_name)
+    } else {
+      sql <- sprintf("
+        SELECT 
+          EXTRACT(EPOCH FROM (NOW() - last_heartbeat))::INTEGER as heartbeat_age_seconds,
+          shutdown_requested
+        FROM %s
+        WHERE hostname = $1 AND process_id = $2
+      ", table_name)
     }
     
-    return(TRUE)
+    result <- DBI::dbGetQuery(con, sql, params = list(hostname, process_id))
     
+    if (nrow(result) > 0 && !is.na(result$heartbeat_age_seconds[1])) {
+      heartbeat_age_seconds <- result$heartbeat_age_seconds[1]
+      shutdown_requested <- result$shutdown_requested[1]
+      
+      # If shutdown was requested, mark as shutting down
+      if (shutdown_requested) {
+        status <- "SHUTTING_DOWN"
+        is_alive <- FALSE
+      } else if (heartbeat_age_seconds > max_heartbeat_age_seconds) {
+        status <- "STALE"
+        is_alive <- FALSE
+      } else {
+        # Heartbeat is recent, now check process existence if on same machine
+        if (is_same_machine) {
+          tryCatch({
+            # Use ps package for accurate process checking
+            p <- ps::ps_handle(process_id)
+            
+            # Check if it's not a zombie
+            ps_status <- ps::ps_status(p)
+            if (ps_status %in% c("zombie", "defunct")) {
+              status <- "ZOMBIE"
+              is_alive <- FALSE
+            } else {
+              status <- "RUNNING"
+              is_alive <- TRUE
+            }
+          }, error = function(e) {
+            # Process doesn't exist or can't be accessed
+            status <- "DEAD"
+            is_alive <- FALSE
+          })
+        } else {
+          # Different machine - trust the heartbeat
+          status <- "RUNNING"
+          is_alive <- TRUE
+        }
+      }
+    } else {
+      # No database record found
+      status <- "NOT_REGISTERED"
+      is_alive <- FALSE
+    }
   }, error = function(e) {
-    # Process doesn't exist or can't be accessed
-    return(FALSE)
+    # Database error
+    status <- "DB_ERROR"
+    is_alive <- FALSE
   })
+  
+  return(list(
+    is_alive = is_alive,
+    status = status,
+    heartbeat_age_seconds = heartbeat_age_seconds,
+    same_machine = is_same_machine
+  ))
 }
 
 
@@ -225,9 +354,9 @@ should_auto_start <- function(con = NULL) {
 }
 
 
-#' Auto-start Process Reporter if needed
+#' Auto-start Reporter if needed
 #'
-#' Internal function called by task_start() to ensure a process reporter
+#' Internal function called by task_start() to ensure a reporter
 #' is running when tasks are started.
 #'
 #' @param hostname Hostname to check/start reporter on
@@ -235,7 +364,7 @@ should_auto_start <- function(con = NULL) {
 #'
 #' @return TRUE if reporter is running (or started), FALSE if unable to start
 #' @keywords internal
-auto_start_process_reporter <- function(hostname = Sys.info()["nodename"], con = NULL) {
+auto_start_reporter <- function(hostname = Sys.info()["nodename"], con = NULL) {
 
   if (isTRUE(getOption("tasker.process_reporter.auto_start", TRUE)) == FALSE) {
     return(FALSE)
@@ -250,18 +379,18 @@ auto_start_process_reporter <- function(hostname = Sys.info()["nodename"], con =
   }
   
   # Check if reporter is already running
-  existing_status <- get_process_reporter_status(hostname, con = con)
+  existing_status <- get_reporter_database_status(hostname, con = con)
   
   if (!is.null(existing_status)) {
     # Verify it's actually alive
-    if (is_reporter_alive(existing_status$process_id, hostname)) {
+    if (get_reporter_status(existing_status$process_id, hostname)$is_alive) {
       return(TRUE)  # Already running
     }
   }
   
   # Try to start reporter
   tryCatch({
-    result <- start_process_reporter(
+    result <- start_reporter(
       hostname = hostname,
       force = FALSE,
       quiet = TRUE,  # Don't spam messages during auto-start

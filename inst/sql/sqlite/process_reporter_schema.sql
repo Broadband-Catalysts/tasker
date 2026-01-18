@@ -81,8 +81,8 @@ CREATE TABLE IF NOT EXISTS process_reporter_status (
     shutdown_requested INTEGER DEFAULT 0   -- SQLite uses INTEGER for boolean
 );
 
-CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON process_reporter_status(hostname);
-CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON process_reporter_status(last_heartbeat DESC);
+CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON reporter_status(hostname);
+CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON reporter_status(last_heartbeat DESC);
 
 -- ============================================================================
 -- Table: process_metrics_retention

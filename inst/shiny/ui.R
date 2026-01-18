@@ -52,6 +52,11 @@ ui <- page_fluid(
       actionButton("refresh_structure", "Refresh Structure", class = "btn-secondary btn-sm",
                    title = "Reload pipeline stages and registered tasks"),
       hr(),
+      div(style = "margin-bottom: 10px;",
+        h6("Process Monitor Status:"),
+        htmlOutput("monitor_status", style = "font-size: 12px;")
+      ),
+      hr(),
       actionButton("start_debugger", "DEBUG", class = "btn-warning btn-sm", 
                    title = "Start R debugger (browser()) for troubleshooting"),
       hr(),

@@ -236,7 +236,7 @@ CREATE INDEX IF NOT EXISTS idx_process_metrics_run_timestamp ON process_metrics(
 CREATE INDEX IF NOT EXISTS idx_process_metrics_errors ON process_metrics(run_id, timestamp) WHERE collection_error = 1;
 CREATE INDEX IF NOT EXISTS idx_process_metrics_cleanup ON process_metrics(timestamp) WHERE is_alive = 0;
 
-CREATE TABLE IF NOT EXISTS process_reporter_status (
+CREATE TABLE IF NOT EXISTS reporter_status (
     reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
     hostname TEXT NOT NULL UNIQUE,
     process_id INTEGER NOT NULL,
@@ -247,8 +247,8 @@ CREATE TABLE IF NOT EXISTS process_reporter_status (
     shutdown_requested INTEGER DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON process_reporter_status(hostname);
-CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON process_reporter_status(last_heartbeat DESC);
+CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON reporter_status(hostname);
+CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON reporter_status(last_heartbeat DESC);
 
 CREATE TABLE IF NOT EXISTS process_metrics_retention (
     retention_id INTEGER PRIMARY KEY AUTOINCREMENT,

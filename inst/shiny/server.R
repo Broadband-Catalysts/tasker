@@ -123,11 +123,16 @@ calculate_task_progress <- function(task_data) {
   items_total <- if (!is.na(task_data$items_total)) task_data$items_total else 0
   items_complete <- if (!is.na(task_data$items_complete)) task_data$items_complete else 0
   
-  # Debug logging to understand why subtask format isn't showing
+  # Debug logging to understand subtask detection
   if (total_subtasks > 0) {
     message(sprintf("DEBUG: Task with subtasks - status=%s, total=%d, completed=%s", 
                    task_status, total_subtasks, 
                    if(is.null(task_data$completed_subtasks)) "NULL" else as.character(task_data$completed_subtasks)))
+  } else {
+    message(sprintf("DEBUG: No subtasks detected - total_subtasks=%s, items_total=%s, items_complete=%s",
+                   if(is.null(total_subtasks)) "NULL" else as.character(total_subtasks),
+                   if(is.null(items_total)) "NULL" else as.character(items_total),
+                   if(is.null(items_complete)) "NULL" else as.character(items_complete)))
   }
   
   # Calculate effective progress - prioritize subtask completion when available
@@ -156,10 +161,8 @@ calculate_task_progress <- function(task_data) {
     effective_progress <- round(100 * completed_count / total_subtasks, 1)
     use_subtasks <- TRUE
   } else {
-    # Log when falling back to items progress
-    if (items_total > 0) {
-      message(sprintf("Using items progress: %d/%d (no subtasks available)", items_complete, items_total))
-    }
+    # Use items progress (task-level or subtask items)
+    # Note: Subtask display and items progress are independent features
     
     if (items_total > 1 && items_complete > 0) {
       effective_progress <- round(100 * items_complete / items_total, 1)
@@ -174,7 +177,7 @@ calculate_task_progress <- function(task_data) {
   # Build enhanced progress bar labels with subtask information
   if (task_status == "COMPLETED") {
     if (total_subtasks > 0 && use_subtasks) {
-      label <- sprintf("Task: %d/%d (100%%)", total_subtasks, total_subtasks)
+      label <- sprintf("Task: %d/%d (100%%)", as.integer(total_subtasks), as.integer(total_subtasks))
     } else {
       label <- "Task: 100%"
     }
@@ -187,12 +190,12 @@ calculate_task_progress <- function(task_data) {
       }
       if (!is.null(task_data$current_subtask_name) && task_data$current_subtask_name != "") {
         label <- sprintf("Task: %d/%d (%.1f%%) - Subtask %d.%d | %s", 
-               completed_count, total_subtasks, effective_progress,
-               current_subtask, 
-               if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1,
+               as.integer(completed_count), as.integer(total_subtasks), effective_progress,
+               as.integer(current_subtask), 
+               as.integer(if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1),
                task_data$current_subtask_name)
       } else {
-        label <- sprintf("Task: %d/%d (%.1f%%)", completed_count, total_subtasks, effective_progress)
+        label <- sprintf("Task: %d/%d (%.1f%%)", as.integer(completed_count), as.integer(total_subtasks), effective_progress)
       }
     } else {
       label <- sprintf("Task: %.1f%%", effective_progress)
@@ -206,12 +209,12 @@ calculate_task_progress <- function(task_data) {
       }
       if (!is.null(task_data$current_subtask_name) && task_data$current_subtask_name != "") {
         label <- sprintf("Task: %d/%d (%.1f%%) - Subtask %d.%d | %s", 
-               completed_count, total_subtasks, effective_progress,
-               current_subtask,
-               if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1,
+               as.integer(completed_count), as.integer(total_subtasks), effective_progress,
+               as.integer(current_subtask),
+               as.integer(if (!is.na(task_data$current_subtask_number)) task_data$current_subtask_number else 1),
                task_data$current_subtask_name)
       } else {
-        label <- sprintf("Task: %d/%d (%.1f%%)", completed_count, total_subtasks, effective_progress)
+        label <- sprintf("Task: %d/%d (%.1f%%)", as.integer(completed_count), as.integer(total_subtasks), effective_progress)
       }
     } else {
       label <- sprintf("Task: %.1f%%", effective_progress)
@@ -323,7 +326,7 @@ task_progress_html <- function(task_data) {
 }
 
 # Generate process status pane HTML
-build_process_status_html <- function(task_data, stage_name, task_name, progress_history_env = NULL, output = NULL, task_reactives = NULL, session = NULL) {
+build_process_status_html <- function(task_data, stage_name, task_name, progress_history_env = NULL, output = NULL, task_reactives = NULL, session = NULL, input = NULL) {
   if (is.null(task_data)) {
     return(HTML("<div class='process-info-header'>No task data available</div>"))
   }
@@ -413,9 +416,36 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   )
   html_parts <- c(html_parts, process_details)
   
-  # Resource usage from process metrics if available
-  if (!is.null(task_data$cpu_percent) && !is.na(task_data$cpu_percent)) {
-    # Main process metrics
+  # Check if process is actually dead and update status if needed
+  process_is_dead <- FALSE
+  if (!is.null(task_data$is_alive) && !is.na(task_data$is_alive) && 
+      status %in% c("RUNNING", "STARTED") && !isTRUE(task_data$is_alive)) {
+    process_is_dead <- TRUE
+    
+    # Update task status to FAILED in database
+    tryCatch({
+      tasker::task_update(
+        status = "FAILED",
+        error_message = sprintf("Process (PID: %s) terminated unexpectedly", 
+                               task_data$process_id),
+        run_id = task_data$run_id,
+        quiet = TRUE
+      )
+      
+      # Update local status for immediate UI feedback
+      status <- "FAILED"
+      
+    }, error = function(e) {
+      message("Failed to update dead process status: ", e$message)
+    })
+  }
+  
+  # Resource usage and process state information
+  has_current_metrics <- !is.null(task_data$cpu_percent) && !is.na(task_data$cpu_percent)
+  has_any_metrics <- has_current_metrics || (!is.null(task_data$metrics_age_seconds) && !is.na(task_data$metrics_age_seconds))
+  
+  if (has_current_metrics) {
+    # Current process metrics available
     cpu_display <- sprintf("%.1f%%", task_data$cpu_percent)
     memory_display <- if (!is.null(task_data$memory_mb) && !is.na(task_data$memory_mb)) {
       sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
@@ -431,7 +461,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
           sprintf(" (%.1f%% CPU)", task_data$child_total_cpu_percent) else ""
         child_mem <- if (!is.null(task_data$child_total_memory_mb) && !is.na(task_data$child_total_memory_mb)) 
           sprintf(" (%.1f MB RAM)", task_data$child_total_memory_mb) else ""
-        sprintf("%d children%s%s", task_data$child_count, child_cpu, child_mem)
+        sprintf("%d children%s%s", as.integer(task_data$child_count), child_cpu, child_mem)
       } else {
         "No children"
       }
@@ -439,11 +469,15 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       "N/A"
     }
     
-    # Metrics age
+    # Metrics age for current metrics
     metrics_age_display <- if (!is.null(task_data$metrics_age_seconds) && !is.na(task_data$metrics_age_seconds)) {
-      sprintf("%ds ago", as.integer(task_data$metrics_age_seconds))
+      if (task_data$metrics_age_seconds <= 10) {
+        "Live"
+      } else {
+        sprintf("%ds ago", as.integer(task_data$metrics_age_seconds))
+      }
     } else {
-      "Never"
+      "Just collected"
     }
     
     resource_html <- sprintf(
@@ -451,7 +485,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
         <span class='detail-item'><strong>CPU:</strong> %s</span>
         <span class='detail-item'><strong>Memory:</strong> %s</span>
         <span class='detail-item'><strong>Children:</strong> %s</span>
-        <span class='detail-item'><strong>Updated:</strong> %s</span>
+        <span class='detail-item'><strong>Metrics:</strong> %s</span>
       </div>",
       htmltools::htmlEscape(cpu_display),
       htmltools::htmlEscape(memory_display),
@@ -459,13 +493,81 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       htmltools::htmlEscape(metrics_age_display)
     )
     html_parts <- c(html_parts, resource_html)
-  } else if (status %in% c("RUNNING", "STARTED")) {
-    # Task is running but no metrics - show warning
-    html_parts <- c(html_parts, sprintf(
+    
+  } else if (has_any_metrics && !is.null(task_data$metrics_age_seconds)) {
+    # Historic metrics available but no current data
+    metrics_age <- as.integer(task_data$metrics_age_seconds)
+    
+    # Determine process state based on status and metrics age
+    if (status == "FAILED") {
+      process_state <- "Process terminated"
+    } else if (status %in% c("COMPLETED", "SKIPPED")) {
+      process_state <- "Process completed normally"
+    } else if (status %in% c("RUNNING", "STARTED")) {
+      if (process_is_dead) {
+        process_state <- "<span style='color: #d9534f;'>Process dead (status updated to FAILED)</span>"
+      } else if (metrics_age > 120) {
+        process_state <- "<span style='color: #f0ad4e;'>Process status uncertain (metrics very stale)</span>"
+      } else {
+        process_state <- "<span style='color: #5bc0de;'>Process running (metrics collection paused)</span>"
+      }
+    } else {
+      process_state <- sprintf("Process status: %s", status)
+    }
+    
+    # Show last known metrics as historic data
+    historic_note <- if (metrics_age < 60) {
+      sprintf("Last collected %.0fs ago", metrics_age)
+    } else if (metrics_age < 3600) {
+      sprintf("Last collected %.0fm ago", metrics_age / 60)
+    } else {
+      sprintf("Last collected %.0fh ago", metrics_age / 3600)
+    }
+    
+    resource_html <- sprintf(
       "<div class='process-details compact'>
-        <span class='detail-item'><strong>Process Metrics:</strong> <span style='color: #ff6b6b; font-size: 12px;'>Not available</span></span>
-      </div>"
-    ))
+        <span class='detail-item'><strong>Process State:</strong> %s</span>
+        <span class='detail-item'><strong>Historic Metrics:</strong> %s</span>
+      </div>",
+      process_state,
+      htmltools::htmlEscape(historic_note)
+    )
+    html_parts <- c(html_parts, resource_html)
+    
+  } else if (status %in% c("RUNNING", "STARTED")) {
+    # Task marked as running but no metrics data at all
+    process_state <- if (process_is_dead) {
+      "<span style='color: #d9534f;'>Process dead (status updated to FAILED)</span>"
+    } else {
+      "<span style='color: #f0ad4e;'>Process monitoring not available</span>"
+    }
+    
+    resource_html <- sprintf(
+      "<div class='process-details compact'>
+        <span class='detail-item'><strong>Process State:</strong> %s</span>
+        <span class='detail-item'><strong>Metrics:</strong> <span style='color: #777;'>No data collected</span></span>
+      </div>",
+      process_state
+    )
+    html_parts <- c(html_parts, resource_html)
+    
+  } else {
+    # Task in terminal state (COMPLETED, FAILED, etc.) - show final state
+    process_state <- switch(status,
+      "COMPLETED" = "Process completed successfully",
+      "FAILED" = "Process failed",
+      "SKIPPED" = "Process skipped",
+      "CANCELLED" = "Process cancelled",
+      sprintf("Process status: %s", status)
+    )
+    
+    resource_html <- sprintf(
+      "<div class='process-details compact'>
+        <span class='detail-item'><strong>Final State:</strong> %s</span>
+      </div>",
+      htmltools::htmlEscape(process_state)
+    )
+    html_parts <- c(html_parts, resource_html)
   }
   
   # Get subtask progress
@@ -585,8 +687,9 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
           # Create reactive output if it doesn't exist
           if (!local_output_id %in% names(output)) {
             output[[local_output_id]] <- renderText({
-              # Force re-execution every 5 seconds to pick up new progress snapshots
-              invalidateLater(5000, session)
+              # Force re-execution using global refresh interval to pick up new progress snapshots
+              refresh_seconds <- if (!is.null(input) && !is.null(input$refresh_interval)) input$refresh_interval else 5
+              invalidateLater(refresh_seconds * 1000, session)
               
               # Also depend on task_reactives for immediate updates when task changes
               task_key <- paste0(local_stage_name, "__", local_task_name)
@@ -597,7 +700,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
               items_total_safe <- if (!is.null(local_items_total) && !is.na(local_items_total)) as.numeric(local_items_total) else 0
               
               if (status_safe %in% c("RUNNING", "STARTED") && items_total_safe > 0 && !is.null(local_run_id) && !is.na(local_run_id)) {
-                # Read from environment - this will update every 5 seconds due to invalidateLater
+                # Read from environment - this will update at the global refresh interval due to invalidateLater
                 estimate <- tasker::get_completion_estimate(progress_history_env, local_run_id, local_subtask_number, quiet = TRUE)
                 completion_text <- tasker::format_completion_with_ci(estimate, quiet = TRUE)
                 if (is.null(completion_text) || completion_text == "") {
@@ -965,12 +1068,14 @@ server <- function(input, output, session) {
       items_complete <- 0
       subtask_info <- NULL
       completed_subtasks <- 0
+      total_subtasks <- 0
       if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
         subtask_info <- tryCatch({
           subs <- tasker::get_subtask_progress(task_status$run_id)
-          # Count completed subtasks
+          # Count completed subtasks and total subtasks
           if (!is.null(subs) && nrow(subs) > 0) {
             completed_subtasks <- sum(subs$status == "COMPLETED", na.rm = TRUE)
+            total_subtasks <- nrow(subs)
           }
           if (!is.null(subs) && nrow(subs) > 0) {
             # Get most recently updated active subtask (RUNNING or STARTED)
@@ -1051,6 +1156,7 @@ server <- function(input, output, session) {
           items_total = items_total,
           items_complete = items_complete,
           completed_subtasks = completed_subtasks,
+          total_subtasks = total_subtasks,
           current_subtask_name = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_name)) subtask_info$subtask_name else "",
           current_subtask_number = if (!is.null(subtask_info) && !is.na(subtask_info$subtask_number)) subtask_info$subtask_number else 0
         ) %>%
@@ -1576,7 +1682,7 @@ server <- function(input, output, session) {
         output[[paste0("stage_count_", stage_id_local)]] <- renderText({
           stage_data <- stage_reactives[[stage_name_local]]
           if (!is.null(stage_data)) {
-            sprintf("%d/%d", stage_data$completed, stage_data$total)
+            sprintf("%d/%d", as.integer(stage_data$completed), as.integer(stage_data$total))
           } else {
             ""
           }
@@ -1655,11 +1761,11 @@ server <- function(input, output, session) {
             if (nchar(current_subtask_name) > 0 && nchar(overall_progress_message) > 0) {
               # Combine subtask name with overall progress message
               sprintf("Subtask %d.%d: %s | %s", 
-                     current_subtask, current_subtask_number,
+                     as.integer(current_subtask), as.integer(current_subtask_number),
                      current_subtask_name, overall_progress_message)
             } else if (nchar(current_subtask_name) > 0) {
               # Show only subtask name if no overall message
-              sprintf("Subtask %d.%d: %s", current_subtask, current_subtask_number, current_subtask_name)
+              sprintf("Subtask %d.%d: %s", as.integer(current_subtask), as.integer(current_subtask_number), current_subtask_name)
             } else {
               # Fall back to overall progress message
               overall_progress_message
@@ -1704,7 +1810,7 @@ server <- function(input, output, session) {
           }
           
           task_data <- task_reactives[[task_key_local]]
-          build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session)
+          build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session, input)
         })
         
         # Log pane content - observer to initialize controls once when expanded
@@ -1745,7 +1851,7 @@ server <- function(input, output, session) {
           
           # Auto-refresh support
           if (settings$auto_refresh && task_id_local %in% rv$expanded_log_panes) {
-            invalidateLater(2000)  # Refresh every 2 seconds
+            invalidateLater(input$refresh_interval * 1000)
           }
           
           task_data <- task_reactives[[task_key_local]]
@@ -1963,7 +2069,7 @@ server <- function(input, output, session) {
               </div>",
               htmltools::htmlEscape(basename(log_file)),
               length(all_lines),
-              displayed_lines,
+              as.integer(displayed_lines),
               format(Sys.time(), "%H:%M:%S")
             )
             
@@ -1999,6 +2105,82 @@ server <- function(input, output, session) {
       paste("Last update:", format(eastern_time, "%H:%M:%S %Z"))
     } else {
       "No data loaded"
+    }
+  })
+  
+  # Process monitor status
+  monitor_status_reactive <- reactive({
+    # Update at the same global refresh interval as other components
+    if (input$auto_refresh) {
+      invalidateLater(input$refresh_interval * 1000)
+    }
+    
+    tryCatch({
+      tasker::check_process_reporter(quiet = TRUE)
+    }, error = function(e) {
+      NULL
+    })
+  })
+  
+  output$monitor_status <- renderUI({
+    monitor_data <- monitor_status_reactive()
+    
+    if (is.null(monitor_data) || nrow(monitor_data) == 0) {
+      # No monitors running
+      HTML('<div style="color: #d9534f; font-weight: bold;">⬤ No monitors running</div>
+           <div style="color: #777; font-size: 11px;">Process metrics unavailable</div>')
+    } else {
+      # Build status for each monitor using dplyr pipeline
+      status_items <- monitor_data %>%
+        dplyr::mutate(
+          color = dplyr::case_when(
+            !isTruthy(is_alive)          ~ "#d9534f", 
+            heartbeat_age_seconds <= 30  ~ "#5cb85c", 
+            heartbeat_age_seconds <= 120 ~ "#f0ad4e", 
+            heartbeat_age_seconds > 120  ~ "#d9534f", 
+            TRUE                         ~ "#777" 
+          ),
+          icon = dplyr::case_when(
+            !isTruthy(is_alive)          ~ "⬤",
+            heartbeat_age_seconds <= 30  ~ "🟢",
+            heartbeat_age_seconds <= 120 ~ "🟡",
+            heartbeat_age_seconds > 120  ~ "🔴",
+            TRUE                         ~ "❓"
+          ),
+          text = dplyr::case_when(
+            !isTruthy(is_alive)          ~ "Dead",
+            heartbeat_age_seconds <= 30  ~ "Active",
+            heartbeat_age_seconds <= 120 ~ "Stale",
+            heartbeat_age_seconds > 120  ~ "Very stale",
+            TRUE                         ~ "Unknown"
+          ),
+          hostname_short = stringr::str_replace(hostname, "\\..*$", ""  ),
+          process_id_str = ifelse(isTruthy(process_id), as.character(process_id), "?"),
+          status_html = paste0(
+            "<div style=\"color: ", color, "; margin-bottom: 2px;\">",
+                icon, " <strong>", hostname_short, "</strong> (PID: ", process_id_str, ") - ", text,
+            "</div>"
+          )
+        ) %>%
+        dplyr::pull(status_html)
+      
+      # Calculate active monitors using dplyr pipeline
+      total_monitors <- nrow(monitor_data)
+      active_monitors <- monitor_data %>%
+        dplyr::filter(
+          isTruthy(is_alive),
+          !is.null(heartbeat_age_seconds),
+          !is.na(heartbeat_age_seconds),
+          as.numeric(heartbeat_age_seconds) <= 30
+        ) %>%
+        nrow()
+      
+      summary_line <- sprintf('<div style="color: #777; font-size: 11px; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px;">
+                                %d/%d monitors active
+                              </div>',
+                              as.integer(active_monitors), as.integer(total_monitors))
+      
+      HTML(paste(c(status_items, summary_line), collapse = ""))
     }
   })
   

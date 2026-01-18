@@ -379,7 +379,7 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
           if (!quiet) warning("Dropping existing SQLite tables and recreating!")
           tables <- c(
             "process_metrics_retention",
-            "process_reporter_status",
+            "reporter_status",
             "process_metrics",
             "subtask_progress",
             "task_runs",

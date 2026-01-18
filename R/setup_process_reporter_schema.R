@@ -1,6 +1,6 @@
-#' Setup Process Reporter Database Schema
+#' Setup Reporter Database Schema
 #'
-#' Creates database tables, indexes, and views for the Process Reporter system.
+#' Creates database tables, indexes, and views for the Reporter system.
 #' This function sets up all required database objects to support process metrics
 #' collection and retention management.
 #'
@@ -13,13 +13,13 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Setup process reporter schema
-#' setup_process_reporter_schema()
+#' # Setup reporter schema
+#' setup_reporter_schema()
 #' 
 #' # Force recreation of existing tables
-#' setup_process_reporter_schema(force = TRUE)
+#' setup_reporter_schema(force = TRUE)
 #' }
-setup_process_reporter_schema <- function(conn = NULL, force = FALSE, quiet = FALSE) {
+setup_reporter_schema <- function(conn = NULL, force = FALSE, quiet = FALSE) {
   
   if (is.null(conn)) {
     conn <- get_tasker_db_connection()
@@ -103,13 +103,13 @@ setup_process_reporter_schema <- function(conn = NULL, force = FALSE, quiet = FA
 #' @return TRUE if all required tables exist
 #' @keywords internal
 check_process_reporter_tables_exist <- function(conn, driver) {
-  required_tables <- c("process_metrics", "process_reporter_status", "process_metrics_retention")
+  required_tables <- c("process_metrics", "reporter_status", "process_metrics_retention")
   
   if (driver == "sqlite") {
     # SQLite: check sqlite_master table
     existing_tables <- DBI::dbGetQuery(conn, "
       SELECT name FROM sqlite_master 
-      WHERE type = 'table' AND name IN ('process_metrics', 'process_reporter_status', 'process_metrics_retention')
+      WHERE type = 'table' AND name IN ('process_metrics', 'reporter_status', 'process_metrics_retention')
     ")$name
   } else {
     # PostgreSQL: check information_schema or use dbListTables
@@ -117,7 +117,7 @@ check_process_reporter_tables_exist <- function(conn, driver) {
     existing_tables <- DBI::dbGetQuery(conn, "
       SELECT table_name 
       FROM information_schema.tables 
-      WHERE table_schema = $1 AND table_name IN ('process_metrics', 'process_reporter_status', 'process_metrics_retention')
+      WHERE table_schema = $1 AND table_name IN ('process_metrics', 'reporter_status', 'process_metrics_retention')
     ", params = list(schema_name))$table_name
   }
   
@@ -131,10 +131,10 @@ check_process_reporter_tables_exist <- function(conn, driver) {
 #' @keywords internal
 drop_process_reporter_tables <- function(conn, driver) {
   if (driver == "sqlite") {
-    tables_to_drop <- c("process_metrics_retention", "process_metrics", "process_reporter_status")
+    tables_to_drop <- c("process_metrics_retention", "process_metrics", "reporter_status")
   } else {
     schema_name <- get_tasker_config()$schema %||% "tasker"
-    tables_to_drop <- paste0(schema_name, ".", c("process_metrics_retention", "process_metrics", "process_reporter_status"))
+    tables_to_drop <- paste0(schema_name, ".", c("process_metrics_retention", "process_metrics", "reporter_status"))
   }
   
   for (table in tables_to_drop) {

@@ -1,6 +1,6 @@
-#' Get process reporter status
+#' Get reporter database status
 #'
-#' Checks if a process reporter is running on a specific host.
+#' Checks if a reporter is running on a specific host.
 #'
 #' @param hostname Check specific host (NULL = current host)
 #' @param con Database connection (NULL = get default)
@@ -10,12 +10,12 @@
 #'
 #' @examples
 #' \dontrun{
-#' status <- get_process_reporter_status()
+#' status <- get_reporter_database_status()
 #' if (!is.null(status)) {
 #'   cat("Reporter running, PID:", status$process_id, "\n")
 #' }
 #' }
-get_process_reporter_status <- function(hostname = NULL, con = NULL) {
+get_reporter_database_status <- function(hostname = NULL, con = NULL) {
   
   if (is.null(hostname)) {
     hostname <- Sys.info()["nodename"]
@@ -35,7 +35,7 @@ get_process_reporter_status <- function(hostname = NULL, con = NULL) {
   })
   
   result <- tryCatch({
-    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    table_name <- get_table_name("reporter_status", con, char = TRUE)
     # Choose parameter placeholder according to DB driver
     db_class <- class(con)[1]
     placeholder <- if (db_class == "PqConnection") "$1" else "?"
@@ -94,7 +94,7 @@ register_reporter <- function(
   }
   
   sql <- paste0("
-    INSERT INTO ", get_table_name('process_reporter_status', con, char = TRUE), "
+    INSERT INTO ", get_table_name('reporter_status', con, char = TRUE), "
       (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
     VALUES (", placeholders[1], ", ", placeholders[2], ", ", 
            if (db_class == "SQLiteConnection") "datetime('now')" else "NOW()", ", ",
@@ -125,7 +125,7 @@ register_reporter <- function(
 #' @keywords internal
 update_reporter_heartbeat <- function(con, hostname) {
   
-  table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+  table_name <- get_table_name("reporter_status", con, char = TRUE)
   
   # Database-specific NOW() function
   config <- getOption("tasker.config")
@@ -147,9 +147,9 @@ update_reporter_heartbeat <- function(con, hostname) {
 }
 
 
-#' Stop process reporter
+#' Stop reporter
 #'
-#' Stops a running process reporter by setting shutdown flag in database.
+#' Stops a running reporter by setting shutdown flag in database.
 #'
 #' @param hostname Which reporter to stop (default: current host)
 #' @param timeout Seconds to wait for graceful shutdown (default: 30)
@@ -161,12 +161,12 @@ update_reporter_heartbeat <- function(con, hostname) {
 #' @examples
 #' \dontrun{
 #' # Stop reporter on current host
-#' stop_process_reporter()
+#' stop_reporter()
 #' 
 #' # Stop reporter on specific host
-#' stop_process_reporter(hostname = "server1")
+#' stop_reporter(hostname = "server1")
 #' }
-stop_process_reporter <- function(
+stop_reporter <- function(
     hostname = Sys.info()["nodename"],
     timeout = 30,
     con = NULL
@@ -189,7 +189,7 @@ stop_process_reporter <- function(
   })
   
   # Set shutdown flag
-  table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+  table_name <- get_table_name("reporter_status", con, char = TRUE)
   
   config <- getOption("tasker.config")
   if (!is.null(config) && config$database$driver == "sqlite") {
@@ -210,7 +210,7 @@ stop_process_reporter <- function(
   # Wait for reporter to exit
   start_time <- Sys.time()
   while (difftime(Sys.time(), start_time, units = "secs") < timeout) {
-    status <- get_process_reporter_status(hostname, con)
+    status <- get_reporter_database_status(hostname, con)
     if (is.null(status)) {
       message("Reporter stopped successfully")
       return(TRUE)

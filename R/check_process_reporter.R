@@ -38,7 +38,7 @@ check_process_reporter <- function(con = NULL, quiet = FALSE) {
   
   # Query all process reporters
   result <- tryCatch({
-    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    table_name <- get_table_name("reporter_status", con, char = TRUE)
     
     # Database-specific timestamp difference calculation
     config <- getOption("tasker.config")
@@ -83,17 +83,20 @@ check_process_reporter <- function(con = NULL, quiet = FALSE) {
   }
   
   # Check if each process is actually alive
-  if (requireNamespace("ps", quietly = TRUE)) {
-    result$is_alive <- sapply(seq_len(nrow(result)), function(i) {
-      tryCatch({
-        is_reporter_alive(result$process_id[i], result$hostname[i])
-      }, error = function(e) {
-        NA  # Can't determine if alive
-      })
+  # Only check processes on the current machine
+  current_hostname <- Sys.info()[["nodename"]]
+  result$is_alive <- sapply(seq_len(nrow(result)), function(i) {
+    # Only check if hostname matches current machine
+    if (result$hostname[i] != current_hostname) {
+      return(NA)  # Can't check processes on other machines
+    }
+    
+    tryCatch({
+      is_reporter_alive(result$process_id[i], result$hostname[i])
+    }, error = function(e) {
+      NA  # Can't determine if alive
     })
-  } else {
-    result$is_alive <- NA
-  }
+  })
   
   # Add status summary
   result$status <- sapply(seq_len(nrow(result)), function(i) {

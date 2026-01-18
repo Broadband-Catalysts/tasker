@@ -150,6 +150,30 @@ test_that("get_database_queries returns empty data frame for SQLite", {
   expect_s3_class(result, "data.frame")
   expect_equal(nrow(result), 0)
   expect_true(all(c("pid", "duration", "username", "query", "state") %in% names(result)))
+  # Duration should be numeric type (for interval objects)
+  expect_type(result$duration, "double")
+  
+  # Cleanup
+  DBI::dbDisconnect(con)
+})
+
+test_that("get_database_queries respects status parameter", {
+  mock_config <- list(
+    database = list(
+      driver = "sqlite",
+      dbname = ":memory:"
+    )
+  )
+  
+  con <- get_monitor_connection(config = mock_config)
+  
+  # Test with default "active" status
+  result_active <- get_database_queries(con, status = "active", db_type = "sqlite")
+  expect_s3_class(result_active, "data.frame")
+  
+  # Test with "any" status
+  result_any <- get_database_queries(con, status = "any", db_type = "sqlite")
+  expect_s3_class(result_any, "data.frame")
   
   # Cleanup
   DBI::dbDisconnect(con)

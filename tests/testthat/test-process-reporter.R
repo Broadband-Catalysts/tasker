@@ -4,7 +4,7 @@
 # Note: These functions are internal and not exported
 library(tasker)
 
-test_that("setup_process_reporter_schema creates tables", {
+test_that("setup_reporter_schema creates tables", {
   skip_if_not_installed("RSQLite")
   
   # Setup clean test database
@@ -88,7 +88,7 @@ test_that("setup_process_reporter_schema creates tables", {
   cleanup_test_db()
 })
 
-test_that("setup_process_reporter_schema with force=TRUE recreates tables", {
+test_that("setup_reporter_schema with force=TRUE recreates tables", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
@@ -99,7 +99,7 @@ test_that("setup_process_reporter_schema with force=TRUE recreates tables", {
   setup_tasker_db(conn = con, force = TRUE, quiet = TRUE)
   
   # Create process reporter schema
-  setup_process_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
+  setup_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
   
   # Insert test data
   DBI::dbExecute(con, "
@@ -112,7 +112,7 @@ test_that("setup_process_reporter_schema with force=TRUE recreates tables", {
   expect_equal(count_before, 1)
   
   # Recreate with force=TRUE (should drop and recreate)
-  setup_process_reporter_schema(conn = con, force = TRUE, quiet = TRUE)
+  setup_reporter_schema(conn = con, force = TRUE, quiet = TRUE)
   
   # Verify tables still exist
   tables <- DBI::dbListTables(con)
@@ -125,7 +125,7 @@ test_that("setup_process_reporter_schema with force=TRUE recreates tables", {
   expect_equal(count_after, 0)
 })
 
-test_that("setup_process_reporter_schema creates view", {
+test_that("setup_reporter_schema creates view", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
@@ -134,7 +134,7 @@ test_that("setup_process_reporter_schema creates view", {
   
   # Setup both schemas
   setup_tasker_db(conn = con, force = TRUE, quiet = TRUE)
-  setup_process_reporter_schema(conn = con, force = TRUE, quiet = TRUE)
+  setup_reporter_schema(conn = con, force = TRUE, quiet = TRUE)
   
   # Verify current_task_status_with_metrics view exists
   views <- DBI::dbGetQuery(con, "
@@ -156,7 +156,7 @@ test_that("setup_process_reporter_schema creates view", {
   }
 })
 
-test_that("setup_process_reporter_schema without force=TRUE preserves data", {
+test_that("setup_reporter_schema without force=TRUE preserves data", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
@@ -167,7 +167,7 @@ test_that("setup_process_reporter_schema without force=TRUE preserves data", {
   setup_tasker_db(conn = con, force = TRUE, quiet = TRUE)
   
   # Create process reporter schema
-  setup_process_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
+  setup_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
   
   # Insert test data
   DBI::dbExecute(con, "
@@ -187,7 +187,7 @@ test_that("setup_process_reporter_schema without force=TRUE preserves data", {
   expect_equal(metrics_count, 1)
   
   # Re-run setup WITHOUT force (should preserve data)
-  setup_process_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
+  setup_reporter_schema(conn = con, force = FALSE, quiet = TRUE)
   
   # Verify data is preserved
   status_count_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM process_reporter_status")$n
@@ -196,7 +196,7 @@ test_that("setup_process_reporter_schema without force=TRUE preserves data", {
   expect_equal(metrics_count_after, 1)
 })
 
-test_that("check_process_reporter_tables_exist detects missing tables", {
+test_that("check_reporter_tables_exist detects missing tables", {
   skip_if_not_installed("RSQLite")
   
   # Create an empty SQLite database (no schema yet)
@@ -214,12 +214,12 @@ test_that("check_process_reporter_tables_exist detects missing tables", {
   on.exit(cleanup_test_db(con), add = TRUE)
 
   # Before schema creation, reporter tables should not exist
-  result_before <- tasker:::check_process_reporter_tables_exist(conn = con, driver = "sqlite")
+  result_before <- tasker:::check_reporter_tables_exist(conn = con, driver = "sqlite")
   expect_false(result_before)
 
   # After schema creation, reporter tables should exist
   setup_tasker_db(conn = con, force = TRUE, quiet = TRUE)
-  result_after <- tasker:::check_process_reporter_tables_exist(conn = con, driver = "sqlite")
+  result_after <- tasker:::check_reporter_tables_exist(conn = con, driver = "sqlite")
   expect_true(result_after)
   
   cleanup_test_db(con)
@@ -515,7 +515,7 @@ test_that("update_reporter_heartbeat updates timestamp", {
   cleanup_test_db()
 })
 
-test_that("get_process_reporter_status returns NULL when no reporter", {
+test_that("get_reporter_database_status returns NULL when no reporter", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
@@ -537,13 +537,13 @@ test_that("get_process_reporter_status returns NULL when no reporter", {
   
   DBI::dbDisconnect(con)
   
-  result <- tasker:::get_process_reporter_status(hostname = "nonexistent-host")
+  result <- tasker:::get_reporter_database_status(hostname = "nonexistent-host")
   expect_null(result)
   
   cleanup_test_db()
 })
 
-test_that("get_process_reporter_status returns reporter info when exists", {
+test_that("get_reporter_database_status returns reporter info when exists", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
@@ -570,7 +570,7 @@ test_that("get_process_reporter_status returns reporter info when exists", {
   tasker:::register_reporter(con, hostname, pid, version)
   DBI::dbDisconnect(con)
   
-  result <- tasker:::get_process_reporter_status(hostname = hostname)
+  result <- tasker:::get_reporter_database_status(hostname = hostname)
   
   expect_false(is.null(result))
   expect_equal(result$hostname, hostname)
@@ -580,7 +580,7 @@ test_that("get_process_reporter_status returns reporter info when exists", {
   cleanup_test_db()
 })
 
-test_that("stop_process_reporter sets shutdown flag", {
+test_that("stop_reporter sets shutdown flag", {
   skip_if_not_installed("RSQLite")
   
   db_path <- setup_test_db()
@@ -616,7 +616,7 @@ test_that("stop_process_reporter sets shutdown flag", {
   DBI::dbDisconnect(con)
   
   # Request shutdown
-  tasker:::stop_process_reporter(hostname = hostname, timeout = 1)
+  tasker:::stop_reporter(hostname = hostname, timeout = 1)
   
   con <- get_test_db_connection()
   result2 <- DBI::dbGetQuery(con, "
@@ -923,24 +923,24 @@ test_that("should_shutdown returns TRUE when shutdown requested", {
   cleanup_test_db(con)
 })
 
-test_that("is_reporter_alive detects dead process", {
+test_that("get_reporter_status detects dead process", {
   skip_if_not_installed("ps")
   
   # Use a PID that definitely doesn't exist
-  result <- tasker:::is_reporter_alive(999999, "test-host")
+  result <- tasker:::get_reporter_status(999999, "test-host")
   expect_false(result)
 })
 
-test_that("is_reporter_alive detects live process", {
+test_that("get_reporter_status detects live process", {
   skip_if_not_installed("ps")
   
   # Use current process PID
   current_pid <- Sys.getpid()
-  result <- tasker:::is_reporter_alive(current_pid, "test-host")
+  result <- tasker:::get_reporter_status(current_pid, "test-host")
   expect_true(result)
 })
 
-test_that("auto_start_process_reporter returns FALSE when tables don't exist", {
+test_that("auto_start_reporter returns FALSE when tables don't exist", {
   skip_if_not_installed("RSQLite")
   
   # Setup minimal database without process reporter tables
@@ -957,14 +957,14 @@ test_that("auto_start_process_reporter returns FALSE when tables don't exist", {
   tasker::setup_tasker_db(force = TRUE)
   con <- get_test_db_connection()
   
-  result <- tasker:::auto_start_process_reporter("test-host", con)
+  result <- tasker:::auto_start_reporter("test-host", con)
   expect_false(result)
   
   DBI::dbDisconnect(con)
   cleanup_test_db()
 })
 
-test_that("task_start integrates with auto_start_process_reporter", {
+test_that("task_start integrates with auto_start_reporter", {
   skip_if_not_installed("RSQLite")
   
   con <- setup_test_db()
@@ -996,10 +996,10 @@ test_that("task_start integrates with auto_start_process_reporter", {
 })
 
 # ============================================================================
-# Tests for start_process_reporter()
+# Tests for start_reporter()
 # ============================================================================
 
-test_that("start_process_reporter validates parameters", {
+test_that("start_reporter validates parameters", {
   skip_if_not_installed("RSQLite")
   skip_if_not_installed("callr")
   
@@ -1036,16 +1036,16 @@ test_that("start_process_reporter validates parameters", {
   cleanup_test_db()
 })
 
-test_that("start_process_reporter accepts supervise parameter", {
+test_that("start_reporter accepts supervise parameter", {
   skip_if_not_installed("RSQLite")
   
   # Verify function signature includes supervise parameter with default FALSE
-  fn_args <- formals(start_process_reporter)
+  fn_args <- formals(start_reporter)
   expect_true("supervise" %in% names(fn_args))
   expect_equal(fn_args$supervise, FALSE)
 })
 
-test_that("start_process_reporter checks for existing reporter", {
+test_that("start_reporter checks for existing reporter", {
   skip_if_not_installed("RSQLite")
   skip_if_not_installed("ps")
   
@@ -1057,20 +1057,20 @@ test_that("start_process_reporter checks for existing reporter", {
   tasker:::register_reporter(con, hostname, fake_pid, version = "1.0.0")
   
   # Get status - should find the registered reporter
-  status <- tasker:::get_process_reporter_status(hostname, con = con)
+  status <- tasker:::get_reporter_database_status(hostname, con = con)
   expect_false(is.null(status))
   expect_equal(status$hostname, hostname)
   expect_equal(status$process_id, fake_pid)
   
   # Check if reporter is alive (should be FALSE for fake PID)
-  is_alive <- tasker:::is_reporter_alive(fake_pid, hostname)
+  is_alive <- tasker:::get_reporter_status(fake_pid, hostname)
   expect_false(is_alive)
   
   DBI::dbDisconnect(con)
   cleanup_test_db()
 })
 
-test_that("start_process_reporter handles dead process detection", {
+test_that("start_reporter handles dead process detection", {
   skip_if_not_installed("RSQLite")
   skip_if_not_installed("ps")
   
@@ -1081,14 +1081,14 @@ test_that("start_process_reporter handles dead process detection", {
   dead_pid <- 999999
   tasker:::register_reporter(con, hostname, dead_pid, version = "1.0.0")
   
-  # is_reporter_alive should return FALSE
-  expect_false(tasker:::is_reporter_alive(dead_pid, hostname))
+  # get_reporter_status should return FALSE
+  expect_false(tasker:::get_reporter_status(dead_pid, hostname))
   
   DBI::dbDisconnect(con)
   cleanup_test_db()
 })
 
-test_that("start_process_reporter respects force parameter", {
+test_that("start_reporter respects force parameter", {
   skip_if_not_installed("RSQLite")
   skip_if_not_installed("ps")
   
@@ -1101,14 +1101,14 @@ test_that("start_process_reporter respects force parameter", {
   live_pid <- Sys.getpid()
   tasker:::register_reporter(con, hostname, live_pid, version = "1.0.0")
   
-  status <- tasker:::get_process_reporter_status(hostname, con = con)
+  status <- tasker:::get_reporter_database_status(hostname, con = con)
   expect_false(is.null(status))
   expect_equal(status$process_id, live_pid)
-  expect_true(tasker:::is_reporter_alive(live_pid, hostname))
+  expect_true(tasker:::get_reporter_status(live_pid, hostname))
   
   # With force=FALSE and live reporter, returns "already_running" (does not error)
   # NOTE: Implementation returns status object, doesn't throw error
-  result <- tasker:::start_process_reporter(
+  result <- tasker:::start_reporter(
     hostname = hostname,
     force = FALSE,
     quiet = TRUE,
@@ -1126,7 +1126,7 @@ test_that("start_process_reporter respects force parameter", {
   cleanup_test_db()
 })
 
-test_that("start_process_reporter supervise parameter is passed to callr::r_bg", {
+test_that("start_reporter supervise parameter is passed to callr::r_bg", {
   skip_if_not_installed("RSQLite")
   skip_if_not_installed("callr")
   
@@ -1142,7 +1142,7 @@ test_that("start_process_reporter supervise parameter is passed to callr::r_bg",
   # Test with supervise=FALSE (default - reporter persists)
   hostname1 <- paste0("test-supervise-false-", format(Sys.time(), "%Y%m%d%H%M%S"))
   result_false <- tryCatch({
-    start_process_reporter(
+    start_reporter(
       collection_interval = 10,
       hostname = hostname1,
       force = FALSE,
@@ -1161,13 +1161,13 @@ test_that("start_process_reporter supervise parameter is passed to callr::r_bg",
   
   # Clean up if started
   if (result_false$status == "started") {
-    tryCatch(stop_process_reporter(hostname1, timeout = 5, con = con), error = function(e) NULL)
+    tryCatch(stop_reporter(hostname1, timeout = 5, con = con), error = function(e) NULL)
   }
   
   # Test with supervise=TRUE (reporter terminates with parent)
   hostname2 <- paste0("test-supervise-true-", format(Sys.time(), "%Y%m%d%H%M%S"))
   result_true <- tryCatch({
-    start_process_reporter(
+    start_reporter(
       collection_interval = 10,
       hostname = hostname2,
       force = FALSE,
@@ -1185,7 +1185,7 @@ test_that("start_process_reporter supervise parameter is passed to callr::r_bg",
   
   # Clean up if started
   if (result_true$status == "started") {
-    tryCatch(stop_process_reporter(hostname2, timeout = 5, con = con), error = function(e) NULL)
+    tryCatch(stop_reporter(hostname2, timeout = 5, con = con), error = function(e) NULL)
   }
   
   DBI::dbDisconnect(con)
@@ -1210,7 +1210,7 @@ test_that("process_reporter_main_loop helper: should_shutdown works", {
   expect_false(tasker:::should_shutdown(con, hostname))
   
   # Request shutdown
-  tasker::stop_process_reporter(hostname, timeout = 1, con = con)
+  tasker::stop_reporter(hostname, timeout = 1, con = con)
   
   # Now should shutdown
   expect_true(tasker:::should_shutdown(con, hostname))
@@ -1341,21 +1341,21 @@ test_that("process_reporter_main_loop components handle errors gracefully", {
 
 
 # ============================================================================
-# Tests for check_process_reporter()
+# Tests for check_reporter()
 # ============================================================================
 
-test_that("check_process_reporter returns NULL when no reporters found", {
+test_that("check_reporter returns NULL when no reporters found", {
   skip_if_not_installed("RSQLite")
   
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Query should return NULL with no reporters
-  result <- check_process_reporter(con = con, quiet = TRUE)
+  result <- check_reporter(con = con, quiet = TRUE)
   expect_null(result)
 })
 
-test_that("check_process_reporter displays single reporter info", {
+test_that("check_reporter displays single reporter info", {
   skip_if_not_installed("RSQLite")
   
   con <- setup_test_db()
@@ -1369,7 +1369,7 @@ test_that("check_process_reporter displays single reporter info", {
   tasker:::register_reporter(con, hostname, pid, version)
   
   # Get reporter info
-  result <- check_process_reporter(con = con, quiet = TRUE)
+  result <- check_reporter(con = con, quiet = TRUE)
   
   expect_false(is.null(result))
   expect_equal(nrow(result), 1)
@@ -1380,7 +1380,7 @@ test_that("check_process_reporter displays single reporter info", {
   expect_true("heartbeat_age_seconds" %in% names(result))
 })
 
-test_that("check_process_reporter displays multiple reporters", {
+test_that("check_reporter displays multiple reporters", {
   skip_if_not_installed("RSQLite")
   
   con <- setup_test_db()
@@ -1392,7 +1392,7 @@ test_that("check_process_reporter displays multiple reporters", {
   tasker:::register_reporter(con, "host-3", 33333, "0.6.0")
   
   # Get reporter info
-  result <- check_process_reporter(con = con, quiet = TRUE)
+  result <- check_reporter(con = con, quiet = TRUE)
   
   expect_false(is.null(result))
   expect_equal(nrow(result), 3)
@@ -1400,7 +1400,7 @@ test_that("check_process_reporter displays multiple reporters", {
   expect_equal(sort(result$process_id), c(11111, 22222, 33333))
 })
 
-test_that("check_process_reporter detects stale reporters", {
+test_that("check_reporter detects stale reporters", {
   skip_if_not_installed("RSQLite")
   
   con <- setup_test_db()
@@ -1417,7 +1417,7 @@ test_that("check_process_reporter detects stale reporters", {
   ", params = list(hostname, pid))
   
   # Get reporter info
-  result <- check_process_reporter(con = con, quiet = TRUE)
+  result <- check_reporter(con = con, quiet = TRUE)
   
   expect_false(is.null(result))
   expect_equal(nrow(result), 1)
@@ -1425,7 +1425,7 @@ test_that("check_process_reporter detects stale reporters", {
   expect_true(result$status %in% c("STALE", "DEAD"))  # Might be DEAD if PID doesn't exist
 })
 
-test_that("check_process_reporter detects shutdown_requested flag", {
+test_that("check_reporter detects shutdown_requested flag", {
   skip_if_not_installed("RSQLite")
   
   con <- setup_test_db()
@@ -1445,7 +1445,7 @@ test_that("check_process_reporter detects shutdown_requested flag", {
   ", params = list(hostname))
   
   # Get reporter info
-  result <- check_process_reporter(con = con, quiet = TRUE)
+  result <- check_reporter(con = con, quiet = TRUE)
   
   expect_false(is.null(result))
   expect_equal(nrow(result), 1)
@@ -1453,11 +1453,11 @@ test_that("check_process_reporter detects shutdown_requested flag", {
   expect_equal(result$status, "SHUTTING_DOWN")
 })
 
-test_that("check_process_reporter handles database connection errors", {
+test_that("check_reporter handles database connection errors", {
   skip_if_not_installed("RSQLite")
   
   # Try with invalid connection
-  result <- check_process_reporter(con = NULL, quiet = TRUE)
+  result <- check_reporter(con = NULL, quiet = TRUE)
   
   # Should return NULL gracefully
   expect_null(result)

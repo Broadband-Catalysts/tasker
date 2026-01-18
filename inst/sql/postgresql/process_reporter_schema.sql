@@ -81,8 +81,8 @@ CREATE TABLE IF NOT EXISTS tasker.process_reporter_status (
     shutdown_requested BOOLEAN DEFAULT FALSE
 );
 
-CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON tasker.process_reporter_status(hostname);
-CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON tasker.process_reporter_status(last_heartbeat DESC);
+CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON tasker.reporter_status(hostname);
+CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON tasker.reporter_status(last_heartbeat DESC);
 
 -- ============================================================================
 -- Table: process_metrics_retention

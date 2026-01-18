@@ -1,6 +1,6 @@
-#' Process Reporter Main Loop
+#' Reporter Main Loop
 #'
-#' The main collection loop for the process reporter service.
+#' The main collection loop for the reporter service.
 #' Runs continuously until shutdown is requested.
 #'
 #' @param collection_interval_seconds How often to collect metrics (default: 10)
@@ -13,16 +13,16 @@
 #' @examples
 #' \dontrun{
 #' # This runs in the background daemon process
-#' process_reporter_main_loop()
+#' reporter_main_loop()
 #' }
-process_reporter_main_loop <- function(
+reporter_main_loop <- function(
     collection_interval_seconds = 10,
     hostname = Sys.info()["nodename"],
     con = NULL
 ) {
   
-  message("[Process Reporter] Starting main loop on host: ", hostname)
-  message("[Process Reporter] Collection interval: ", collection_interval_seconds, " seconds")
+  message("[Process Reporter] ", Sys.time() ," Starting main loop on host: ", hostname)
+  message("[Process Reporter] ", Sys.time() ," Collection interval: ", collection_interval_seconds, " seconds")
   
   close_con <- FALSE
   if (is.null(con)) {
@@ -31,7 +31,7 @@ process_reporter_main_loop <- function(
   }
   
   on.exit({
-    message("[Process Reporter] Main loop shutting down")
+    message("[Process Reporter] ", Sys.time(), " Main loop shutting down")
     if (close_con && !is.null(con)) {
       tryCatch(DBI::dbDisconnect(con), error = function(e) NULL)
     }
@@ -47,7 +47,7 @@ process_reporter_main_loop <- function(
     tryCatch({
       # Check for shutdown signal
       if (should_shutdown(con, hostname)) {
-        message("[Process Reporter] Shutdown requested, exiting main loop")
+        message("[Process Reporter] ", Sys.time(), " Shutdown requested, exiting main loop")
         break
       }
       
@@ -55,10 +55,10 @@ process_reporter_main_loop <- function(
       update_reporter_heartbeat(con, hostname)
       
       # Get active tasks on this host
-      active_tasks <- get_active_tasks(con, hostname)
+      active_tasks <- get_active_tasks_for_reporter(con, hostname)
       
       if (length(active_tasks) > 0) {
-        message("[Process Reporter] Found ", length(active_tasks), " active tasks")
+        message("[Process Reporter] ", Sys.time(), "  Found ", length(active_tasks), " active tasks")
         
         # Get previous start times for PID reuse detection (batch query)
         run_ids <- sapply(active_tasks, function(task) task$run_id)
@@ -84,16 +84,16 @@ process_reporter_main_loop <- function(
             write_process_metrics(metrics, con = con)
             
           }, error = function(e) {
-            warning("[Process Reporter] Error collecting metrics for run_id ", 
+            warning("[Process Reporter] ", Sys.time(), " Error collecting metrics for run_id ", 
                     task$run_id, ": ", e$message)
           })
         }
       } else {
-        message("[Process Reporter] No active tasks found")
+        message("[Process Reporter] ", Sys.time(), " No active tasks found")
       }
       
     }, error = function(e) {
-      warning("[Process Reporter] Error in main loop: ", e$message)
+      warning("[Process Reporter] ", Sys.time(), " Error in main loop: ", e$message)
     })
     
     # Calculate sleep time to maintain consistent interval
@@ -103,12 +103,12 @@ process_reporter_main_loop <- function(
     if (sleep_time > 0) {
       Sys.sleep(sleep_time)
     } else {
-      warning("[Process Reporter] Loop took ", round(loop_duration, 2), 
+      warning("[Process Reporter] ", Sys.time(), " Loop took ", round(loop_duration, 2), 
               " seconds (longer than ", collection_interval_seconds, "s interval)")
     }
   }
   
-  message("[Process Reporter] Main loop terminated")
+  message("[Process Reporter] ", Sys.time(), " Main loop terminated")
   return(NULL)
 }
 
@@ -125,7 +125,7 @@ process_reporter_main_loop <- function(
 should_shutdown <- function(con, hostname) {
   
   tryCatch({
-    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    table_name <- get_table_name("reporter_status", con, char = TRUE)
     
     # Database-specific SQL
     config <- getOption("tasker.config")
@@ -169,33 +169,40 @@ should_shutdown <- function(con, hostname) {
 #'
 #' @return List of task info (run_id, process_id, etc.)
 #' @keywords internal
-get_active_tasks <- function(con, hostname) {
+get_active_tasks_for_reporter <- function(con, hostname) {
   
   tryCatch({
-    table_name <- get_table_name("task_runs", con, char = TRUE)
+    # Get table names directly to avoid configuration dependency issues
+    config <- getOption("tasker.config")
+    if (!is.null(config) && !is.null(config$database) && !is.null(config$database$schema)) {
+      task_runs_table <- paste0(config$database$schema, ".task_runs")
+      tasks_table <- paste0(config$database$schema, ".tasks")
+    } else {
+      task_runs_table <- "task_runs"
+      tasks_table <- "tasks"
+    }
     
     # Database-specific SQL
-    config <- getOption("tasker.config")
     if (!is.null(config) && config$database$driver == "sqlite") {
       sql <- sprintf("
         SELECT tr.run_id, tr.process_id, tr.start_time, COALESCE(t.task_name, 'Unknown') as task_name
         FROM %s tr
-        LEFT JOIN tasks t ON tr.task_id = t.task_id
+        LEFT JOIN %s t ON tr.task_id = t.task_id
         WHERE tr.hostname = ? 
           AND tr.status IN ('RUNNING', 'STARTED')
           AND tr.process_id IS NOT NULL
         ORDER BY tr.start_time
-      ", table_name)
+      ", task_runs_table, tasks_table)
     } else {
       sql <- sprintf("
         SELECT tr.run_id, tr.process_id, tr.start_time, COALESCE(t.task_name, 'Unknown') as task_name
         FROM %s tr
-        LEFT JOIN tasks t ON tr.task_id = t.task_id
+        LEFT JOIN %s t ON tr.task_id = t.task_id
         WHERE tr.hostname = $1 
           AND tr.status IN ('RUNNING', 'STARTED')
           AND tr.process_id IS NOT NULL
         ORDER BY tr.start_time
-      ", table_name)
+      ", task_runs_table, tasks_table)
     }
     
     result <- DBI::dbGetQuery(con, sql, params = list(hostname))

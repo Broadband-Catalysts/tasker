@@ -15,6 +15,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libcurl4-openssl-dev \
     procps \
     r-cran-bslib \
+    r-cran-callr \
     r-cran-cli \
     r-cran-crayon \
     r-cran-dbi \
@@ -30,7 +31,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-lifecycle \
     r-cran-lubridate \
     r-cran-pillar \
+    r-cran-ps \
     r-cran-purrr \
+    r-cran-r.utils \
     r-cran-readr \
     r-cran-remotes \
     r-cran-rlang \
@@ -44,6 +47,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-shinywidgets \
     r-cran-sqlparser \
     r-cran-stringr \
+    r-cran-testthat \
+    r-cran-this.path \
     r-cran-tibble \
     r-cran-tictoc \
     r-cran-tidyr \
