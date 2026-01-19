@@ -47,14 +47,21 @@ get_subtask_progress <- function(run_id, conn = NULL) {
     "subtask_progress"
   }
   
+  # Build driver-appropriate SQL for integer casting
+  if (driver == "postgresql") {
+    items_select <- "items_total::INTEGER as items_total, items_complete::INTEGER as items_complete"
+  } else {
+    # SQLite and others: plain column selection
+    items_select <- "items_total as items_total, items_complete as items_complete"
+  }
+
   tryCatch({
     DBI::dbGetQuery(
       conn,
       glue::glue_sql("SELECT progress_id, run_id, subtask_number, subtask_name,
                              status, start_time, end_time, last_update,
                              percent_complete, progress_message,
-                             items_total::INTEGER as items_total,
-                             items_complete::INTEGER as items_complete,
+                             {DBI::SQL(items_select)},
                              error_message
                       FROM {DBI::SQL(table_ref)} 
                       WHERE run_id = {run_id} 

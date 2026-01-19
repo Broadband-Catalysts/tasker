@@ -107,8 +107,11 @@ test_that("tasker_cluster helper works", {
   expect_true(!is.null(cl))
   expect_true(!is.null(attr(cl, "tasker_managed")))
   
-  # Simple parallel work
+  # Simple parallel work with staggered delays to prevent SQLite lock contention
   results <- parallel::parLapply(cl, 1:10, function(x) {
+    # Stagger database access: worker 1 gets items 1,3,5,7,9; worker 2 gets 2,4,6,8,10
+    # Add small delay based on item number to spread out database writes
+    Sys.sleep(0.05 * (x %% 2))
     tasker::subtask_increment(increment = 1, quiet = TRUE)
     x * 2
   })

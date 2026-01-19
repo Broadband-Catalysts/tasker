@@ -5,12 +5,12 @@ test_that("task registration validates input", {
   # Should require stage and name
   expect_error(
     register_task(name = "test"),
-    "stage.*required"
+    "'stage' must be a non-empty character string"
   )
   
   expect_error(
     register_task(stage = "TEST"),
-    "name.*required"
+    "'name' must be a non-empty character string"
   )
 })
 

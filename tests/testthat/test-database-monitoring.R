@@ -253,25 +253,22 @@ test_that("get_database_queries uses config from options for db_type", {
   skip_if_not(requireNamespace("RSQLite", quietly = TRUE))
   
   # This test verifies the db_type detection from config
-  # We'll use SQLite but set config driver to test the logic
+  # We'll use SQLite connection and set config driver to sqlite
   temp_db <- tempfile(fileext = ".db")
   con <- DBI::dbConnect(RSQLite::SQLite(), temp_db)
   
   config <- list(
     database = list(
-      driver = "postgresql"
+      driver = "sqlite"
     )
   )
   options(tasker.config = config)
   
-  # Should detect postgresql from config
-  # This will fail with SQLite connection but that's expected
-  # We're just testing that it reads the config
-  expect_error(
-    get_database_queries(con),
-    # Will fail because SQLite doesn't support pg_stat_activity
-    NA  # We expect some error, but checking config read is tested
-  )
+  # Should detect sqlite from config and return empty data frame
+  result <- get_database_queries(con)
+  
+  expect_s3_class(result, "data.frame")
+  expect_equal(nrow(result), 0)
   
   # Cleanup
   DBI::dbDisconnect(con)
@@ -300,17 +297,16 @@ test_that("get_database_queries returns data frame", {
   skip_if_not(requireNamespace("DBI", quietly = TRUE))
   skip_if_not(requireNamespace("RSQLite", quietly = TRUE))
   
-  # Create a mock connection (will fail but tests structure)
+  # Create a SQLite connection and test with sqlite db_type
   temp_db <- tempfile(fileext = ".db")
   con <- DBI::dbConnect(RSQLite::SQLite(), temp_db)
   
-  # SQLite doesn't support the PostgreSQL query, but we can test
-  # that the function attempts to execute a query
-  expect_error(
-    get_database_queries(con, "postgresql"),
-    # Will error because pg_stat_activity doesn't exist in SQLite
-    NA  # Some error expected
-  )
+  # SQLite returns empty data frame
+  result <- get_database_queries(con, "sqlite")
+  
+  expect_s3_class(result, "data.frame")
+  expect_equal(nrow(result), 0)
+  expect_true(all(c("pid", "duration", "username", "query", "state") %in% names(result)))
   
   # Cleanup
   DBI::dbDisconnect(con)

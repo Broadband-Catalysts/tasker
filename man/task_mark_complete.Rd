@@ -23,7 +23,8 @@ task_mark_complete(
 
 \item{message}{Completion message (optional)}
 
-\item{total_subtasks}{Number of subtasks to mark complete (optional)}
+\item{total_subtasks}{Number of subtasks to mark complete (optional). Use
+zero to indicate the task has no subtasks.}
 
 \item{version}{Version string (optional)}
 

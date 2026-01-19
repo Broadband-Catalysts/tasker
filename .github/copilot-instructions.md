@@ -1,5 +1,72 @@
 # GitHub Copilot Instructions for tasker-dev
 
+# ⚠️ MANDATORY: Before ANY Code Changes
+
+**STOP - Check this list before proceeding:**
+
+□ Read relevant sections of copilot-instructions.md for the task type
+□ Check if any Agent Skills apply (list skills explicitly in response) 
+□ If modifying code: Will use #code-review skill before finalizing
+□ If multi-step work: Will use #manage_todo_list for tracking
+□ State which procedures you're following in your response
+
+**If you cannot check all boxes, STOP and ask for clarification.**
+
+**CRITICAL REQUIREMENT:** You MUST explicitly state which copilot-instructions.md sections and/or Agent Skills you are following in every response that involves code changes or multi-step work.
+
+## Token Usage Checkpoints
+
+**At 50K+ tokens:** Remind user you're still following documented procedures
+**At 75K+ tokens:** Explicitly review which procedures you've been following
+**At 90K+ tokens:** Warning about context limits affecting procedure adherence
+
+## Quick Skill Reference
+
+- **#code-review** - REQUIRED before finalizing any code changes
+- **#git-commit-message** - For commit message generation  
+- **#shiny-patterns** - For Shiny application development patterns
+- **#parallel-processing** - For database connection handling in parallel workers
+- **#unit-testing** - For creating and maintaining test coverage
+- **#manage_todo_list** - For multi-step task tracking and planning
+
+## ⚠️ CRITICAL WORKFLOW CHECKLIST
+
+**Before implementing ANY code changes, verify you will:**
+
+1. ✅ **Create/update unit tests** - Code changes and tests must be implemented together
+2. ✅ **Follow anti-patterns** - Check relevant sections below before coding
+3. ✅ **Review changes** - Use systematic code review before finalizing
+4. ✅ **Update documentation** - Regenerate docs if modifying exported functions
+
+**After making changes, verify you have:**
+
+1. ✅ **Tests passing** - All new/modified code has passing tests
+2. ✅ **Documentation updated** - roxygen2 comments and .Rd files current
+3. ✅ **No anti-patterns** - Reviewed against project-specific warnings
+4. ✅ **User informed** - Confirmed completion to user
+
+## Cross-Project Development
+
+**When making changes in other project directories, always check for and use project-specific guidance:**
+
+- **`.github/copilot-instructions.md`** - Project-specific instructions, anti-patterns, and critical warnings
+- **`.github/skills/`** - Agent Skills with step-by-step procedural patterns
+
+These files contain critical project-specific context including:
+- Database patterns and anti-patterns
+- Technology-specific considerations (Shiny, R, Python, etc.)
+- Code review standards
+- Common gotchas and error patterns
+- Development workflows
+
+**Example workflow:**
+```bash
+# Before modifying fccData code from tasker-dev context:
+1. Read /home/warnes/src/fccData/.github/copilot-instructions.md
+2. Check /home/warnes/src/fccData/.github/skills/ for relevant patterns
+3. Apply project-specific rules when making changes
+```
+
 ## Shiny Application Development
 
 ### Critical: Avoid renderUI() Anti-Pattern
@@ -271,6 +338,58 @@ R --slave -e "result <- 2 + 2; print(result)"  # Variables like $var get expande
 
 Single quotes preserve the literal string, preventing shell interpretation and ensuring R code is passed exactly as written.
 
+### R Script Argument Handling
+
+**Always use the `argparse` package for handling command-line arguments in R scripts:**
+
+```r
+# ✅ CORRECT - Use argparse for robust argument handling
+library(argparse)
+
+# Create argument parser
+parser <- ArgumentParser(description = "Process data with configurable options")
+parser$add_argument("--input", type = "character", required = TRUE,
+                   help = "Input data file path")
+parser$add_argument("--output", type = "character", required = TRUE,
+                   help = "Output file path")
+parser$add_argument("--ncores", type = "integer", default = 4,
+                   help = "Number of parallel cores to use [default: 4]")
+parser$add_argument("--overwrite", action = "store_true", default = FALSE,
+                   help = "Overwrite existing output files")
+parser$add_argument("--verbose", action = "store_true", default = FALSE,
+                   help = "Enable verbose output")
+
+# Parse arguments
+args <- parser$parse_args()
+
+# Use parsed arguments
+if (args$verbose) {
+  cat("Processing", args$input, "with", args$ncores, "cores...\n")
+}
+
+# ❌ INCORRECT - Manual argument parsing (fragile and error-prone)
+args <- commandArgs(trailingOnly = TRUE)
+input_file <- args[1]  # No validation, unclear meaning
+ncores <- as.integer(args[2])  # May fail with no error handling
+```
+
+**Why use argparse:**
+- **Automatic help generation**: `--help` flag automatically works
+- **Type validation**: Ensures arguments are correct types
+- **Required argument checking**: Fails with clear error if required args missing
+- **Default values**: Clean handling of optional parameters
+- **Clear documentation**: Help text makes script usage obvious
+- **Standard conventions**: Follows common CLI patterns (`--flag`, `-f`)
+
+**Example usage:**
+```bash
+# Script provides helpful usage information
+Rscript my_script.R --help
+
+# Clear, self-documenting command lines
+Rscript my_script.R --input data.csv --output results.csv --ncores 8 --overwrite --verbose
+```
+
 ## Code Review Practices
 
 ### Review Modified Files
@@ -330,6 +449,60 @@ subtask_increment <- function(run_id, subtask_number, increment = 1, quiet = TRU
 }
 ```
 
+## Unit Tests
+
+**Always create or update unit tests when creating or modifying functions:**
+
+- **New functions**: Create test file in `tests/testthat/test-{function_name}.R`
+- **Modified functions**: Update existing tests to cover new behavior
+- **Bug fixes**: Add test case that reproduces the bug before fixing
+
+**Test structure using testthat:**
+```r
+# tests/testthat/test-my_function.R
+test_that("my_function validates input", {
+  expect_error(my_function(NULL), "input.*required")
+  expect_error(my_function("invalid"), "must be numeric")
+})
+
+test_that("my_function handles edge cases", {
+  expect_equal(my_function(0), expected_result)
+  expect_equal(my_function(c()), numeric(0))
+})
+
+test_that("my_function produces correct output", {
+  result <- my_function(valid_input)
+  expect_true(is.numeric(result))
+  expect_equal(length(result), expected_length)
+  expect_equal(result, expected_value)
+})
+```
+
+**What to test:**
+- **Input validation**: Invalid/missing parameters, type checking, boundary conditions
+- **Edge cases**: Empty inputs, NULL values, single element vectors, large datasets
+- **Core functionality**: Expected outputs for typical inputs
+- **Error handling**: Proper error messages and graceful failures
+- **Side effects**: Database operations, file I/O (use mocking when appropriate)
+
+**Test coverage guidelines:**
+- All exported functions must have tests
+- Critical internal functions should have tests
+- Bug fixes must include regression tests
+- Aim for >80% code coverage on new code
+
+**Run tests before committing:**
+```r
+# Run all tests
+devtools::test()
+
+# Run specific test file
+testthat::test_file("tests/testthat/test-my_function.R")
+
+# Check test coverage
+covr::package_coverage()
+```
+
 ## Git Commit Messages
 
 ### Summarizing Changes
@@ -361,10 +534,11 @@ Update R/subtask_update.R
 
 ## Common Gotchas
 
-1. **Don't use renderUI() for content updates** - Use reactive data + renderText/renderUI for structure only
-2. **Don't serialize connection objects** - Always return `NULL` from `clusterEvalQ()` when creating connections
-3. **Use atomic increments** - `subtask_increment()` for parallel workers, not `subtask_update()`
-4. **Cast COUNT() to INTEGER** - Avoid bigint conversion issues
-5. **Run from project root** - Ensure renv and .Renviron are loaded
-6. **Single quote shell commands** - Prevent shell variable expansion
-7. **Export all needed variables** - Use `clusterExport()` for global variables needed by workers
+1. **Register tasks with script_filename** - Required for auto-detection to work
+2. **Don't use renderUI() for content updates** - Use reactive data + renderText/renderUI for structure only
+3. **Don't serialize connection objects** - Always return `NULL` from `clusterEvalQ()` when creating connections
+4. **Use atomic increments** - `subtask_increment()` for parallel workers, not `subtask_update()`
+5. **Cast COUNT() to INTEGER** - Avoid bigint conversion issues
+6. **Run from project root** - Ensure renv and .Renviron are loaded
+7. **Single quote shell commands** - Prevent shell variable expansion
+8. **Export all needed variables** - Use `clusterExport()` for global variables needed by workers

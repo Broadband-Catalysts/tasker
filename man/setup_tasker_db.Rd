@@ -4,14 +4,28 @@
 \alias{setup_tasker_db}
 \title{Initialize tasker Database Schema}
 \usage{
-setup_tasker_db(conn = NULL, schema_name = "tasker", force = FALSE)
+setup_tasker_db(
+  conn = NULL,
+  schema_name = "tasker",
+  force = FALSE,
+  skip_backup = FALSE,
+  keep_backup = FALSE,
+  schema_sql_file = NULL,
+  quiet = FALSE
+)
 }
 \arguments{
 \item{conn}{Optional database connection. If NULL, uses connection from config.}
 
 \item{schema_name}{Name of the schema to create (default: "tasker")}
 
-\item{force}{If TRUE, drops existing schema and recreates it (WARNING: destroys data)}
+\item{force}{If TRUE, recreates schema while preserving existing data via backup}
+
+\item{skip_backup}{If TRUE, skips data backup (USE WITH CAUTION)}
+
+\item{keep_backup}{If TRUE, keeps backup schema after successful migration}
+
+\item{schema_sql_file}{Optional path to a schema SQL script (used mainly for testing)}
 }
 \value{
 TRUE if successful
@@ -19,6 +33,14 @@ TRUE if successful
 \description{
 Creates the necessary PostgreSQL schema and tables for tasker.
 This function should be run once to set up the database.
+}
+\details{
+SAFETY FEATURES:
+\itemize{
+\item Uses transactions to rollback on failure
+\item Preserves existing data by backing up to {schema}_backup
+\item Only drops backup after successful migration
+}
 }
 \examples{
 \dontrun{
@@ -29,7 +51,10 @@ setup_tasker_db()
 conn <- DBI::dbConnect(RPostgres::Postgres(), ...)
 setup_tasker_db(conn)
 
-# Force recreate (destroys existing data!)
+# Force recreate (backs up existing data first!)
 setup_tasker_db(force = TRUE)
+
+# Force recreate and keep backup for manual inspection
+setup_tasker_db(force = TRUE, keep_backup = TRUE)
 }
 }
