@@ -41,10 +41,10 @@ get_monitor_connection <- function(config = NULL, session_con = NULL) {
     }
     con <- DBI::dbConnect(
       RPostgres::Postgres(),
-      host = config$database$host,
-      port = config$database$port,
-      dbname = config$database$dbname,
-      user = config$database$user,
+      host     = config$database$host,
+      port     = config$database$port,
+      dbname   = config$database$dbname,
+      user     = config$database$user,
       password = config$database$password
     )
   } else if (db_type == "mysql") {
@@ -53,10 +53,10 @@ get_monitor_connection <- function(config = NULL, session_con = NULL) {
     }
     con <- DBI::dbConnect(
       RMariaDB::MariaDB(),
-      host = config$database$host,
-      port = config$database$port,
-      dbname = config$database$dbname,
-      user = config$database$user,
+      host     = config$database$host,
+      port     = config$database$port,
+      dbname   = config$database$dbname,
+      user     = config$database$user,
       password = config$database$password
     )
   } else if (db_type == "sqlite") {

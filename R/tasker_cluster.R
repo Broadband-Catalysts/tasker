@@ -62,11 +62,11 @@
 #' subtask_complete()
 #' task_complete()
 #' }
-tasker_cluster <- function(ncores = NULL, 
+tasker_cluster <- function(ncores   = NULL,
                            packages = NULL,
-                           export = NULL,
+                           export   = NULL,
                            setup_expr = NULL,
-                           envir = parent.frame(),
+                           envir    = parent.frame(),
                            load_all = FALSE) {
   
   # Input validation

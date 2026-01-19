@@ -10,6 +10,7 @@
 #' @param include_children Collect child process aggregate info (default: TRUE)
 #' @param timeout_seconds Maximum time to spend collecting metrics (default: 5)
 #' @param prev_start_time Previous process start time for PID reuse detection (optional)
+#' @param scale_cpu_by_cores Scale CPU percentage by number of CPU cores (default: FALSE)
 #'
 #' @return List with metrics data or error information
 #' @export
@@ -27,7 +28,8 @@ collect_process_metrics <- function(
     hostname = Sys.info()["nodename"],
     include_children = TRUE,
     timeout_seconds = 5,
-    prev_start_time = NULL
+    prev_start_time = NULL,
+    scale_cpu_by_cores = FALSE
 ) {
   
   collection_start <- Sys.time()
@@ -103,11 +105,51 @@ collect_process_metrics <- function(
         return(result)
       }
       
-      # CPU usage
-      result$cpu_percent <- tryCatch(
-        ps::ps_cpu_percent(p),
-        error = function(e) NA_real_
-      )
+      # CPU usage - Calculate percentage based on CPU time difference
+      # Store previous CPU times in a package environment for tracking
+      if (!exists(".cpu_time_cache", envir = .GlobalEnv)) {
+        assign(".cpu_time_cache", new.env(hash = TRUE), envir = .GlobalEnv)
+        # Cache CPU count since it's constant for the system - calculate once
+        assign(".cpu_count_cached", tryCatch(ps::ps_cpu_count(), error = function(e) 1), envir = .GlobalEnv)
+      }
+      cpu_cache <- get(".cpu_time_cache", envir = .GlobalEnv)
+      num_cores <- get(".cpu_count_cached", envir = .GlobalEnv)
+      
+      cpu_times <- tryCatch(ps::ps_cpu_times(p), error = function(e) NULL)
+      if (!is.null(cpu_times)) {
+        current_time <- Sys.time()
+        current_total <- cpu_times["user"] + cpu_times["system"]
+        cache_key <- as.character(process_id)
+        
+        # Check if we have a previous measurement
+        if (exists(cache_key, envir = cpu_cache)) {
+          prev_data <- get(cache_key, envir = cpu_cache)
+          time_diff <- as.numeric(difftime(current_time, prev_data$time, units = "secs"))
+          
+          if (time_diff > 0 && time_diff < 300) {  # Reasonable time interval (< 5 minutes)
+            cpu_diff <- current_total - prev_data$cpu_total
+            # Convert to percentage: CPU time delta / elapsed time * 100
+            # Optionally scale by CPU cores if requested
+            if (scale_cpu_by_cores) {
+              result$cpu_percent <- (cpu_diff / time_diff / num_cores) * 100
+            } else {
+              result$cpu_percent <- (cpu_diff / time_diff) * 100
+            }
+          } else {
+            result$cpu_percent <- NA_real_  # First measurement or too much time passed
+          }
+        } else {
+          result$cpu_percent <- NA_real_  # First measurement
+        }
+        
+        # Store current measurement for next time
+        assign(cache_key, list(time = current_time, cpu_total = current_total), envir = cpu_cache)
+      } else {
+        result$cpu_percent <- NA_real_
+      }
+      
+      # Include CPU core count in results for client-side scaling
+      result$cpu_cores <- num_cores
       
       # Memory usage
       mem_info <- tryCatch(ps::ps_memory_info(p), error = function(e) NULL)

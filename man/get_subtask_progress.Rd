@@ -4,10 +4,10 @@
 \alias{get_subtask_progress}
 \title{Get subtask progress for a task run}
 \usage{
-get_subtask_progress(run_id, conn = NULL)
+get_subtask_progress(run_id = NULL, conn = NULL)
 }
 \arguments{
-\item{run_id}{Run ID}
+\item{run_id}{Run ID (optional - defaults to most recent active task)}
 
 \item{conn}{Database connection (optional)}
 }
@@ -34,7 +34,11 @@ Get subtask progress for a task run
 }
 \examples{
 \dontrun{
+# Get subtasks for specific run
 get_subtask_progress(run_id)
+
+# Get subtasks for most recent active task
+get_subtask_progress()
 }
 }
 \seealso{

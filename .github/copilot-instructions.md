@@ -1,31 +1,51 @@
 # GitHub Copilot Instructions for tasker-dev
 
-# ⚠️ MANDATORY: Before ANY Code Changes
+# 🛑 STOP - READ THIS FIRST 🛑
 
-**STOP - Check this list before proceeding:**
+**Before responding to ANY request involving code changes or multi-step work:**
 
-□ Read relevant sections of copilot-instructions.md for the task type
-□ Check if any Agent Skills apply (list skills explicitly in response) 
-□ If modifying code: Will use #code-review skill before finalizing
-□ If multi-step work: Will use #manage_todo_list for tracking
-□ State which procedures you're following in your response
+☐ State which copilot-instructions.md sections apply to this request
+☐ Check if any Agent Skills apply (list them explicitly)
+☐ If multi-step work: Create todo list with #manage_todo_list
+☐ Mark tasks in-progress and completed as you work
+☐ Use #code-review before finalizing ANY code changes
+☐ Use "we" collaborative language and refer to user as "Dr. Greg"
 
-**If you cannot check all boxes, STOP and ask for clarification.**
+**If you cannot check ALL boxes above, STOP and ask for clarification.**
 
-**CRITICAL REQUIREMENT:** You MUST explicitly state which copilot-instructions.md sections and/or Agent Skills you are following in every response that involves code changes or multi-step work.
+**Example Response Format:**
+```
+**Following copilot-instructions.md sections: Shiny Patterns, Database Patterns**
+**Applicable Agent Skills: #code-review, #git-commit-message**
+**Will use #manage_todo_list for multi-step tracking**
 
-## Token Usage Checkpoints
+Dr. Greg, we need to...
+```
 
-**At 50K+ tokens:** Remind user you're still following documented procedures
-**At 75K+ tokens:** Explicitly review which procedures you've been following
-**At 90K+ tokens:** Warning about context limits affecting procedure adherence
+---
+
+# 📖 REQUIRED READING
+
+**ALWAYS read the user-level copilot-instructions.md file first:**
+- **Location**: `/home/warnes/src/vscode-config/copilot-instructions.md`
+- **Contains**: Communication style, token monitoring, cross-project development patterns
+- **Why**: Establishes baseline behavior and standards across all projects
+
+**This file (project-specific) provides:**
+- Shiny application patterns and anti-patterns
+- Database connection handling in parallel workers
+- Unit testing requirements and code review standards
+- Agent Skills specific to tasker-dev workflows
+
+---
 
 ## Quick Skill Reference
 
 - **#code-review** - REQUIRED before finalizing any code changes
 - **#git-commit-message** - For commit message generation  
-- **#shiny-patterns** - For Shiny application development patterns
-- **#parallel-processing** - For database connection handling in parallel workers
+- **#shiny-ui-patterns** - For Shiny UI updates without flickering
+- **#database-patterns** - For database connection and query patterns
+- **#r-script-execution** - For running scripts and managing packages
 - **#unit-testing** - For creating and maintaining test coverage
 - **#manage_todo_list** - For multi-step task tracking and planning
 
@@ -45,159 +65,33 @@
 3. ✅ **No anti-patterns** - Reviewed against project-specific warnings
 4. ✅ **User informed** - Confirmed completion to user
 
-## Cross-Project Development
-
-**When making changes in other project directories, always check for and use project-specific guidance:**
-
-- **`.github/copilot-instructions.md`** - Project-specific instructions, anti-patterns, and critical warnings
-- **`.github/skills/`** - Agent Skills with step-by-step procedural patterns
-
-These files contain critical project-specific context including:
-- Database patterns and anti-patterns
-- Technology-specific considerations (Shiny, R, Python, etc.)
-- Code review standards
-- Common gotchas and error patterns
-- Development workflows
-
-**Example workflow:**
-```bash
-# Before modifying fccData code from tasker-dev context:
-1. Read /home/warnes/src/fccData/.github/copilot-instructions.md
-2. Check /home/warnes/src/fccData/.github/skills/ for relevant patterns
-3. Apply project-specific rules when making changes
-```
-
 ## Shiny Application Development
 
-### Critical: Avoid renderUI() Anti-Pattern
+**See #shiny-ui-patterns skill for complete guidance.**
 
-**NEVER use `renderUI()` for updating dynamic content.** It causes:
-- UI flickering and poor user experience
-- Loss of scroll position in scrollable containers
-- Complete DOM reconstruction on every update
-- Memory overhead and performance degradation
-- Input focus loss and control state reset
+### CRITICAL Anti-Pattern: Never Use renderUI() for Content Updates
 
-### ✅ CORRECT: Static Structure + Reactive Updates
+**Causes:** UI flickering, lost scroll position, memory overhead, poor performance.
 
-**Pattern:** Create UI elements once, update values through reactive expressions and `updateXXX()` functions.
-
+**✅ CORRECT:** Static structure + reactive content
 ```r
-# ✅ CORRECT - UI structure created once
+# UI - Created once
 ui <- fluidPage(
-  div(
-    class = "log-terminal",
-    htmlOutput("log_text")  # Container stays in DOM
-  )
+  div(class = "log-terminal", htmlOutput("log_content"))
 )
 
+# Server - Only content updates
 server <- function(input, output, session) {
-  # Reactive data
-  log_content <- reactive({
-    # Depend on reactive trigger
-    rv$log_refresh_trigger
-    
-    # Read and format data
-    lines <- readLines(log_file)
-    format_log_lines(lines)
-  })
-  
-  # Render updates content only, not structure
-  output$log_text <- renderUI({
-    HTML(log_content())
-  })
-  
-  # Trigger updates via reactive value
-  observeEvent(input$refresh_button, {
-    rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+  output$log_content <- renderUI({
+    rv$trigger  # Reactive dependency
+    HTML(read_and_format_log())
   })
 }
 ```
 
-### ❌ INCORRECT: renderUI() Recreates Everything
+**❌ INCORRECT:** renderUI() recreates entire structure on every update.
 
-```r
-# ❌ INCORRECT - Recreates entire UI structure on every update
-output$log_content <- renderUI({
-  tagList(
-    div(class = "controls",
-      selectInput(...),  # Recreated every time
-      checkboxInput(...) # Recreated every time
-    ),
-    div(class = "log-terminal",
-      HTML(format_log_lines(lines))  # Entire container recreated
-    )
-  )
-})
-```
-
-### Preferred Update Patterns
-
-#### 1. Split Static Structure from Dynamic Content
-
-```r
-# Static UI with controls (rendered once)
-output$log_viewer <- renderUI({
-  tagList(
-    div(class = "controls",
-      selectInput("num_lines", ...),
-      actionButton("refresh", ...)
-    ),
-    div(class = "log-terminal",
-      htmlOutput("log_content")  # Only this updates
-    )
-  )
-})
-
-# Dynamic content only
-output$log_content <- renderUI({
-  rv$trigger  # Reactive dependency
-  HTML(read_and_format_log())
-})
-```
-
-#### 2. Use updateXXX() Functions
-
-```r
-# For Shiny inputs, use update functions in observers
-observeEvent(new_data(), {
-  updateSelectInput(session, "task_filter", choices = new_choices)
-  updateProgressBar(session, "progress_bar", value = new_progress)
-  updateTextInput(session, "status_text", value = new_status)
-})
-```
-
-#### 3. Use shinyjs for DOM Manipulation
-
-```r
-observeEvent(input$toggle_pane, {
-  if (pane_visible) {
-    shinyjs::hide("process_pane")
-    shinyjs::removeClass("toggle_btn", "expanded")
-  } else {
-    shinyjs::show("process_pane")
-    shinyjs::addClass("toggle_btn", "expanded")
-  }
-})
-```
-
-#### 4. Reactive Triggers for Content Updates
-
-```r
-# Use reactive value as trigger
-rv <- reactiveValues(content_trigger = 0)
-
-# Increment trigger to force re-render
-observeEvent(input$update_button, {
-  rv$content_trigger <- rv$content_trigger + 1
-})
-
-# Content depends on trigger
-output$content <- renderUI({
-  rv$content_trigger  # Re-renders when incremented
-  generate_content()
-})
-```
+**For details:** See #shiny-ui-patterns skill for update patterns, updateXXX() functions, shinyjs, reactive triggers.
 
 ## Parallel Processing with Database Connections
 
@@ -252,28 +146,25 @@ process_item <- function(item) {
 
 ## Database Patterns
 
-### COUNT() Query Results
+**See #database-patterns skill for complete guidance.**
 
-**Always cast COUNT() results to INTEGER** to avoid conversion issues:
+### Critical Anti-Patterns
 
+**COUNT() casting:**
 ```r
-# ✅ CORRECT - Cast COUNT to INTEGER
-dbGetQuery(con, "SELECT COUNT(*)::INTEGER as n FROM table_name")
-dbGetQuery(con, "SELECT COUNT(DISTINCT column)::INTEGER as count FROM table_name")
+# ✅ CORRECT
+dbGetQuery(con, "SELECT COUNT(*)::INTEGER as n FROM table")
 
-# ❌ INCORRECT - Returns bigint which causes problems in R
-dbGetQuery(con, "SELECT COUNT(*) as n FROM table_name")
+# ❌ INCORRECT - Returns bigint
+dbGetQuery(con, "SELECT COUNT(*) as n FROM table")
 ```
 
-**Why:** PostgreSQL's `COUNT()` returns bigint (int64), which R's RPostgres package converts to numeric, causing precision loss and scientific notation display.
+**Connection management:**
+- `dbConnectBBC(mode="rw")` - Read-write
+- `dbConnectBBC(mode="r")` - Read-only (note: 'r', not 'ro')
+- Use read-write for monitoring/status updates
 
-### Connection Management
-
-- Use `dbConnectBBC(mode="rw")` for read-write connections
-- Use `dbConnectBBC(mode="r")` for read-only connections (note: 'r', not 'ro')
-- Main process connection: `con <- dbConnectBBC(mode="rw")`
-- Worker connections: Created in each worker via `clusterEvalQ()`
-- Use read-write connections for monitoring progress/status updates
+**For details:** See #database-patterns skill.
 
 ## Error Handling Patterns
 
@@ -296,99 +187,29 @@ Scripts support automatic retry for failed items:
 
 ## Running R Scripts
 
-**Always run R and R scripts from the project root directory** to ensure proper environment setup:
+**See #r-script-execution skill for complete guidance.**
 
+### Critical Patterns
+
+**Always run from project root:**
 ```bash
-# ✅ CORRECT - From project root
-cd /home/warnes/src/tasker-dev
-Rscript inst/scripts/my_script.R
-
-# ❌ INCORRECT - From scripts directory (won't pick up renv or .Renviron)
-cd /home/warnes/src/tasker-dev/inst/scripts
-Rscript my_script.R
+cd /home/warnes/src/tasker-dev && Rscript inst/scripts/my_script.R
 ```
 
-**Why:** Running from the project root ensures:
-- `renv` package environment is activated
-- `.Renviron` file is sourced for environment variables
-- Relative paths work correctly
-- `devtools::load_all()` can find the package source
-
-**Avoid using `--vanilla` flag** with Rscript as it prevents loading of `.Renviron` and startup files.
-
-### Shell Quoting for R Commands
-
-**Always use single quotes `'...'` when passing R code to `R` or `Rscript` commands:**
-
+**Shell quoting:**
 ```bash
-# ✅ CORRECT - Single quotes prevent shell interpretation
-Rscript -e 'cat("Hello!\n")'
-R --slave -e 'result <- 2 + 2; print(result)'
-
-# ❌ INCORRECT - Double quotes allow shell expansion
-Rscript -e "cat('Hello!\n')"  # Shell interprets ! as history expansion
-R --slave -e "result <- 2 + 2; print(result)"  # Variables like $var get expanded
+Rscript -e 'cat("Use single quotes!\n")'  # ✅ Correct
 ```
 
-**Why:** In bash, double quotes allow:
-- Variable expansion: `$var` gets replaced with variable value
-- Command substitution: `$(command)` gets executed
-- History expansion: `!` triggers history substitution (if enabled)
-- Escape sequences: `\n`, `\t` may be interpreted by shell
-
-Single quotes preserve the literal string, preventing shell interpretation and ensuring R code is passed exactly as written.
-
-### R Script Argument Handling
-
-**Always use the `argparse` package for handling command-line arguments in R scripts:**
-
+**Use argparse for arguments:**
 ```r
-# ✅ CORRECT - Use argparse for robust argument handling
 library(argparse)
-
-# Create argument parser
-parser <- ArgumentParser(description = "Process data with configurable options")
-parser$add_argument("--input", type = "character", required = TRUE,
-                   help = "Input data file path")
-parser$add_argument("--output", type = "character", required = TRUE,
-                   help = "Output file path")
-parser$add_argument("--ncores", type = "integer", default = 4,
-                   help = "Number of parallel cores to use [default: 4]")
-parser$add_argument("--overwrite", action = "store_true", default = FALSE,
-                   help = "Overwrite existing output files")
-parser$add_argument("--verbose", action = "store_true", default = FALSE,
-                   help = "Enable verbose output")
-
-# Parse arguments
+parser <- ArgumentParser(description = "...")
+parser$add_argument("--input", type = "character", required = TRUE)
 args <- parser$parse_args()
-
-# Use parsed arguments
-if (args$verbose) {
-  cat("Processing", args$input, "with", args$ncores, "cores...\n")
-}
-
-# ❌ INCORRECT - Manual argument parsing (fragile and error-prone)
-args <- commandArgs(trailingOnly = TRUE)
-input_file <- args[1]  # No validation, unclear meaning
-ncores <- as.integer(args[2])  # May fail with no error handling
 ```
 
-**Why use argparse:**
-- **Automatic help generation**: `--help` flag automatically works
-- **Type validation**: Ensures arguments are correct types
-- **Required argument checking**: Fails with clear error if required args missing
-- **Default values**: Clean handling of optional parameters
-- **Clear documentation**: Help text makes script usage obvious
-- **Standard conventions**: Follows common CLI patterns (`--flag`, `-f`)
-
-**Example usage:**
-```bash
-# Script provides helpful usage information
-Rscript my_script.R --help
-
-# Clear, self-documenting command lines
-Rscript my_script.R --input data.csv --output results.csv --ncores 8 --overwrite --verbose
-```
+**For details:** See #r-script-execution skill.
 
 ## Code Review Practices
 

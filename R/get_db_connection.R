@@ -21,10 +21,10 @@ get_db_connection <- function() {
     
     conn <- DBI::dbConnect(
       RPostgres::Postgres(),
-      host = db$host,
-      port = db$port,
-      dbname = db$dbname,
-      user = db$user,
+      host     = db$host,
+      port     = db$port,
+      dbname   = db$dbname,
+      user     = db$user,
       password = db$password
     )
     
@@ -45,10 +45,10 @@ get_db_connection <- function() {
     
     conn <- DBI::dbConnect(
       RMariaDB::MariaDB(),
-      host = db$host,
-      port = db$port,
-      dbname = db$dbname,
-      user = db$user,
+      host     = db$host,
+      port     = db$port,
+      dbname   = db$dbname,
+      user     = db$user,
       password = db$password
     )
     

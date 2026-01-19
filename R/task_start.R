@@ -39,10 +39,15 @@
 #' subtask_complete()
 #' task_complete()
 #' }
-task_start <- function(stage = NULL, task = NULL, total_subtasks = NULL, 
-                      message = NULL, version = NULL, 
-                      git_commit = NULL, quiet = FALSE, conn = NULL,
-                      .active = TRUE) {
+task_start <- function(stage         = NULL,
+                      task          = NULL,
+                      total_subtasks = NULL,
+                      message       = NULL,
+                      version       = NULL,
+                      git_commit    = NULL,
+                      quiet         = FALSE,
+                      conn          = NULL,
+                      .active       = TRUE) {
   
   # Auto-detect stage and task from script filename if not provided
   if (is.null(stage) || is.null(task)) {

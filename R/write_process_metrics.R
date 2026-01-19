@@ -28,21 +28,31 @@ write_process_metrics <- function(metrics_data, con = NULL) {
     }
   })
   
-  # Generate parameter placeholders based on database type  
+  # Generate parameter placeholders and SQL based on database type  
   db_class <- class(con)[1]
+  
   if (db_class == "PqConnection") {
-    # PostgreSQL uses $1, $2, etc. (30 parameters, timestamp is auto-generated)
-    placeholders <- paste0("$", 1:30)
+    # PostgreSQL uses $1, $2, etc. (31 parameters, timestamp is auto-generated)
+    placeholders <- paste0("$", 1:31)
+    timestamp_func <- "NOW()"
+    returning_clause <- "RETURNING metric_id"
+  } else if (db_class %in% c("MariaDBConnection", "MySQLConnection")) {
+    # MySQL/MariaDB use ? placeholders
+    placeholders <- rep("?", 31)
+    timestamp_func <- "NOW()"
+    returning_clause <- ""  # MySQL doesn't support RETURNING
   } else {
-    # SQLite, MySQL, and others use ? (30 parameters, timestamp is auto-generated)
-    placeholders <- rep("?", 30)
+    # SQLite and others use ? (31 parameters, timestamp is auto-generated)
+    placeholders <- rep("?", 31)
+    timestamp_func <- "datetime('now')"
+    returning_clause <- "RETURNING metric_id"
   }
   
   # Build INSERT statement with all fields
   sql <- paste0("
     INSERT INTO ", get_table_name('process_metrics', con, char = TRUE), " (
       run_id, timestamp, process_id, hostname, is_alive, process_start_time,
-      cpu_percent, memory_mb, memory_percent, memory_vms_mb, swap_mb,
+      cpu_percent, cpu_cores, memory_mb, memory_percent, memory_vms_mb, swap_mb,
       read_bytes, write_bytes, read_count, write_count, io_wait_percent,
       open_files, num_fds, num_threads,
       page_faults_minor, page_faults_major,
@@ -52,11 +62,11 @@ write_process_metrics <- function(metrics_data, con = NULL) {
       reporter_version, collection_duration_ms
     ) VALUES (",
     placeholders[1], ", ", 
-    if (db_class == "SQLiteConnection") "datetime('now')" else "NOW()", ", ",
-    paste(placeholders[2:30], collapse = ", "),
-    ")
-    RETURNING metric_id
-  ")
+    timestamp_func, ", ",
+    paste(placeholders[2:31], collapse = ", "),
+    ") ",
+    returning_clause
+  )
   
   # Helper to get value or NULL/NA for database
   get_val <- function(name, default = NA) {
@@ -76,8 +86,9 @@ write_process_metrics <- function(metrics_data, con = NULL) {
     get_val("is_alive", TRUE),                        # $4
     get_val("process_start_time", NA),                # $5
     get_val("cpu_percent", NA),                       # $6
-    get_val("memory_mb", NA),                         # $7
-    get_val("memory_percent", NA),                    # $8
+    get_val("cpu_cores", NA),                        # $7
+    get_val("memory_mb", NA),                         # $8
+    get_val("memory_percent", NA),                    # $9
     get_val("memory_vms_mb", NA),                     # $9
     get_val("swap_mb", NA),                           # $10
     get_val("read_bytes", NA),                        # $11
@@ -102,7 +113,14 @@ write_process_metrics <- function(metrics_data, con = NULL) {
     get_val("collection_duration_ms", NA)             # $30
   )
   
-  result <- DBI::dbGetQuery(con, sql, params = params)
+  if (db_class %in% c("MariaDBConnection", "MySQLConnection")) {
+    # MySQL/MariaDB: Execute INSERT and get LAST_INSERT_ID separately
+    DBI::dbExecute(con, sql, params = params)
+    result <- DBI::dbGetQuery(con, "SELECT LAST_INSERT_ID() AS metric_id")
+  } else {
+    # PostgreSQL and SQLite support RETURNING clause
+    result <- DBI::dbGetQuery(con, sql, params = params)
+  }
   
   invisible(result$metric_id[1])
 }

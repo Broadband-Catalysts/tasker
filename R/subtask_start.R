@@ -27,8 +27,13 @@
 #' subtask_start("Transform data")                # Subtask 2
 #' subtask_start("Save data")                     # Subtask 3
 #' }
-subtask_start <- function(subtask_name, items_total = NULL, message = NULL, 
-                         quiet = FALSE, conn = NULL, run_id = NULL, subtask_number = NULL) {
+subtask_start <- function(subtask_name,
+                         items_total   = NULL,
+                         message       = NULL,
+                         quiet         = FALSE,
+                         conn          = NULL,
+                         run_id        = NULL,
+                         subtask_number = NULL) {
   
   # Input validation
   if (missing(subtask_name) || !is.character(subtask_name) || length(subtask_name) != 1 || nchar(trimws(subtask_name)) == 0) {

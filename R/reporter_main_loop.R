@@ -132,68 +132,99 @@ update_reporter_heartbeat <- function(con, hostname) {
     table_name <- get_table_name("reporter_status", con, char = TRUE)
     current_pid <- Sys.getpid()
     current_time <- Sys.time()
+      # Use stable string format when storing timestamps to DB to avoid parsing issues
+      current_time_str <- format(current_time, "%Y-%m-%d %H:%M:%S")
     
     # Get current package version
     version <- utils::packageVersion("tasker")
     
-    # Check if an existing reporter row exists for this hostname
     config <- getOption("tasker.config")
+    
+    # Check if existing record exists and get its PID
     if (!is.null(config) && config$database$driver == "sqlite") {
-      check_sql <- sprintf("SELECT process_id FROM %s WHERE hostname = ?", table_name)
+      check_sql <- sprintf("SELECT process_id, started_at FROM %s WHERE hostname = ?", table_name)
       check_params <- list(hostname)
     } else {
-      check_sql <- sprintf("SELECT process_id FROM %s WHERE hostname = $1", table_name)
+      check_sql <- sprintf("SELECT process_id, started_at FROM %s WHERE hostname = $1", table_name)
       check_params <- list(hostname)
     }
     
     existing <- tryCatch({
       DBI::dbGetQuery(con, check_sql, params = check_params)
     }, error = function(e) {
-      # Table might not exist yet or other error - treat as no existing row
-      data.frame(process_id = integer(0))
+      # Table might not exist yet - treat as no existing row
+      data.frame(process_id = integer(0), started_at = character(0))
     })
     
-    # If there's an existing row for a different process, delete it first
-    # (New reporter should get a completely fresh row, not inherit old data)
-    if (nrow(existing) > 0 && existing$process_id[1] != current_pid) {
+    # Determine if we need to replace (different PID) or just update heartbeat (same PID)
+    need_replace <- nrow(existing) == 0 || existing$process_id[1] != current_pid
+    
+    if (need_replace) {
+      # Different PID or no record: Use transaction to DELETE old and INSERT new
+      # This ensures no old data is propagated and avoids race conditions
+      DBI::dbBegin(con)
+      
+      tryCatch({
+        # DELETE any existing row for this hostname
+        if (!is.null(config) && config$database$driver == "sqlite") {
+          delete_sql <- sprintf("DELETE FROM %s WHERE hostname = ?", table_name)
+          delete_params <- list(hostname)
+        } else {
+          delete_sql <- sprintf("DELETE FROM %s WHERE hostname = $1", table_name)
+          delete_params <- list(hostname)
+        }
+        
+        DBI::dbExecute(con, delete_sql, params = delete_params)
+        
+        # INSERT new row with current process information
+        if (!is.null(config) && config$database$driver == "sqlite") {
+          insert_sql <- sprintf("
+            INSERT INTO %s 
+            (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
+            VALUES (?, ?, ?, ?, ?, FALSE)
+          ", table_name)
+            insert_params <- list(hostname, current_pid, current_time_str, current_time_str, as.character(version))
+        } else {
+          insert_sql <- sprintf("
+            INSERT INTO %s 
+            (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
+            VALUES ($1, $2, $3, $4, $5, FALSE)
+          ", table_name)
+            insert_params <- list(hostname, current_pid, current_time_str, current_time_str, as.character(version))
+        }
+        
+        DBI::dbExecute(con, insert_sql, params = insert_params)
+        
+        # Commit transaction
+        DBI::dbCommit(con)
+        
+      }, error = function(e) {
+        # Rollback on error
+        DBI::dbRollback(con)
+        stop("Transaction failed: ", e$message)
+      })
+      
+    } else {
+      # Same PID: Just update heartbeat and version (keep started_at unchanged)
       if (!is.null(config) && config$database$driver == "sqlite") {
-        delete_sql <- sprintf("DELETE FROM %s WHERE hostname = ?", table_name)
-        delete_params <- list(hostname)
+        update_sql <- sprintf("
+          UPDATE %s 
+          SET last_heartbeat = ?, version = ?
+          WHERE hostname = ? AND process_id = ?
+        ", table_name)
+        update_params <- list(current_time, as.character(version), hostname, current_pid)
       } else {
-        delete_sql <- sprintf("DELETE FROM %s WHERE hostname = $1", table_name)
-        delete_params <- list(hostname)
+        update_sql <- sprintf("
+          UPDATE %s 
+          SET last_heartbeat = $1, version = $2
+          WHERE hostname = $3 AND process_id = $4
+        ", table_name)
+        update_params <- list(current_time, as.character(version), hostname, current_pid)
       }
       
-      DBI::dbExecute(con, delete_sql, params = delete_params)
+      DBI::dbExecute(con, update_sql, params = update_params)
     }
     
-    # Insert or update reporter record
-    # Use UPSERT for same PID (heartbeat updates), but we've already deleted different PIDs above
-    if (!is.null(config) && config$database$driver == "sqlite") {
-      sql <- sprintf("
-        INSERT OR REPLACE INTO %s 
-        (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
-        VALUES (?, ?, 
-                COALESCE((SELECT started_at FROM %s WHERE hostname = ? AND process_id = ?), ?),
-                ?, ?, FALSE)
-      ", table_name, table_name)
-      params <- list(hostname, current_pid, hostname, current_pid, current_time, current_time, as.character(version))
-    } else {
-      # PostgreSQL UPSERT - since we deleted different PIDs above, this will only
-      # update for same PID (heartbeats) or insert for new PID (new reporter)
-      sql <- sprintf("
-        INSERT INTO %s (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
-        VALUES ($1, $2, $3, $4, $5, FALSE)
-        ON CONFLICT (hostname) 
-        DO UPDATE SET 
-          last_heartbeat = EXCLUDED.last_heartbeat,
-          version = EXCLUDED.version,
-          shutdown_requested = FALSE
-      ", table_name)
-      params <- list(hostname, current_pid, current_time, current_time, as.character(version))
-    }
-    
-    DBI::dbExecute(con, sql, params = params)
     return(TRUE)
     
   }, error = function(e) {
@@ -266,40 +297,34 @@ should_shutdown <- function(con, hostname) {
 get_active_tasks_for_reporter <- function(con, hostname) {
   
   tryCatch({
-    # Get table names directly to avoid configuration dependency issues
-    config <- getOption("tasker.config")
-    if (!is.null(config) && !is.null(config$database) && !is.null(config$database$schema)) {
-      task_runs_table <- paste0(config$database$schema, ".task_runs")
-      tasks_table <- paste0(config$database$schema, ".tasks")
-    } else {
-      task_runs_table <- "task_runs"
-      tasks_table <- "tasks"
-    }
-    
-    # Database-specific SQL
-    if (!is.null(config) && config$database$driver == "sqlite") {
-      sql <- sprintf("
-        SELECT tr.run_id, tr.process_id, tr.start_time, COALESCE(t.task_name, 'Unknown') as task_name
-        FROM %s tr
-        LEFT JOIN %s t ON tr.task_id = t.task_id
-        WHERE tr.hostname = ? 
-          AND tr.status IN ('RUNNING', 'STARTED')
-          AND tr.process_id IS NOT NULL
-        ORDER BY tr.start_time
-      ", task_runs_table, tasks_table)
-    } else {
-      sql <- sprintf("
-        SELECT tr.run_id, tr.process_id, tr.start_time, COALESCE(t.task_name, 'Unknown') as task_name
-        FROM %s tr
-        LEFT JOIN %s t ON tr.task_id = t.task_id
-        WHERE tr.hostname = $1 
-          AND tr.status IN ('RUNNING', 'STARTED')
-          AND tr.process_id IS NOT NULL
-        ORDER BY tr.start_time
-      ", task_runs_table, tasks_table)
-    }
-    
-    result <- DBI::dbGetQuery(con, sql, params = list(hostname))
+      # Get table names directly to avoid configuration dependency issues
+      config <- getOption("tasker.config")
+      driver <- if (!is.null(config) && !is.null(config$database)) config$database$driver else "sqlite"
+      schema <- if (!is.null(config) && !is.null(config$database) && !is.null(config$database$schema)) config$database$schema else ""
+
+      # Use DBI::SQL to safely inject schema-qualified names when necessary
+      if (nchar(schema) > 0) {
+        task_runs_table_str <- paste0(schema, ".task_runs")
+        tasks_table_str <- paste0(schema, ".tasks")
+      } else {
+        task_runs_table_str <- "task_runs"
+        tasks_table_str <- "tasks"
+      }
+
+      # Build query using glue::glue_sql to avoid accidental leading dots
+      if (!is.null(driver) && tolower(driver) == "sqlite") {
+        sql <- glue::glue_sql(
+          "SELECT tr.run_id, tr.process_id, tr.start_time, COALESCE(t.task_name, 'Unknown') as task_name\n        FROM {DBI::SQL(task_runs_table_str)} tr\n        LEFT JOIN {DBI::SQL(tasks_table_str)} t ON tr.task_id = t.task_id\n        WHERE tr.hostname = ?\n          AND tr.status IN ('RUNNING', 'STARTED')\n          AND tr.process_id IS NOT NULL\n        ORDER BY tr.start_time",
+          .con = con
+        )
+      } else {
+        sql <- glue::glue_sql(
+          "SELECT tr.run_id, tr.process_id, tr.start_time, COALESCE(t.task_name, 'Unknown') as task_name\n        FROM {DBI::SQL(task_runs_table_str)} tr\n        LEFT JOIN {DBI::SQL(tasks_table_str)} t ON tr.task_id = t.task_id\n        WHERE tr.hostname = $1\n          AND tr.status IN ('RUNNING', 'STARTED')\n          AND tr.process_id IS NOT NULL\n        ORDER BY tr.start_time",
+          .con = con
+        )
+      }
+
+      result <- DBI::dbGetQuery(con, sql, params = list(hostname))
     
     # Convert to list of task objects
     if (nrow(result) > 0) {

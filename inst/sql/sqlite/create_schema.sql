@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS process_metrics (
     is_alive INTEGER NOT NULL DEFAULT 1,
     process_start_time TEXT,
     cpu_percent REAL,
+    cpu_cores INTEGER,
     memory_mb REAL,
     memory_percent REAL,
     memory_vms_mb REAL,
@@ -271,6 +272,7 @@ CREATE VIEW IF NOT EXISTS task_runs_with_latest_metrics AS
 SELECT 
     tr.*,
     pm.cpu_percent,
+    pm.cpu_cores,
     pm.memory_mb,
     pm.memory_percent,
     pm.child_count,

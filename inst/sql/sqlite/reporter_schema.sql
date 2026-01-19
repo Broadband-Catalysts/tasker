@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS process_metrics (
     
     -- Resource usage - CPU and Memory
     cpu_percent REAL,                      -- CPU usage percentage
+    cpu_cores INTEGER,                     -- Number of CPU cores in system
     memory_mb REAL,                        -- Memory (RSS) in MB
     memory_percent REAL,                   -- Memory usage percentage
     memory_vms_mb REAL,                    -- Virtual memory size in MB
@@ -122,6 +123,7 @@ CREATE VIEW IF NOT EXISTS task_runs_with_latest_metrics AS
 SELECT 
     tr.*,
     pm.cpu_percent,
+    pm.cpu_cores,
     pm.memory_mb,
     pm.memory_percent,
     pm.child_count,

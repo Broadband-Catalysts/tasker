@@ -22,14 +22,14 @@
 register_task <- function(stage,
                          name,
                          type,
-                         description = NULL,
-                         script_path = NULL,
+                         description     = NULL,
+                         script_path     = NULL,
                          script_filename = NULL,
-                         log_path = NULL,
-                         log_filename = NULL,
-                         stage_order = NULL,
-                         task_order = NULL,
-                         conn = NULL) {
+                         log_path        = NULL,
+                         log_filename    = NULL,
+                         stage_order     = NULL,
+                         task_order      = NULL,
+                         conn            = NULL) {
   ensure_configured()
   
   # Input validation

@@ -10,7 +10,8 @@ collect_process_metrics(
   hostname = Sys.info()["nodename"],
   include_children = TRUE,
   timeout_seconds = 5,
-  prev_start_time = NULL
+  prev_start_time = NULL,
+  scale_cpu_by_cores = FALSE
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ collect_process_metrics(
 \item{timeout_seconds}{Maximum time to spend collecting metrics (default: 5)}
 
 \item{prev_start_time}{Previous process start time for PID reuse detection (optional)}
+
+\item{scale_cpu_by_cores}{Scale CPU percentage by number of CPU cores (default: FALSE)}
 }
 \value{
 List with metrics data or error information

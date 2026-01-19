@@ -69,9 +69,16 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
     }
   })
   
-  # Get driver type
+  # Get driver type and schema from config
   config <- getOption("tasker.config")
   driver <- config$database$driver
+  
+  # Use schema from config if schema_name not explicitly provided
+  # The parameter default is "tasker", but if config has a different schema, use that
+  if (schema_name == "tasker" && !is.null(config$database$schema) && config$database$schema != "") {
+    schema_name <- config$database$schema
+  }
+  
   backup_schema <- paste0(schema_name, "_backup")
   
   tryCatch({
@@ -142,6 +149,14 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
         # present), and finally execute the remaining views portion.
         if (driver == "postgresql") {
           sql_text <- paste(readLines(sql_file, warn = FALSE), collapse = "\n")
+          
+          # Replace hardcoded 'tasker' schema with actual schema name
+          if (schema_name != "tasker") {
+            sql_text <- gsub("\\btasker\\.", paste0(schema_name, "."), sql_text)
+            sql_text <- gsub("schema_name = 'tasker'", paste0("schema_name = '", schema_name, "'"), sql_text)
+            sql_text <- gsub('schema_name = "tasker"', paste0('schema_name = "', schema_name, '"'), sql_text)
+          }
+          
           split_marker <- "-- Views for easier querying"
           if (grepl(split_marker, sql_text, fixed = TRUE)) {
             parts <- strsplit(sql_text, split_marker, fixed = TRUE)[[1]]
@@ -159,7 +174,17 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
             # Execute reporter schema if present
             proc_file <- system.file("sql", "postgresql", "reporter_schema.sql", package = "tasker")
             if (file.exists(proc_file) && nzchar(proc_file)) {
-              bbcDB::dbExecuteScript(conn, proc_file, .open = "", .close = "", .quiet = FALSE)
+              # Also replace schema name in reporter schema
+              reporter_sql <- paste(readLines(proc_file, warn = FALSE), collapse = "\n")
+              if (schema_name != "tasker") {
+                reporter_sql <- gsub("\\btasker\\.", paste0(schema_name, "."), reporter_sql)
+                reporter_sql <- gsub("schema_name = 'tasker'", paste0("schema_name = '", schema_name, "'"), reporter_sql)
+                reporter_sql <- gsub('schema_name = "tasker"', paste0('schema_name = "', schema_name, '"'), reporter_sql)
+              }
+              tmp_reporter <- tempfile(fileext = ".sql")
+              writeLines(reporter_sql, tmp_reporter)
+              bbcDB::dbExecuteScript(conn, tmp_reporter, .open = "", .close = "", .quiet = FALSE)
+              try(file.remove(tmp_reporter), silent = TRUE)
             }
 
             # Execute remaining views

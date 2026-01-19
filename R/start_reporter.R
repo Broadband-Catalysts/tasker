@@ -10,6 +10,7 @@
 #' @param conn Database connection (NULL = get default)
 #' @param supervise If FALSE (default), reporter persists after parent process exits.
 #'   If TRUE, reporter is automatically terminated when parent R process exits.
+#' @param timeout Timeout in seconds for stopping existing reporter (default: 30)
 #'
 #' @return List with process handle and status information
 #' @export
@@ -31,7 +32,8 @@ start_reporter <- function(
     force = FALSE,
     quiet = FALSE,
     conn = NULL,
-    supervise = FALSE
+    supervise = FALSE,
+    timeout = 30
 ) {
   
   if (!quiet) {
@@ -62,7 +64,7 @@ start_reporter <- function(
     if (!quiet) {
       message("[Reporter] Force restart requested, stopping existing reporter")
     }
-    stop_reporter(hostname, timeout = 10, con = conn)
+    stop_reporter(hostname, timeout = timeout, con = conn)
     Sys.sleep(2)  # Brief pause for clean shutdown
   }
   
@@ -166,7 +168,7 @@ start_reporter <- function(
 #'
 #' @return List with is_alive (logical), status (character), heartbeat_age_seconds (integer)
 #' @keywords internal
-get_reporter_status <- function(process_id, hostname, max_heartbeat_age_seconds = 60, con = NULL) {
+get_reporter_status <- function(process_id, hostname=Sys.info()["nodename"], max_heartbeat_age_seconds = 60, con = NULL) {
   
   # Get current machine hostname for comparison
   current_hostname <- Sys.info()["nodename"]
@@ -274,6 +276,7 @@ get_reporter_status <- function(process_id, hostname, max_heartbeat_age_seconds 
   })
   
   return(list(
+    process_id = process_id,
     is_alive = is_alive,
     status = status,
     heartbeat_age_seconds = heartbeat_age_seconds,

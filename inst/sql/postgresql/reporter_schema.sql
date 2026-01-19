@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS tasker.process_metrics (
     
     -- Resource usage - CPU and Memory
     cpu_percent NUMERIC(5,2),               -- CPU usage percentage
+    cpu_cores INTEGER,                      -- Number of CPU cores in system
     memory_mb NUMERIC(10,2),                -- Memory (RSS) in MB
     memory_percent NUMERIC(5,2),            -- Memory usage percentage
     memory_vms_mb NUMERIC(10,2),            -- Virtual memory size in MB
@@ -121,6 +122,7 @@ CREATE OR REPLACE VIEW tasker.task_runs_with_latest_metrics AS
 SELECT 
     tr.*,
     pm.cpu_percent AS metrics_cpu_percent,
+    pm.cpu_cores AS metrics_cpu_cores,
     pm.memory_mb AS metrics_memory_mb,
     pm.memory_percent AS metrics_memory_percent,
     pm.child_count AS metrics_child_count,

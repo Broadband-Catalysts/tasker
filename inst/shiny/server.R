@@ -437,33 +437,39 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   }
   
   # Resource usage and process state information
-  has_current_metrics <- (!is.null(task_data$metrics_cpu_percent) && !is.na(task_data$metrics_cpu_percent)) || 
-                        (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) ||
-                        (!is.null(task_data$metrics_child_count) && !is.na(task_data$metrics_child_count))
+  has_current_metrics <- (!is.null(task_data$cpu_percent) && !is.na(task_data$cpu_percent)) || 
+                        (!is.null(task_data$memory_mb) && !is.na(task_data$memory_mb)) ||
+                        (!is.null(task_data$child_count) && !is.na(task_data$child_count))
   has_any_metrics <- has_current_metrics || (!is.null(task_data$metrics_age_seconds) && !is.na(task_data$metrics_age_seconds))
   
   if (has_current_metrics) {
     # Current process metrics available
-    cpu_display <- if (!is.null(task_data$metrics_cpu_percent) && !is.na(task_data$metrics_cpu_percent)) {
-      sprintf("%.1f%%", task_data$metrics_cpu_percent)
+    cpu_display <- if (!is.null(task_data$cpu_percent) && !is.na(task_data$cpu_percent)) {
+      cpu_text <- sprintf("%.1f%%", task_data$cpu_percent)
+      # Add CPU core info if available
+      if (!is.null(task_data$cpu_cores) && !is.na(task_data$cpu_cores)) {
+        sprintf("%s (%d cores)", cpu_text, as.integer(task_data$cpu_cores))
+      } else {
+        cpu_text
+      }
     } else {
       "N/A"
     }
-    memory_display <- if (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) {
-      sprintf("%.1f MB (%.1f%%)", task_data$metrics_memory_mb, 
-              if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) task_data$metrics_memory_percent else 0)
+    memory_display <- if (!is.null(task_data$memory_mb) && !is.na(task_data$memory_mb)) {
+      sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
+              if (!is.null(task_data$memory_percent) && !is.na(task_data$memory_percent)) task_data$memory_percent else 0)
     } else {
       "N/A"
     }
     
     # Child process counts
-    child_display <- if (!is.null(task_data$metrics_child_count) && !is.na(task_data$metrics_child_count)) {
-      if (task_data$metrics_child_count > 0) {
-        child_cpu <- if (!is.null(task_data$metrics_child_total_cpu_percent) && !is.na(task_data$metrics_child_total_cpu_percent)) 
-          sprintf(" (%.1f%% CPU)", task_data$metrics_child_total_cpu_percent) else ""
-        child_mem <- if (!is.null(task_data$metrics_child_total_memory_mb) && !is.na(task_data$metrics_child_total_memory_mb)) 
-          sprintf(" (%.1f MB RAM)", task_data$metrics_child_total_memory_mb) else ""
-        sprintf("%d children%s%s", as.integer(task_data$metrics_child_count), child_cpu, child_mem)
+    child_display <- if (!is.null(task_data$child_count) && !is.na(task_data$child_count)) {
+      if (task_data$child_count > 0) {
+        child_cpu <- if (!is.null(task_data$child_total_cpu_percent) && !is.na(task_data$child_total_cpu_percent)) 
+          sprintf(" (%.1f%% CPU)", task_data$child_total_cpu_percent) else ""
+        child_mem <- if (!is.null(task_data$child_total_memory_mb) && !is.na(task_data$child_total_memory_mb)) 
+          sprintf(" (%.1f MB RAM)", task_data$child_total_memory_mb) else ""
+        sprintf("%d children%s%s", as.integer(task_data$child_count), child_cpu, child_mem)
       } else {
         "No children"
       }
@@ -521,7 +527,13 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     
     # Show actual metrics instead of just collection time
     cpu_display <- if (!is.null(task_data$metrics_cpu_percent) && !is.na(task_data$metrics_cpu_percent)) {
-      sprintf("%.1f%%", task_data$metrics_cpu_percent)
+      cpu_text <- sprintf("%.1f%%", task_data$metrics_cpu_percent)
+      # Add CPU core info if available
+      if (!is.null(task_data$metrics_cpu_cores) && !is.na(task_data$metrics_cpu_cores)) {
+        sprintf("%s (%d cores)", cpu_text, as.integer(task_data$metrics_cpu_cores))
+      } else {
+        cpu_text
+      }
     } else {
       "N/A"
     }
@@ -537,9 +549,9 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       "N/A"
     }
     
-    child_display <- if (!is.null(task_data$metrics_child_count) && !is.na(task_data$metrics_child_count)) {
-      if (task_data$metrics_child_count > 0) {
-        sprintf("%d children", as.integer(task_data$metrics_child_count))
+    child_display <- if (!is.null(task_data$child_count) && !is.na(task_data$child_count)) {
+      if (task_data$child_count > 0) {
+        sprintf("%d children", as.integer(task_data$child_count))
       } else {
         "No children"
       }
@@ -701,7 +713,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
             <th>Items</th>
             <th>Message</th>
             <th>Duration</th>
-            <th>Est. Complete</th>
+            <th>Remaining</th>
           </tr>
         </thead>
         <tbody>
@@ -2205,25 +2217,25 @@ server <- function(input, output, session) {
             heartbeat_age_seconds <= 30                      ~ "#5cb85c",  # Green: fresh heartbeat
             heartbeat_age_seconds <= 120                     ~ "#f0ad4e",  # Yellow: aging
             heartbeat_age_seconds > 120                      ~ "#d9534f",  # Red: stale
-            !isTruthy(is_alive) && !is.na(is_alive)          ~ "#d9534f",  # Red: confirmed dead
+            !is.na(is_alive) & !as.logical(is_alive)         ~ "#d9534f",  # Red: confirmed dead
             TRUE                                             ~ "#777"      # Gray: unknown
           ),
           icon = dplyr::case_when(
             heartbeat_age_seconds <= 30                      ~ "🟢",
             heartbeat_age_seconds <= 120                     ~ "🟡",
             heartbeat_age_seconds > 120                      ~ "🔴",
-            !isTruthy(is_alive) && !is.na(is_alive)          ~ "⬤",
+            !is.na(is_alive) & !as.logical(is_alive)         ~ "⬤",
             TRUE                                             ~ "❓"
           ),
           text = dplyr::case_when(
-            !is.na(is_alive) && !isTruthy(is_alive) ~ "Dead",
-            heartbeat_age_seconds <= 30             ~ "Active",
-            heartbeat_age_seconds <= 120            ~ "Stale",
-            heartbeat_age_seconds > 120             ~ "Very stale",
-            TRUE                                    ~ "Unknown"
+            !is.na(is_alive) & !as.logical(is_alive) ~ "Dead",
+            heartbeat_age_seconds <= 30              ~ "Active",
+            heartbeat_age_seconds <= 120             ~ "Stale",
+            heartbeat_age_seconds > 120              ~ "Very stale",
+            TRUE                                     ~ "Unknown"
           ),
           hostname_short = stringr::str_replace(hostname, "\\..*$", ""  ),
-          process_id_str = ifelse(isTruthy(process_id), as.character(process_id), "?"),
+          process_id_str = ifelse(is.na(process_id), "?", as.character(process_id)),
           status_html = paste0(
             "<div style=\"color: ", color, "; margin-bottom: 2px;\">",
                 icon, " <strong>", hostname_short, "</strong> (PID: ", process_id_str, ") - ", text,
@@ -2236,7 +2248,7 @@ server <- function(input, output, session) {
       total_monitors <- nrow(monitor_data)
       active_monitors <- monitor_data %>%
         dplyr::filter(
-          (is.na(is_alive) || isTruthy(is_alive)),
+          (is.na(is_alive) | as.logical(is_alive)),
           !is.null(heartbeat_age_seconds),
           !is.na(heartbeat_age_seconds),
           as.numeric(heartbeat_age_seconds) <= 30
@@ -2376,20 +2388,23 @@ server <- function(input, output, session) {
   observeEvent(input$toggle_process_pane, {
     task_id <- input$toggle_process_pane
     
-    # Toggle expanded state
-    if (task_id %in% rv$expanded_process_panes) {
-      rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
-      # Hide the pane
-      shinyjs::hide(paste0("process_pane_", task_id))
-      # Remove expanded class from button
-      shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
-    } else {
-      rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
-      # Show the pane
-      shinyjs::show(paste0("process_pane_", task_id))
-      # Add expanded class to button
-      shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
-    }
+    # Use a small delay to ensure DOM elements are fully rendered
+    shinyjs::delay(50, {
+      # Toggle expanded state
+      if (task_id %in% rv$expanded_process_panes) {
+        rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
+        # Hide the pane
+        shinyjs::hide(paste0("process_pane_", task_id))
+        # Remove expanded class from button
+        shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
+      } else {
+        rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
+        # Show the pane
+        shinyjs::show(paste0("process_pane_", task_id))
+        # Add expanded class to button
+        shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
+      }
+    })
   })
   
   # Log pane toggle handler
