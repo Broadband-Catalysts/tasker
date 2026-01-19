@@ -155,7 +155,7 @@ LEFT JOIN process_metrics pm ON pm.run_id = cts.run_id
 tasker::setup_tasker_db(force = TRUE)
 
 # Ensure process reporter tables exist
-tasker::setup_process_reporter_schema()
+tasker::setup_reporter_schema()
 ```
 
 ## Testing
@@ -263,7 +263,7 @@ for (i in 1:nrow(status)) {
 ## Support
 
 For issues or questions:
-1. Check that Process Reporter schema is installed: `setup_process_reporter_schema()`
-2. Verify reporter is running: `get_process_reporter_status()`
+1. Check that Process Reporter schema is installed: `setup_reporter_schema()`
+2. Verify reporter is running: `check_reporter()`
 3. Run integration test: `source("tests/manual/test_monitor_integration.R")`
 4. Check Shiny console for errors when loading monitor

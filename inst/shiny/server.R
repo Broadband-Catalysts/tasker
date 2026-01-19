@@ -123,12 +123,12 @@ calculate_task_progress <- function(task_data) {
   items_total <- if (!is.na(task_data$items_total)) task_data$items_total else 0
   items_complete <- if (!is.na(task_data$items_complete)) task_data$items_complete else 0
   
-  # Debug logging to understand subtask detection
-  if (total_subtasks > 0) {
-    message(sprintf("DEBUG: Task with subtasks - status=%s, total=%d, completed=%s", 
-                   task_status, total_subtasks, 
-                   if(is.null(task_data$completed_subtasks)) "NULL" else as.character(task_data$completed_subtasks)))
-  }
+  # Debug logging to understand subtask detection (DISABLED)
+  # if (total_subtasks > 0) {
+  #   message(sprintf("DEBUG: Task with subtasks - status=%s, total=%d, completed=%s", 
+  #                  task_status, total_subtasks, 
+  #                  if(is.null(task_data$completed_subtasks)) "NULL" else as.character(task_data$completed_subtasks)))
+  # }
   # Note: Removed noisy debug message about no subtasks detected
   
   # Calculate effective progress - prioritize subtask completion when available
@@ -149,10 +149,10 @@ calculate_task_progress <- function(task_data) {
       0
     }
     
-    # Log when we successfully use subtask progress
-    if (total_subtasks > 0) {
-      message(sprintf("Using subtask progress: %d/%d", completed_count, total_subtasks))
-    }
+    # Log when we successfully use subtask progress (DISABLED)
+    # if (total_subtasks > 0) {
+    #   message(sprintf("Using subtask progress: %d/%d", completed_count, total_subtasks))
+    # }
     
     effective_progress <- round(100 * completed_count / total_subtasks, 1)
     use_subtasks <- TRUE
@@ -355,7 +355,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   
   # Check for process/metrics issues using database fields
   # Priority: collection_error > stale metrics > process dead
-  if (!is.null(task_data$collection_error) && isTRUE(task_data$collection_error)) {
+  if (!is.null(task_data$metrics_collection_error) && isTRUE(task_data$metrics_collection_error)) {
     # Metrics collection error
     error_msg <- if (!is.null(task_data$metrics_error_message) && !is.na(task_data$metrics_error_message)) {
       sprintf("Metrics collection error: %s", task_data$metrics_error_message)
@@ -380,9 +380,9 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
         as.integer(task_data$metrics_age_seconds)
       ))
     }
-  } else if (!is.null(task_data$is_alive) && !is.na(task_data$is_alive)) {
+  } else if (!is.null(task_data$metrics_is_alive) && !is.na(task_data$metrics_is_alive)) {
     # Check database is_alive field (from process metrics)
-    if (status %in% c("RUNNING", "STARTED") && !isTRUE(task_data$is_alive)) {
+    if (status %in% c("RUNNING", "STARTED") && !isTRUE(task_data$metrics_is_alive)) {
       html_parts <- c(html_parts, sprintf(
         "<div class='process-error-banner'>
           <i class='fa fa-exclamation-triangle'></i>
@@ -414,8 +414,8 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   
   # Check if process is actually dead and update status if needed
   process_is_dead <- FALSE
-  if (!is.null(task_data$is_alive) && !is.na(task_data$is_alive) && 
-      status %in% c("RUNNING", "STARTED") && !isTRUE(task_data$is_alive)) {
+  if (!is.null(task_data$metrics_is_alive) && !is.na(task_data$metrics_is_alive) && 
+      status %in% c("RUNNING", "STARTED") && !isTRUE(task_data$metrics_is_alive)) {
     process_is_dead <- TRUE
     
     # Update task status to FAILED in database
@@ -437,27 +437,33 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   }
   
   # Resource usage and process state information
-  has_current_metrics <- !is.null(task_data$cpu_percent) && !is.na(task_data$cpu_percent)
+  has_current_metrics <- (!is.null(task_data$metrics_cpu_percent) && !is.na(task_data$metrics_cpu_percent)) || 
+                        (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) ||
+                        (!is.null(task_data$metrics_child_count) && !is.na(task_data$metrics_child_count))
   has_any_metrics <- has_current_metrics || (!is.null(task_data$metrics_age_seconds) && !is.na(task_data$metrics_age_seconds))
   
   if (has_current_metrics) {
     # Current process metrics available
-    cpu_display <- sprintf("%.1f%%", task_data$cpu_percent)
-    memory_display <- if (!is.null(task_data$memory_mb) && !is.na(task_data$memory_mb)) {
-      sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
-              if (!is.null(task_data$memory_percent) && !is.na(task_data$memory_percent)) task_data$memory_percent else 0)
+    cpu_display <- if (!is.null(task_data$metrics_cpu_percent) && !is.na(task_data$metrics_cpu_percent)) {
+      sprintf("%.1f%%", task_data$metrics_cpu_percent)
+    } else {
+      "N/A"
+    }
+    memory_display <- if (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) {
+      sprintf("%.1f MB (%.1f%%)", task_data$metrics_memory_mb, 
+              if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) task_data$metrics_memory_percent else 0)
     } else {
       "N/A"
     }
     
     # Child process counts
-    child_display <- if (!is.null(task_data$child_count) && !is.na(task_data$child_count)) {
-      if (task_data$child_count > 0) {
-        child_cpu <- if (!is.null(task_data$child_total_cpu_percent) && !is.na(task_data$child_total_cpu_percent)) 
-          sprintf(" (%.1f%% CPU)", task_data$child_total_cpu_percent) else ""
-        child_mem <- if (!is.null(task_data$child_total_memory_mb) && !is.na(task_data$child_total_memory_mb)) 
-          sprintf(" (%.1f MB RAM)", task_data$child_total_memory_mb) else ""
-        sprintf("%d children%s%s", as.integer(task_data$child_count), child_cpu, child_mem)
+    child_display <- if (!is.null(task_data$metrics_child_count) && !is.na(task_data$metrics_child_count)) {
+      if (task_data$metrics_child_count > 0) {
+        child_cpu <- if (!is.null(task_data$metrics_child_total_cpu_percent) && !is.na(task_data$metrics_child_total_cpu_percent)) 
+          sprintf(" (%.1f%% CPU)", task_data$metrics_child_total_cpu_percent) else ""
+        child_mem <- if (!is.null(task_data$metrics_child_total_memory_mb) && !is.na(task_data$metrics_child_total_memory_mb)) 
+          sprintf(" (%.1f MB RAM)", task_data$metrics_child_total_memory_mb) else ""
+        sprintf("%d children%s%s", as.integer(task_data$metrics_child_count), child_cpu, child_mem)
       } else {
         "No children"
       }
@@ -502,30 +508,65 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     } else if (status %in% c("RUNNING", "STARTED")) {
       if (process_is_dead) {
         process_state <- "<span style='color: #d9534f;'>Process dead (status updated to FAILED)</span>"
+      } else if (metrics_age > 300) {  # 5 minutes
+        process_state <- "<span style='color: #f0ad4e;'>Process running (metrics collection paused)</span>"
       } else if (metrics_age > 120) {
-        process_state <- "<span style='color: #f0ad4e;'>Process status uncertain (metrics very stale)</span>"
+        process_state <- "<span style='color: #f0ad4e;'>Process running (metrics slightly stale)</span>"
       } else {
-        process_state <- "<span style='color: #5bc0de;'>Process running (metrics collection paused)</span>"
+        process_state <- "<span style='color: #5cb85c;'>Process running (metrics active)</span>"
       }
     } else {
       process_state <- sprintf("Process status: %s", status)
     }
     
-    # Show last known metrics as historic data
-    historic_note <- if (metrics_age < 60) {
-      sprintf("Last collected %.0fs ago", metrics_age)
-    } else if (metrics_age < 3600) {
-      sprintf("Last collected %.0fm ago", metrics_age / 60)
+    # Show actual metrics instead of just collection time
+    cpu_display <- if (!is.null(task_data$metrics_cpu_percent) && !is.na(task_data$metrics_cpu_percent)) {
+      sprintf("%.1f%%", task_data$metrics_cpu_percent)
     } else {
-      sprintf("Last collected %.0fh ago", metrics_age / 3600)
+      "N/A"
+    }
+    
+    memory_display <- if (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) {
+      sprintf("%.1f MB", task_data$metrics_memory_mb)
+      if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) {
+        sprintf("%.1f MB (%.1f%%)", task_data$metrics_memory_mb, task_data$metrics_memory_percent)
+      } else {
+        sprintf("%.1f MB", task_data$metrics_memory_mb)
+      }
+    } else {
+      "N/A"
+    }
+    
+    child_display <- if (!is.null(task_data$metrics_child_count) && !is.na(task_data$metrics_child_count)) {
+      if (task_data$metrics_child_count > 0) {
+        sprintf("%d children", as.integer(task_data$metrics_child_count))
+      } else {
+        "No children"
+      }
+    } else {
+      "N/A"
+    }
+    
+    historic_note <- if (metrics_age < 60) {
+      sprintf("as of %.0fs ago", metrics_age)
+    } else if (metrics_age < 3600) {
+      sprintf("as of %.0fm ago", metrics_age / 60)
+    } else {
+      sprintf("as of %.0fh ago", metrics_age / 3600)
     }
     
     resource_html <- sprintf(
       "<div class='process-details compact'>
         <span class='detail-item'><strong>Process State:</strong> %s</span>
-        <span class='detail-item'><strong>Historic Metrics:</strong> %s</span>
+        <span class='detail-item'><strong>CPU:</strong> %s</span>
+        <span class='detail-item'><strong>Memory:</strong> %s</span>
+        <span class='detail-item'><strong>Children:</strong> %s</span>
+        <span class='detail-item'><strong>Updated:</strong> %s</span>
       </div>",
       process_state,
+      htmltools::htmlEscape(cpu_display),
+      htmltools::htmlEscape(memory_display),
+      htmltools::htmlEscape(child_display),
       htmltools::htmlEscape(historic_note)
     )
     html_parts <- c(html_parts, resource_html)
@@ -580,7 +621,13 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       duration <- tryCatch({
         start_val <- st$start_time
         if (!is.null(start_val) && !is.na(start_val)) {
-          format_duration(start_val, st$last_update)
+          # Use end_time if available (completed subtask), otherwise current time (running subtask)
+          end_time <- if (!is.null(st$end_time) && !is.na(st$end_time)) {
+            st$end_time
+          } else {
+            Sys.time()  # For running subtasks
+          }
+          format_duration(start_val, end_time)
         } else {
           "-"
         }
@@ -1757,16 +1804,16 @@ server <- function(input, output, session) {
         })
         
         # Status badge - reactive output
-        output[[paste0("task_status_", task_id_local)]] <- renderUI({
+        output[[paste0("task_status_", task_id_local)]] <- renderText({
           task_data <- task_reactives[[task_key_local]]
           task_status <- if (!is.null(task_data)) task_data$status else "NOT_STARTED"
-          HTML(badge_html(task_status))
+          badge_html(task_status)
         })
         
         # Progress bars - reactive output
-        output[[paste0("task_progress_", task_id_local)]] <- renderUI({
+        output[[paste0("task_progress_", task_id_local)]] <- renderText({
           task_data <- task_reactives[[task_key_local]]
-          HTML(task_progress_html(task_data))
+          task_progress_html(task_data)
         })
         
         # Message with enhanced subtask details - reactive output
@@ -2138,19 +2185,18 @@ server <- function(input, output, session) {
     }
     
     tryCatch({
-      tasker::check_process_reporter(quiet = TRUE)
+      tasker::check_reporter(quiet = TRUE)
     }, error = function(e) {
       NULL
     })
   })
   
-  output$monitor_status <- renderUI({
+  output$monitor_status <- renderText({
     monitor_data <- monitor_status_reactive()
     
     if (is.null(monitor_data) || nrow(monitor_data) == 0) {
       # No monitors running
-      HTML('<div style="color: #d9534f; font-weight: bold;">⬤ No monitors running</div>
-           <div style="color: #777; font-size: 11px;">Process metrics unavailable</div>')
+      '<div style="color: #d9534f; font-weight: bold;">⬤ No monitors running</div><div style="color: #777; font-size: 11px;">Process metrics unavailable</div>'
     } else {
       # Build status for each monitor using dplyr pipeline
       status_items <- monitor_data %>%
@@ -2170,11 +2216,11 @@ server <- function(input, output, session) {
             TRUE                                             ~ "❓"
           ),
           text = dplyr::case_when(
-            !isTruthy(is_alive)          ~ "Dead",
-            heartbeat_age_seconds <= 30  ~ "Active",
-            heartbeat_age_seconds <= 120 ~ "Stale",
-            heartbeat_age_seconds > 120  ~ "Very stale",
-            TRUE                         ~ "Unknown"
+            !is.na(is_alive) && !isTruthy(is_alive) ~ "Dead",
+            heartbeat_age_seconds <= 30             ~ "Active",
+            heartbeat_age_seconds <= 120            ~ "Stale",
+            heartbeat_age_seconds > 120             ~ "Very stale",
+            TRUE                                    ~ "Unknown"
           ),
           hostname_short = stringr::str_replace(hostname, "\\..*$", ""  ),
           process_id_str = ifelse(isTruthy(process_id), as.character(process_id), "?"),
@@ -2190,7 +2236,7 @@ server <- function(input, output, session) {
       total_monitors <- nrow(monitor_data)
       active_monitors <- monitor_data %>%
         dplyr::filter(
-          isTruthy(is_alive),
+          (is.na(is_alive) || isTruthy(is_alive)),
           !is.null(heartbeat_age_seconds),
           !is.na(heartbeat_age_seconds),
           as.numeric(heartbeat_age_seconds) <= 30
@@ -2202,7 +2248,7 @@ server <- function(input, output, session) {
                               </div>',
                               as.integer(active_monitors), as.integer(total_monitors))
       
-      HTML(paste(c(status_items, summary_line), collapse = ""))
+      paste(c(status_items, summary_line), collapse = "")
     }
   })
   
@@ -2221,7 +2267,7 @@ server <- function(input, output, session) {
   })
   
   # Dynamic error banner with appropriate styling
-  output$error_banner <- renderUI({
+  output$error_banner <- renderText({
     if (!is.null(rv$error_message)) {
       error_text <- rv$error_message
       
@@ -2231,21 +2277,21 @@ server <- function(input, output, session) {
       alert_class <- if (is_info) "alert-info" else "alert-danger"
       label_text <- if (is_info) "Info: " else "Error: "
       
-      div(
-        class = paste("alert", alert_class), 
-        style = "margin: 6px; padding: 6px 10px;",
-        tags$strong(label_text),
-        tags$pre(
-          style = "white-space: pre-wrap; margin-top: 6px; background: #fff; padding: 6px; border: 1px solid #ddd;",
-          error_text
-        ),
-        # Add dismiss button for info messages
-        if (is_info) {
-          actionButton("dismiss_info", "Dismiss", 
-                      class = "btn btn-sm btn-secondary",
-                      style = "margin-top: 6px;")
-        }
+      dismiss_button <- if (is_info) {
+        '<button id="dismiss_info" type="button" class="btn btn-sm btn-secondary" style="margin-left: 10px;">Dismiss</button>'
+      } else {
+        ''
+      }
+      
+      sprintf(
+        '<div class="alert %s" style="margin: 6px; padding: 6px 10px;"><strong>%s</strong><pre style="white-space: pre-wrap; margin-top: 6px; background: #fff; padding: 6px; border: 1px solid #ddd;">%s</pre>%s</div>',
+        alert_class,
+        label_text,
+        htmltools::htmlEscape(error_text),
+        dismiss_button
       )
+    } else {
+      ""
     }
   })
   
@@ -2514,8 +2560,39 @@ server <- function(input, output, session) {
     })
   })
   
-  # SQL queries table will be rendered in the observe block below
-  
+  # Render SQL queries table - initial render with proper column structure
+  output$sql_queries_table <- renderDT({
+    # Start with empty data frame with proper columns
+    initial_data <- data.frame(
+      pid = integer(0),
+      duration = character(0),
+      username = character(0),
+      query = character(0),
+      state = character(0),
+      Actions = character(0),
+      stringsAsFactors = FALSE
+    )
+    
+    datatable(
+      initial_data,
+      options = list(
+        pageLength = 25,
+        scrollX = TRUE,
+        scrollY = "60vh",
+        scrollCollapse = TRUE,
+        dom = 'lfrtip',
+        ordering = TRUE,
+        columnDefs = list(
+          list(targets = ncol(initial_data) - 1, orderable = FALSE)
+        )
+      ),
+      rownames = FALSE,
+      filter = 'none',
+      escape = FALSE,
+      class = 'cell-border stripe'
+    )
+  })
+
   # Update SQL queries table content using proxy
   observe({
     queries <- sql_queries_data()
@@ -2529,74 +2606,15 @@ server <- function(input, output, session) {
           htmltools::htmlEscape(queries$username[i])
         )
       })
-      
-      # Add row index for alternating colors (1-based)
-      queries$row_index <- seq_len(nrow(queries))
     } else {
       queries$Actions <- character(0)
     }
+
+    # Use proxy to update data without recreating the table
+    proxy <- dataTableProxy('sql_queries_table')
     
-    # Create new datatable with data and apply formatStyle
-    if (nrow(queries) > 0) {
-      # Create alternating color vectors
-      odd_indices <- queries$row_index[queries$row_index %% 2 == 1]
-      even_indices <- queries$row_index[queries$row_index %% 2 == 0]
-      
-      dt <- datatable(
-        queries,
-        options = list(
-          pageLength = 25,
-          scrollX = TRUE,
-          scrollY = "60vh",
-          scrollCollapse = TRUE,
-          dom = 'lfrtip',
-          ordering = TRUE,
-          columnDefs = list(
-            list(targets = ncol(queries) - 1, orderable = FALSE), # Actions column
-            list(targets = ncol(queries) - 2, visible = FALSE)    # Hide row_index column
-          )
-        ),
-        rownames = FALSE,
-        filter = 'none',
-        escape = FALSE,
-        class = 'cell-border compact'
-      ) 
-      
-      # Replace the entire output
-      output$sql_queries_table <- renderDT({ dt })
-    } else {
-      # Empty table case
-      empty_data <- data.frame(
-        pid = integer(0),
-        duration = character(0),
-        username = character(0),
-        query = character(0),
-        state = character(0),
-        Actions = character(0),
-        stringsAsFactors = FALSE
-      )
-      
-      output$sql_queries_table <- renderDT({
-        datatable(
-          empty_data,
-          options = list(
-            pageLength = 25,
-            scrollX = TRUE,
-            scrollY = "60vh",
-            scrollCollapse = TRUE,
-            dom = 'lfrtip',
-            ordering = TRUE,
-            columnDefs = list(
-              list(targets = ncol(empty_data) - 1, orderable = FALSE)
-            )
-          ),
-          rownames = FALSE,
-          filter = 'none',
-          escape = FALSE,
-          class = 'cell-border compact'
-        )
-      })
-    }
+    # Always pass queries (which has proper column structure)
+    replaceData(proxy, queries, resetPaging = FALSE, rownames = FALSE)
   })
   
   # Handle kill button clicks

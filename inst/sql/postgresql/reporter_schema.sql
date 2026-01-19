@@ -66,11 +66,11 @@ CREATE INDEX IF NOT EXISTS idx_process_metrics_errors ON tasker.process_metrics(
 CREATE INDEX IF NOT EXISTS idx_process_metrics_cleanup ON tasker.process_metrics(timestamp) WHERE is_alive = FALSE;
 
 -- ============================================================================
--- Table: process_reporter_status
+-- Table: reporter_status
 -- Tracks active process reporters (one per host)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS tasker.process_reporter_status (
+CREATE TABLE IF NOT EXISTS tasker.reporter_status (
     reporter_id SERIAL PRIMARY KEY,
     hostname VARCHAR(255) NOT NULL UNIQUE,
     process_id INTEGER NOT NULL,

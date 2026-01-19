@@ -65,7 +65,7 @@ ui <- page_fluid(
     # Error/Info message banner
     conditionalPanel(
       condition = "output.has_error",
-      uiOutput("error_banner")
+      htmlOutput("error_banner")
     ),
     tabsetPanel(
       id = "main_tabs",

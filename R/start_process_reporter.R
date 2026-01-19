@@ -200,7 +200,7 @@ get_reporter_status <- function(process_id, hostname, max_heartbeat_age_seconds 
   
   # Get heartbeat info from database
   tryCatch({
-    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    table_name <- get_table_name("reporter_status", con, char = TRUE)
     
     # Database-specific SQL for heartbeat age
     config <- getOption("tasker.config")
