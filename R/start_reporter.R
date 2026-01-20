@@ -11,6 +11,7 @@
 #' @param supervise If FALSE (default), reporter persists after parent process exits.
 #'   If TRUE, reporter is automatically terminated when parent R process exits.
 #' @param timeout Timeout in seconds for stopping existing reporter (default: 30)
+#' @param config_file Optional path to .tasker.yml config file for reporter to use
 #'
 #' @return List with process handle and status information
 #' @export
@@ -33,7 +34,8 @@ start_reporter <- function(
     quiet = FALSE,
     conn = NULL,
     supervise = FALSE,
-    timeout = 30
+    timeout = 30,
+    config_file = NULL
 ) {
   
   if (!quiet) {
@@ -45,7 +47,7 @@ start_reporter <- function(
   
   if (!is.null(existing_status) && !force) {
     # Check if the process is actually alive
-    if (get_reporter_status(existing_status$process_id, hostname)$is_alive) {
+    if (get_reporter_status(existing_status$process_id, hostname, con = conn)$is_alive) {
       if (!quiet) {
         message("[Reporter] Reporter already running (PID: ", existing_status$process_id, ")")
       }
@@ -108,8 +110,16 @@ start_reporter <- function(
   tryCatch({
     # Use nohup to make process completely independent
     r_cmd <- file.path(R.home("bin"), "Rscript")
-    cmd <- sprintf("nohup env %s %s '%s' --interval %d --hostname '%s' > '%s' 2>&1 </dev/null & echo $!", 
-                   env_vars, r_cmd, daemon_script, collection_interval, hostname, log_file)
+    
+    # Build command with optional config file
+    config_arg <- if (!is.null(config_file)) {
+      sprintf("--config-file '%s'", config_file)
+    } else {
+      ""
+    }
+    
+    cmd <- sprintf("nohup env %s %s '%s' --interval %d --hostname '%s' %s > '%s' 2>&1 </dev/null & echo $!", 
+                   env_vars, r_cmd, daemon_script, collection_interval, hostname, config_arg, log_file)
     
     bg_pid <- as.integer(system(cmd, intern = TRUE))
     
@@ -179,6 +189,16 @@ get_reporter_status <- function(process_id, hostname=Sys.info()["nodename"], max
   status <- "UNKNOWN"
   heartbeat_age_seconds <- NA
   
+  # If on same machine, check process first
+  process_exists <- FALSE
+  if (is_same_machine) {
+    process_exists <- tryCatch({
+      p <- ps::ps_handle(process_id)
+      ps_status <- ps::ps_status(p)
+      !ps_status %in% c("zombie", "defunct")
+    }, error = function(e) FALSE)
+  }
+  
   # Get database connection and heartbeat info first
   close_con <- FALSE
   if (is.null(con)) {
@@ -202,7 +222,7 @@ get_reporter_status <- function(process_id, hostname=Sys.info()["nodename"], max
   
   # Get heartbeat info from database
   tryCatch({
-    table_name <- get_table_name("process_reporter_status", con, char = TRUE)
+    table_name <- get_table_name("reporter_status", con, char = TRUE)
     
     # Database-specific SQL for heartbeat age
     config <- getOption("tasker.config")
@@ -230,39 +250,19 @@ get_reporter_status <- function(process_id, hostname=Sys.info()["nodename"], max
       heartbeat_age_seconds <- result$heartbeat_age_seconds[1]
       shutdown_requested <- result$shutdown_requested[1]
       
-      # If shutdown was requested, mark as shutting down
+      # Determine status based on shutdown request, process existence, and heartbeat age
       if (shutdown_requested) {
         status <- "SHUTTING_DOWN"
+        is_alive <- process_exists
+      } else if (is_same_machine && !process_exists) {
+        status <- "DEAD"
         is_alive <- FALSE
       } else if (heartbeat_age_seconds > max_heartbeat_age_seconds) {
         status <- "STALE"
-        is_alive <- FALSE
+        is_alive <- process_exists  # On same machine, trust process check; remote can't verify
       } else {
-        # Heartbeat is recent, now check process existence if on same machine
-        if (is_same_machine) {
-          tryCatch({
-            # Use ps package for accurate process checking
-            p <- ps::ps_handle(process_id)
-            
-            # Check if it's not a zombie
-            ps_status <- ps::ps_status(p)
-            if (ps_status %in% c("zombie", "defunct")) {
-              status <- "ZOMBIE"
-              is_alive <- FALSE
-            } else {
-              status <- "RUNNING"
-              is_alive <- TRUE
-            }
-          }, error = function(e) {
-            # Process doesn't exist or can't be accessed
-            status <- "DEAD"
-            is_alive <- FALSE
-          })
-        } else {
-          # Different machine - trust the heartbeat
-          status <- "RUNNING"
-          is_alive <- TRUE
-        }
+        status <- "RUNNING"
+        is_alive <- if (is_same_machine) process_exists else TRUE  # Remote: trust heartbeat
       }
     } else {
       # No database record found
@@ -317,19 +317,14 @@ should_auto_start <- function(con = NULL) {
     }
   })
   
-  # Check if reporter tables exist
-  tryCatch({
-    table_name <- get_table_name("reporter_status", con, char = TRUE)
-    
-    # Simple query to check if table exists and is accessible
-    DBI::dbGetQuery(con, sprintf("SELECT 1 FROM %s LIMIT 1", table_name))
-    
-    return(TRUE)
-    
-  }, error = function(e) {
-    # Tables don't exist or aren't accessible
+  # Check if all required tables exist
+  config <- get_tasker_config()
+  driver <- config$database$driver
+  if (!check_tasker_tables_exist(conn = con, driver = driver)) {
     return(FALSE)
-  })
+  }
+  
+  return(TRUE)
 }
 
 
@@ -362,7 +357,7 @@ auto_start_reporter <- function(hostname = Sys.info()["nodename"], con = NULL) {
   
   if (!is.null(existing_status)) {
     # Verify it's actually alive
-    if (get_reporter_status(existing_status$process_id, hostname)$is_alive) {
+    if (get_reporter_status(existing_status$process_id, hostname, con = con)$is_alive) {
       return(TRUE)  # Already running
     }
   }

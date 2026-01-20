@@ -2,7 +2,7 @@
 % Please edit documentation in R/setup_reporter_schema.R
 \name{drop_reporter_tables}
 \alias{drop_reporter_tables}
-\title{Drop Reporter Tables}
+\title{Check if Reporter Tables Exist}
 \usage{
 drop_reporter_tables(conn, driver)
 }
@@ -11,7 +11,10 @@ drop_reporter_tables(conn, driver)
 
 \item{driver}{Database driver type}
 }
+\value{
+TRUE if all required tables exist
+}
 \description{
-Drop Reporter Tables
+Check if Reporter Tables Exist
 }
 \keyword{internal}

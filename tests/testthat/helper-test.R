@@ -71,3 +71,28 @@ get_test_db_connection <- function() {
   tasker:::ensure_configured()
   tasker::get_db_connection()
 }
+
+#' Create temporary config file for reporter background processes
+#' 
+#' Creates a .tasker.yml config file pointing to the test SQLite database
+#' so that spawned reporter processes connect to the test DB instead of production.
+#' 
+#' @return Path to temporary config file
+create_test_config_file <- function() {
+  db_path <- getOption("tasker.test_db_path", get_test_db_path())
+  
+  # Create temp config file
+  config_file <- tempfile(pattern = "tasker_test_config_", fileext = ".yml")
+  
+  # Write config pointing to test database
+  config_content <- sprintf("
+database:
+  driver: sqlite
+  dbname: %s
+  schema: ''
+", db_path)
+  
+  writeLines(config_content, config_file)
+  
+  return(config_file)
+}

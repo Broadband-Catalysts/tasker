@@ -1,3 +1,17 @@
+#' Check if a reporter process is alive
+#' @keywords internal
+is_reporter_alive <- function(process_id, hostname) {
+  tryCatch({
+    p <- ps::ps_handle(process_id)
+    ps_status <- ps::ps_status(p)
+    # Return TRUE if process exists and is not zombie/defunct
+    return(!ps_status %in% c("zombie", "defunct"))
+  }, error = function(e) {
+    # Process doesn't exist or can't be accessed
+    return(FALSE)
+  })
+}
+
 #' Check Reporter Status
 #'
 #' Displays information about all running reporters in the database.

@@ -11,7 +11,8 @@ start_reporter(
   quiet = FALSE,
   conn = NULL,
   supervise = FALSE,
-  timeout = 30
+  timeout = 30,
+  config_file = NULL
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ start_reporter(
 If TRUE, reporter is automatically terminated when parent R process exits.}
 
 \item{timeout}{Timeout in seconds for stopping existing reporter (default: 30)}
+
+\item{config_file}{Optional path to .tasker.yml config file for reporter to use}
 }
 \value{
 List with process handle and status information

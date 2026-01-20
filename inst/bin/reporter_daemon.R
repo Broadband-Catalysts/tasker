@@ -11,8 +11,9 @@ args <- commandArgs(trailingOnly = TRUE)
 # Simple named argument parsing
 collection_interval_seconds <- 10  # default
 hostname <- Sys.info()["nodename"]  # default
+config_file <- NULL  # default - use normal config search
 
-# Parse --interval and --hostname arguments
+# Parse --interval, --hostname, and --config-file arguments
 i <- 1
 while (i <= length(args)) {
   if (args[i] == "--interval" && i < length(args)) {
@@ -20,6 +21,9 @@ while (i <= length(args)) {
     i <- i + 2
   } else if (args[i] == "--hostname" && i < length(args)) {
     hostname <- args[i + 1]
+    i <- i + 2
+  } else if (args[i] == "--config-file" && i < length(args)) {
+    config_file <- args[i + 1]
     i <- i + 2
   } else {
     # Skip unknown arguments
@@ -41,8 +45,12 @@ if (is.na(hostname) || hostname == "") {
 # Load tasker package
 library(tasker)
 
-# Load configuration
-tasker_config()
+# Load configuration - use specified config file if provided
+if (!is.null(config_file)) {
+  tasker_config(config_file = config_file)
+} else {
+  tasker_config()
+}
 
 # Verify configuration loaded
 if (is.null(getOption("tasker.config"))) {

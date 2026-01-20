@@ -1221,9 +1221,29 @@ hr {
   margin-bottom: 4px !important;
 }
 
-/* Reduce padding around sidebar content */
-.bslib-sidebar-layout > .sidebar > div {
-  margin-bottom: 2px !important;
+/* Reduce vertical padding around sidebar content */
+.bslib-sidebar-layout>.sidebar>.sidebar-content {
+  display: flow;
+  flex-direction: column;
+  gap: var(--bslib-spacer, 1rem);
+  padding: var(--_padding);
+}
+
+.bslib-sidebar-layout .sidebar-title
+{
+  border-bottom-color: #3498dbff !important;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  box-sizing: border-box;
+}
+
+.bslib-sidebar-layout hr
+{
+  border: none;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498dbff !important;
+  height: 5px;
+  box-sizing: border-box;
 }
 
 /* highlight alternating rows in data tables */

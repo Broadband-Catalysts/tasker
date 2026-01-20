@@ -2,6 +2,7 @@
 
 export(check_reporter)
 export(check_tasker_db)
+export(check_tasker_tables_exist)
 export(cleanup_old_metrics)
 export(clear_registered_tasks)
 export(collect_process_metrics)

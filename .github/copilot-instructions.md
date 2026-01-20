@@ -209,6 +209,18 @@ parser$add_argument("--input", type = "character", required = TRUE)
 args <- parser$parse_args()
 ```
 
+**Use tee for test/script output monitoring:**
+```bash
+# ✅ CORRECT - Allows user monitoring + agent analysis
+Rscript -e 'devtools::load_all(); test_file("tests/testthat/test-file.R")' |& tee /tmp/output.log
+grep "FAIL" /tmp/output.log
+
+# ❌ INCORRECT - User can't monitor progress
+Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
+```
+
+**Why:** Piping directly to grep/head/tail prevents user from observing unanticipated errors or issues during execution. Using tee allows simultaneous user monitoring and agent analysis of specific output.
+
 **For details:** See #r-script-execution skill.
 
 ## Code Review Practices

@@ -102,33 +102,6 @@ setup_reporter_schema <- function(conn = NULL, force = FALSE, quiet = FALSE) {
 #' @param driver Database driver type
 #' @return TRUE if all required tables exist
 #' @keywords internal
-check_reporter_tables_exist <- function(conn, driver) {
-  required_tables <- c("process_metrics", "reporter_status", "process_metrics_retention")
-  
-  if (driver == "sqlite") {
-    # SQLite: check sqlite_master table
-    existing_tables <- DBI::dbGetQuery(conn, "
-      SELECT name FROM sqlite_master 
-      WHERE type = 'table' AND name IN ('process_metrics', 'reporter_status', 'process_metrics_retention')
-    ")$name
-  } else {
-    # PostgreSQL: check information_schema or use dbListTables
-    schema_name <- get_tasker_config()$schema %||% "tasker"
-    existing_tables <- DBI::dbGetQuery(conn, "
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = $1 AND table_name IN ('process_metrics', 'reporter_status', 'process_metrics_retention')
-    ", params = list(schema_name))$table_name
-  }
-  
-  return(length(intersect(required_tables, existing_tables)) == length(required_tables))
-}
-
-#' Drop Reporter Tables
-#'
-#' @param conn Database connection  
-#' @param driver Database driver type
-#' @keywords internal
 drop_reporter_tables <- function(conn, driver) {
   if (driver == "sqlite") {
     tables_to_drop <- c("process_metrics_retention", "process_metrics", "reporter_status")

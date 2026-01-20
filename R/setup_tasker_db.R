@@ -502,3 +502,66 @@ check_tasker_db <- function(conn = NULL) {
   message("\u2713 tasker database schema is properly initialized")
   return(TRUE)
 }
+
+#' Check if all tasker tables exist
+#'
+#' Verifies that all required database tables exist (both main tasker tables
+#' and reporter tables).
+#'
+#' @param conn Database connection. If NULL, uses default tasker connection
+#' @param driver Database driver type ("sqlite" or "postgresql"). If NULL, uses config
+#'
+#' @return TRUE if all tables exist, FALSE otherwise
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' con <- get_tasker_db_connection()
+#' if (!check_tasker_tables_exist(con)) {
+#'   setup_tasker_db()
+#' }
+#' }
+check_tasker_tables_exist <- function(conn = NULL, driver = NULL) {
+  if (is.null(conn)) {
+    conn <- get_tasker_db_connection()
+    close_conn <- TRUE
+    on.exit({
+      if (close_conn && !is.null(conn) && DBI::dbIsValid(conn)) {
+        DBI::dbDisconnect(conn)
+      }
+    })
+  } else {
+    close_conn <- FALSE
+  }
+  
+  if (is.null(driver)) {
+    config <- get_tasker_config()
+    driver <- config$database$driver
+  }
+  
+  # All required tables (main tasker + reporter)
+  required_tables <- c(
+    "stages", "tasks", "task_runs", "subtask_progress",
+    "process_metrics", "reporter_status", "process_metrics_retention"
+  )
+  
+  if (driver == "sqlite") {
+    # SQLite: check sqlite_master table
+    existing_tables <- DBI::dbGetQuery(conn, "
+      SELECT name FROM sqlite_master 
+      WHERE type = 'table' AND name IN ('stages', 'tasks', 'task_runs', 'subtask_progress', 
+                                         'process_metrics', 'reporter_status', 'process_metrics_retention')
+    ")$name
+  } else {
+    # PostgreSQL: check information_schema
+    schema_name <- get_tasker_config()$schema %||% "tasker"
+    existing_tables <- DBI::dbGetQuery(conn, "
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = $1 AND table_name IN ('stages', 'tasks', 'task_runs', 'subtask_progress',
+                                                  'process_metrics', 'reporter_status', 'process_metrics_retention')
+    ", params = list(schema_name))$table_name
+  }
+  
+  return(length(intersect(required_tables, existing_tables)) == length(required_tables))
+}
