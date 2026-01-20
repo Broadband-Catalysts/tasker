@@ -82,24 +82,24 @@ h2 {
 
 /* Pipeline Status Tab Styles */
 .pipeline-status-container {
-  padding: 15px;
+  padding: 8px;
 }
 
 .stage-panel {
-  margin-bottom: 15px;
+  margin-bottom: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
   background: #fff;
 }
 
 .stage-header {
-  padding: 12px 15px;
+  padding: 6px 10px;
   background: #f8f9fa;
   border-bottom: 1px solid #ddd;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .stage-header:hover {
@@ -115,13 +115,13 @@ h2 {
 
 .stage-badge,
 .badge {
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: bold;
   text-transform: uppercase;
   flex: 0 0 auto;
-  min-width: 120px;
+  min-width: 100px;
   text-align: center;
 }
 
@@ -155,7 +155,7 @@ h2 {
   flex: 1;
   height: 20px;
   background: #e0e0e0;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
 }
@@ -210,7 +210,7 @@ span[id^="stage_progress_"] {
 }
 
 .stage-body {
-  padding: 10px 15px;
+  padding: 6px 10px;
   display: none;
 }
 
@@ -219,13 +219,13 @@ span[id^="stage_progress_"] {
 }
 
 .task-row {
-  padding: 8px 10px;
-  margin: 5px 0;
+  padding: 4px 8px;
+  margin: 3px 0;
   background: #fafafa;
-  border-radius: 5px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-size: 14px;
 }
 
@@ -294,8 +294,8 @@ span[id^="stage_progress_"] {
 
 /* Sub-panes */
 .task-subpane {
-  margin: 10px 0 10px 40px;
-  padding: 15px;
+  margin: 6px 0 6px 32px;
+  padding: 8px;
   background: #fff;
   border-left: 3px solid #007bff;
   border-radius: 4px;
@@ -326,49 +326,70 @@ span[id^="stage_progress_"] {
 .process-info-header {
   font-weight: 600;
   font-size: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  margin-top: 6px;
   color: #333;
 }
 
 .process-details {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 8px;
-  margin-bottom: 15px;
-  font-size: 13px;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
 }
 
 .process-detail-item {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .process-detail-item strong {
-  min-width: 80px;
+  min-width: 70px;
   color: #666;
+}
+
+/* Compact inline layout for process details */
+.process-details.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.process-details.compact .detail-item {
+  display: inline-flex;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.process-details.compact .detail-item strong {
+  color: #666;
+  min-width: auto;
 }
 
 .child-process-header {
   font-weight: 600;
-  font-size: 14px;
-  margin: 15px 0 10px 0;
+  font-size: 13px;
+  margin: 8px 0 6px 0;
   color: #333;
 }
 
 .child-process-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 15px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .child-process-item {
   display: flex;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: #f8f9fa;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   border-left: 3px solid #17a2b8;
 }
 
@@ -384,19 +405,19 @@ span[id^="stage_progress_"] {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .subtask-table th {
   background: #f8f9fa;
-  padding: 8px;
+  padding: 4px 6px;
   text-align: left;
   border-bottom: 2px solid #dee2e6;
   font-weight: 600;
 }
 
 .subtask-table td {
-  padding: 6px 8px;
+  padding: 3px 6px;
   border-bottom: 1px solid #dee2e6;
 }
 
@@ -406,8 +427,8 @@ span[id^="stage_progress_"] {
 
 /* Log pane components */
 .log-controls-container {
-  margin-bottom: 10px;
-  padding: 10px;
+  margin-bottom: 6px;
+  padding: 6px;
   background: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 4px;
@@ -415,7 +436,7 @@ span[id^="stage_progress_"] {
 
 .log-controls {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
@@ -482,11 +503,11 @@ span[id^="stage_progress_"] {
 .log-file-info-bar {
   background: #2d2d30;
   color: #cccccc;
-  padding: 6px 12px;
+  padding: 4px 8px;
   border-bottom: 1px solid #3e3e42;
   font-size: 11px;
   display: flex;
-  gap: 20px;
+  gap: 16px;
   flex-wrap: wrap;
   position: sticky;
   top: 0;
@@ -518,7 +539,7 @@ span[id^="stage_progress_"] {
 }
 
 .log-line {
-  padding: 2px 12px;
+  padding: 1px 8px;
   white-space: pre-wrap;
   word-wrap: break-word;
   border-left: 3px solid transparent;
@@ -546,21 +567,45 @@ span[id^="stage_progress_"] {
   background: #fff3cd;
   border: 1px solid #ffc107;
   border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 15px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .process-error-banner i {
   color: #856404;
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .process-error-banner .error-text {
   color: #856404;
   font-weight: 500;
+  font-size: 12px;
+}
+
+/* Process warning banner for stale metrics */
+.process-warning-banner {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.process-warning-banner i {
+  color: #ff9800;
+  font-size: 16px;
+}
+
+.process-warning-banner .warning-text {
+  color: #856404;
+  font-weight: 500;
+  font-size: 12px;
 }
 
 
@@ -573,13 +618,13 @@ span[id^="stage_progress_"] {
 }
 
 .task-status-badge {
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: bold;
   text-transform: uppercase;
   flex: 0 0 auto;
-  min-width: 120px;
+  min-width: 100px;
   text-align: center;
 }
 
@@ -615,14 +660,14 @@ span[id^="stage_progress_"] {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 200px;
 }
 
 .task-progress {
-  height: 20px;
+  height: 18px;
   background: #e0e0e0;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
 }
@@ -955,4 +1000,263 @@ span[id^="stage_progress_"] {
 .stage-badge.status-NOT_STARTED.recalculating {
   background: #e0e0e0 !important;
   color: #444 !important;
+}
+
+/* ========================================================================== */
+/* GLOBAL VERTICAL SPACING REDUCTION                                         */
+/* ========================================================================== */
+
+/* Reduce all heading margins */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 6px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Reduce paragraph spacing */
+p {
+  margin-bottom: 4px !important;
+}
+
+/* Tighten form groups */
+.form-group {
+  margin-bottom: 8px !important;
+}
+
+/* Reduce hr spacing */
+hr {
+  margin-top: 8px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Tighten wells and panels */
+.well, .panel {
+  padding: 8px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Reduce alert spacing */
+.alert {
+  padding: 6px 10px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Tighten button groups */
+.btn-toolbar {
+  margin-bottom: 6px !important;
+}
+
+.btn-group {
+  margin-bottom: 4px !important;
+}
+
+/* Reduce table spacing */
+.table {
+  margin-bottom: 8px !important;
+}
+
+.table th,
+.table td {
+  padding: 3px 6px !important;
+  vertical-align: middle !important;
+}
+
+.table-condensed th,
+.table-condensed td {
+  padding: 2px 4px !important;
+}
+
+/* Tighten list groups */
+.list-group-item {
+  padding: 4px 8px !important;
+  margin-bottom: 2px !important;
+}
+
+/* Reduce nav tabs spacing */
+.nav-tabs {
+  margin-bottom: 6px !important;
+}
+
+.tab-content {
+  padding-top: 6px !important;
+}
+
+.tab-pane {
+  padding: 4px 0 !important;
+}
+
+/* Tighten modal spacing */
+.modal-body {
+  padding: 8px !important;
+}
+
+.modal-header,
+.modal-footer {
+  padding: 6px 10px !important;
+}
+
+/* Reduce accordion spacing */
+.accordion-item {
+  margin-bottom: 4px !important;
+}
+
+.accordion-button {
+  padding: 6px 10px !important;
+}
+
+.accordion-body {
+  padding: 6px 10px !important;
+}
+
+/* Tighten Bootstrap 5 specific elements */
+.card {
+  margin-bottom: 8px !important;
+}
+
+.card-body {
+  padding: 8px !important;
+}
+
+.card-header {
+  padding: 6px 10px !important;
+}
+
+/* Reduce sidebar title spacing */
+.bslib-sidebar-layout > .sidebar h5,
+.bslib-sidebar-layout > .sidebar h4,
+.bslib-sidebar-layout > .sidebar h3 {
+  margin-top: 2px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Tighten spacing between controls */
+.bslib-sidebar-layout > .sidebar .form-group {
+  margin-bottom: 2px !important;
+}
+
+.bslib-sidebar-layout > .sidebar {
+  padding: 4px !important;
+}
+
+.bslib-sidebar-layout > .sidebar .form-control {
+  padding: 3px 6px !important;
+  margin-bottom: 1px !important;
+}
+
+/* Target shiny input containers specifically */
+.bslib-sidebar-layout > .sidebar .shiny-input-container {
+  margin-bottom: 1px !important;
+  margin-top: 1px !important;
+}
+
+/* Target form groups with input containers */
+.bslib-sidebar-layout > .sidebar .form-group.shiny-input-container {
+  margin-bottom: 1px !important;
+  margin-top: 1px !important;
+  padding: 0 !important;
+}
+
+/* Reduce input wrapper spacing */
+.bslib-sidebar-layout > .sidebar .input-group {
+  margin-bottom: 1px !important;
+}
+
+/* Target select inputs specifically */
+.bslib-sidebar-layout > .sidebar select.form-control {
+  margin-bottom: 1px !important;
+}
+
+.bslib-sidebar-layout > .sidebar label {
+  margin-bottom: 1px !important;
+  margin-top: 1px !important;
+}
+
+.bslib-sidebar-layout > .sidebar .checkbox {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+.bslib-sidebar-layout > .sidebar .btn {
+  margin-bottom: 1px !important;
+  margin-top: 1px !important;
+  padding: 3px 10px !important;
+}
+
+/* Reduce spacing between button groups */
+.bslib-sidebar-layout > .sidebar .btn-group,
+.bslib-sidebar-layout > .sidebar div:has(.btn) {
+  margin-bottom: 2px !important;
+}
+
+/* Reduce spacing around timestamp and last elements */
+.bslib-sidebar-layout > .sidebar p,
+.bslib-sidebar-layout > .sidebar div:last-child {
+  margin-bottom: 1px !important;
+  margin-top: 2px !important;
+}
+
+/* Tighten title panel */
+.container-fluid > h2 {
+  margin-bottom: 8px !important;
+}
+
+/* Special handling for DEBUG button area */
+#debug_mode {
+  margin-top: 3px !important;
+  margin-bottom: 2px !important;
+}
+
+/* Reduce overall sidebar padding */
+.bslib-sidebar-layout > .sidebar {
+  padding: 4px !important;
+}
+
+/* Reduce spacing between sidebar content blocks */
+.bslib-sidebar-layout > .sidebar > div {
+  margin-bottom: 1px !important;
+}
+
+/* Special handling for DEBUG button area */
+#debug_mode {
+  margin-top: 6px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Reduce vertical padding around sidebar content */
+.bslib-sidebar-layout>.sidebar>.sidebar-content {
+  display: flow;
+  flex-direction: column;
+  gap: var(--bslib-spacer, 1rem);
+  padding: var(--_padding);
+}
+
+.bslib-sidebar-layout .sidebar-title
+{
+  border-bottom-color: #3498dbff !important;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  box-sizing: border-box;
+}
+
+.bslib-sidebar-layout hr
+{
+  border: none;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498dbff !important;
+  height: 5px;
+  box-sizing: border-box;
+}
+
+/* highlight alternating rows in data tables */
+.table>:not(caption)>*>* {
+  background-color: transparent;
+}
+
+table.dataTable tr.odd {
+  background-color: #037bc242;
+  /* Your custom light blue */
+}
+
+table.dataTable tr.even {
+  background-color: white;
+  /* Your custom white/light color */
 }

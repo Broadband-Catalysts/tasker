@@ -43,7 +43,8 @@ Update subtask progress
 }
 \note{
 For parallel workers incrementing counters, use subtask_increment() instead
-to avoid race conditions.
+to avoid race conditions. Related functions subtask_increment and subtask_complete
+are now in separate files (subtask_increment.R and subtask_complete.R).
 }
 \examples{
 \dontrun{
@@ -58,5 +59,6 @@ subtask_update(status = "RUNNING", percent = 50)
 \seealso{
 \code{\link[=subtask_increment]{subtask_increment()}} for atomic counter updates safe for parallel
 workers, \code{\link[=subtask_start]{subtask_start()}} to start tracking a subtask,
-\code{\link[=get_subtask_progress]{get_subtask_progress()}} to query subtask progress
+\code{\link[=get_subtask_progress]{get_subtask_progress()}} to query subtask progress,
+\code{\link[=subtask_complete]{subtask_complete()}} for convenient completion marking
 }

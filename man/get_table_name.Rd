@@ -4,15 +4,17 @@
 \alias{get_table_name}
 \title{Get table name with or without schema}
 \usage{
-get_table_name(table, conn)
+get_table_name(table, conn, char = FALSE)
 }
 \arguments{
 \item{table}{Table name}
 
 \item{conn}{Database connection}
+
+\item{char}{Return character string instead of DBI::SQL object (default: FALSE)}
 }
 \value{
-SQL identifier with schema prefix if applicable
+SQL identifier with schema prefix if applicable, or character string if char=TRUE
 }
 \description{
 Get table name with or without schema

@@ -46,8 +46,6 @@ CREATE TABLE IF NOT EXISTS tasker.task_runs (
     start_time TIMESTAMPTZ,
     end_time TIMESTAMPTZ,
     last_update TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    -- Status tracking
     status VARCHAR(20) NOT NULL,
     
     -- Overall task progress
@@ -190,6 +188,31 @@ CREATE OR REPLACE VIEW tasker.active_tasks AS
 SELECT * FROM tasker.current_task_status
 WHERE status IN ('STARTED', 'RUNNING')
 ORDER BY stage_order, task_order;
+
+-- View combining current task status with latest process metrics
+CREATE OR REPLACE VIEW tasker.current_task_status_with_metrics AS
+SELECT 
+    cts.*,
+    pm.cpu_percent AS metrics_cpu_percent,
+    pm.memory_mb AS metrics_memory_mb,
+    pm.memory_percent AS metrics_memory_percent,
+    pm.child_count AS metrics_child_count,
+    pm.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm.is_alive AS metrics_is_alive,
+    pm.collection_error AS metrics_collection_error,
+    pm.error_message AS metrics_error_message,
+    pm.error_type AS metrics_error_type,
+    pm.timestamp AS metrics_timestamp,
+    EXTRACT(EPOCH FROM (NOW() - pm.timestamp))::INTEGER AS metrics_age_seconds
+FROM tasker.current_task_status cts
+LEFT JOIN LATERAL (
+    SELECT *
+    FROM tasker.process_metrics
+    WHERE process_metrics.run_id = cts.run_id
+    ORDER BY timestamp DESC
+    LIMIT 1
+) pm ON TRUE;
 
 COMMENT ON SCHEMA tasker IS 'Task and pipeline execution tracking';
 COMMENT ON TABLE tasker.stages IS 'Pipeline stages (e.g., PREREQ, STATIC, DAILY)';

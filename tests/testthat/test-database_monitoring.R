@@ -1,5 +1,6 @@
 test_that("get_monitor_connection validates config", {
-  # Test error when config is NULL
+  # Test error when config is NULL and no option set
+  withr::local_options(list(tasker.config = NULL))
   expect_error(
     get_monitor_connection(config = NULL, session_con = NULL),
     "Tasker configuration not loaded"
@@ -84,7 +85,7 @@ test_that("get_monitor_connection requires RPostgres for PostgreSQL", {
   )
 })
 
-test_that("get_monitor_connection requires RMySQL for MySQL", {
+test_that("get_monitor_connection requires RMariaDB for MySQL", {
   skip_if_not_installed("mockery")
   
   mock_config <- list(
@@ -107,7 +108,7 @@ test_that("get_monitor_connection requires RMySQL for MySQL", {
   
   expect_error(
     get_monitor_connection(config = mock_config),
-    "RMySQL package required for MySQL"
+    "RMariaDB package required for MySQL"
   )
 })
 
@@ -134,7 +135,7 @@ test_that("get_monitor_connection requires RSQLite for SQLite", {
   )
 })
 
-test_that("get_database_queries returns message for SQLite", {
+test_that("get_database_queries returns empty data frame for SQLite", {
   mock_config <- list(
     database = list(
       driver = "sqlite",
@@ -147,8 +148,32 @@ test_that("get_database_queries returns message for SQLite", {
   result <- get_database_queries(con, db_type = "sqlite")
   
   expect_s3_class(result, "data.frame")
-  expect_true("Message" %in% names(result))
-  expect_match(result$Message, "SQLite does not support query monitoring")
+  expect_equal(nrow(result), 0)
+  expect_true(all(c("pid", "duration", "username", "query", "state") %in% names(result)))
+  # Duration should be numeric type (for interval objects)
+  expect_type(result$duration, "double")
+  
+  # Cleanup
+  DBI::dbDisconnect(con)
+})
+
+test_that("get_database_queries respects status parameter", {
+  mock_config <- list(
+    database = list(
+      driver = "sqlite",
+      dbname = ":memory:"
+    )
+  )
+  
+  con <- get_monitor_connection(config = mock_config)
+  
+  # Test with default "active" status
+  result_active <- get_database_queries(con, status = "active", db_type = "sqlite")
+  expect_s3_class(result_active, "data.frame")
+  
+  # Test with "any" status
+  result_any <- get_database_queries(con, status = "any", db_type = "sqlite")
+  expect_s3_class(result_any, "data.frame")
   
   # Cleanup
   DBI::dbDisconnect(con)
@@ -187,11 +212,12 @@ test_that("get_database_queries uses config when db_type is NULL", {
   
   con <- get_monitor_connection(config = mock_config)
   
-  # Should use driver from config
+  # Should use driver from config (SQLite returns empty data frame)
   result <- get_database_queries(con, db_type = NULL)
   
   expect_s3_class(result, "data.frame")
-  expect_true("Message" %in% names(result))
+  expect_equal(nrow(result), 0)
+  expect_true(all(c("pid", "duration", "username", "query", "state") %in% names(result)))
   
   # Cleanup
   DBI::dbDisconnect(con)

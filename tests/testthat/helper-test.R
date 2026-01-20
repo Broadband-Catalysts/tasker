@@ -15,28 +15,53 @@ setup_test_db <- function() {
   }
   
   # Configure tasker to use SQLite
-  tasker_config(
+  tasker::tasker_config(
     driver = "sqlite",
     dbname = db_path,
     schema = "",  # SQLite doesn't use schemas
     reload = TRUE
   )
+
+  # Avoid callr background processes during unit tests
+  options(tasker.process_reporter.auto_start = FALSE)
   
-  # Create schema
-  setup_tasker_db(force = TRUE)
-  
-  invisible(db_path)
+  # Create full schema (tables + reporter tables + views)
+  tasker::setup_tasker_db(force = TRUE, quiet = TRUE)
+
+  # Persist the path for callers that need it
+  options(tasker.test_db_path = db_path)
+
+  # Return a DBI connection for convenience (many tests expect a connection)
+  tasker:::ensure_configured()
+  con <- tasker::get_db_connection()
+  return(con)
 }
 
 #' Clean up test database
-cleanup_test_db <- function() {
-  db_path <- get_test_db_path()
-  if (file.exists(db_path)) {
-    unlink(db_path)
+cleanup_test_db <- function(con = NULL) {
+  # Accept either a DBI connection or a path to the DB file
+  if (!is.null(con)) {
+    if (is.character(con)) {
+      db_path <- con
+      if (file.exists(db_path)) unlink(db_path)
+    } else {
+      # try disconnecting if it's a DBI connection
+      tryCatch({
+        if (DBI::dbIsValid(con)) DBI::dbDisconnect(con)
+      }, error = function(e) NULL)
+      # remove file from known test path as well
+      db_path <- get_test_db_path()
+      if (file.exists(db_path)) unlink(db_path)
+    }
+  } else {
+    # No arg provided: remove the default test DB path
+    db_path <- get_test_db_path()
+    if (file.exists(db_path)) unlink(db_path)
   }
   
   # Clear config
   options(tasker.config = NULL)
+  options(tasker.process_reporter.auto_start = NULL)
   
   invisible(NULL)
 }
@@ -45,4 +70,29 @@ cleanup_test_db <- function() {
 get_test_db_connection <- function() {
   tasker:::ensure_configured()
   tasker::get_db_connection()
+}
+
+#' Create temporary config file for reporter background processes
+#' 
+#' Creates a .tasker.yml config file pointing to the test SQLite database
+#' so that spawned reporter processes connect to the test DB instead of production.
+#' 
+#' @return Path to temporary config file
+create_test_config_file <- function() {
+  db_path <- getOption("tasker.test_db_path", get_test_db_path())
+  
+  # Create temp config file
+  config_file <- tempfile(pattern = "tasker_test_config_", fileext = ".yml")
+  
+  # Write config pointing to test database
+  config_content <- sprintf("
+database:
+  driver: sqlite
+  dbname: %s
+  schema: ''
+", db_path)
+  
+  writeLines(config_content, config_file)
+  
+  return(config_file)
 }

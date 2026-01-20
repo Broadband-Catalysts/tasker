@@ -34,7 +34,15 @@ CREATE INDEX IF NOT EXISTS idx_tasks_name ON tasks(task_name);
 CREATE INDEX IF NOT EXISTS idx_tasks_order ON tasks(task_order);
 
 CREATE TABLE IF NOT EXISTS task_runs (
-    run_id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    run_id TEXT PRIMARY KEY DEFAULT (
+        lower(
+            substr(hex(randomblob(16)), 1, 8) || '-' ||
+            substr(hex(randomblob(16)), 9, 4) || '-' ||
+            substr(hex(randomblob(16)), 13, 4) || '-' ||
+            substr(hex(randomblob(16)), 17, 4) || '-' ||
+            substr(hex(randomblob(16)), 21, 12)
+        )
+    ),
     task_id INTEGER NOT NULL REFERENCES tasks(task_id),
     
     -- Execution identification
@@ -180,6 +188,110 @@ BEGIN
     UPDATE subtask_progress SET last_update = datetime('now') WHERE progress_id = NEW.progress_id;
 END;
 
+-- ============================================================================
+-- Process Reporter Database Schema (was process_reporter_schema.sql)
+-- Tables for collecting and storing process metrics for running tasks
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS process_metrics (
+    metric_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES task_runs(run_id) ON DELETE CASCADE,
+    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+    process_id INTEGER NOT NULL,
+    hostname TEXT NOT NULL,
+    is_alive INTEGER NOT NULL DEFAULT 1,
+    process_start_time TEXT,
+    cpu_percent REAL,
+    cpu_cores INTEGER,
+    memory_mb REAL,
+    memory_percent REAL,
+    memory_vms_mb REAL,
+    swap_mb REAL,
+    read_bytes INTEGER,
+    write_bytes INTEGER,
+    read_count INTEGER,
+    write_count INTEGER,
+    io_wait_percent REAL,
+    open_files INTEGER,
+    num_fds INTEGER,
+    num_threads INTEGER,
+    page_faults_minor INTEGER,
+    page_faults_major INTEGER,
+    num_ctx_switches_voluntary INTEGER,
+    num_ctx_switches_involuntary INTEGER,
+    child_count INTEGER DEFAULT 0,
+    child_total_cpu_percent REAL,
+    child_total_memory_mb REAL,
+    collection_error INTEGER DEFAULT 0,
+    error_message TEXT,
+    error_type TEXT,
+    reporter_version TEXT,
+    collection_duration_ms INTEGER,
+    UNIQUE (run_id, timestamp)
+);
+
+CREATE INDEX IF NOT EXISTS idx_process_metrics_run_id ON process_metrics(run_id);
+CREATE INDEX IF NOT EXISTS idx_process_metrics_timestamp ON process_metrics(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_process_metrics_hostname ON process_metrics(hostname);
+CREATE INDEX IF NOT EXISTS idx_process_metrics_run_timestamp ON process_metrics(run_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_process_metrics_errors ON process_metrics(run_id, timestamp) WHERE collection_error = 1;
+CREATE INDEX IF NOT EXISTS idx_process_metrics_cleanup ON process_metrics(timestamp) WHERE is_alive = 0;
+
+CREATE TABLE IF NOT EXISTS reporter_status (
+    reporter_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hostname TEXT NOT NULL UNIQUE,
+    process_id INTEGER NOT NULL,
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_heartbeat TEXT NOT NULL DEFAULT (datetime('now')),
+    version TEXT,
+    config TEXT DEFAULT '{}',
+    shutdown_requested INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_hostname ON reporter_status(hostname);
+CREATE INDEX IF NOT EXISTS idx_reporter_heartbeat ON reporter_status(last_heartbeat DESC);
+
+CREATE TABLE IF NOT EXISTS process_metrics_retention (
+    retention_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES task_runs(run_id) ON DELETE CASCADE,
+    task_completed_at TEXT NOT NULL,
+    metrics_delete_after TEXT NOT NULL,
+    metrics_deleted INTEGER DEFAULT 0,
+    deleted_at TEXT,
+    metrics_count INTEGER,
+    UNIQUE (run_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_retention_delete_after ON process_metrics_retention(metrics_delete_after) 
+    WHERE metrics_deleted = 0;
+
+CREATE INDEX IF NOT EXISTS idx_task_runs_active_host ON task_runs(hostname, status) 
+    WHERE status IN ('RUNNING', 'STARTED');
+
+CREATE VIEW IF NOT EXISTS task_runs_with_latest_metrics AS
+SELECT 
+    tr.*,
+    pm.cpu_percent,
+    pm.cpu_cores,
+    pm.memory_mb,
+    pm.memory_percent,
+    pm.child_count,
+    pm.child_total_cpu_percent,
+    pm.child_total_memory_mb,
+    pm.is_alive,
+    pm.collection_error,
+    pm.error_message,
+    pm.error_type,
+    pm.timestamp AS metrics_timestamp,
+    CAST((julianday('now') - julianday(pm.timestamp)) * 86400 AS INTEGER) AS metrics_age_seconds
+FROM task_runs tr
+LEFT JOIN process_metrics pm ON pm.run_id = tr.run_id 
+    AND pm.timestamp = (
+        SELECT MAX(timestamp) 
+        FROM process_metrics pm2 
+        WHERE pm2.run_id = tr.run_id
+    );
+
 -- Views for easier querying
 CREATE VIEW IF NOT EXISTS current_task_status AS
 SELECT 
@@ -219,3 +331,26 @@ CREATE VIEW IF NOT EXISTS active_tasks AS
 SELECT * FROM current_task_status
 WHERE status IN ('STARTED', 'RUNNING')
 ORDER BY stage_order, task_order;
+-- View combining current task status with latest process metrics (SQLite version)
+CREATE VIEW IF NOT EXISTS current_task_status_with_metrics AS
+SELECT 
+    cts.*,
+    pm.cpu_percent,
+    pm.memory_mb,
+    pm.memory_percent,
+    pm.child_count,
+    pm.child_total_cpu_percent,
+    pm.child_total_memory_mb,
+    pm.is_alive,
+    pm.collection_error,
+    pm.error_message AS metrics_error_message,
+    pm.error_type AS metrics_error_type,
+    pm.timestamp AS metrics_timestamp,
+    CAST((julianday('now') - julianday(pm.timestamp)) * 86400 AS INTEGER) AS metrics_age_seconds
+FROM current_task_status cts
+LEFT JOIN process_metrics pm ON pm.run_id = cts.run_id 
+    AND pm.timestamp = (
+        SELECT MAX(timestamp) 
+        FROM process_metrics pm2 
+        WHERE pm2.run_id = cts.run_id
+    );

@@ -8,6 +8,7 @@ get_completion_estimate(
   progress_history_env,
   run_id,
   subtask_number,
+  confidence_level = 0.95,
   quiet = FALSE
 )
 }
@@ -18,6 +19,8 @@ get_completion_estimate(
 
 \item{subtask_number}{Subtask number (1-based)}
 
+\item{confidence_level}{Confidence level for intervals (default: 0.95 for 95\% CI)}
+
 \item{quiet}{Suppress debug messages (default: FALSE)}
 }
 \value{
@@ -27,12 +30,13 @@ or NULL if insufficient data
 \description{
 Calculates estimated time to completion using simple linear extrapolation:
 (elapsed time / items completed) * items remaining.
-Provides 95\% confidence intervals using normal approximation for the rate estimate.
+Provides confidence intervals using normal approximation for the rate estimate.
 }
 \examples{
 \dontrun{
 env <- new.env()
 # ... collect progress snapshots ...
 estimate <- get_completion_estimate(env, "run_123", 1)
+estimate_90 <- get_completion_estimate(env, "run_123", 1, confidence_level = 0.90)
 }
 }

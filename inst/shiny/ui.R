@@ -46,25 +46,26 @@ ui <- page_fluid(
       numericInput("refresh_interval", "Auto-refresh (seconds):", 
                    value = 5, min = 1, max = 60),
       checkboxInput("auto_refresh", "Auto-refresh", value = TRUE),
-      checkboxInput("show_script_name", "Show script names", value = FALSE),
+      checkboxInput("show_script_name", "Show script names", value = TRUE),
       hr(),
       actionButton("refresh", "Refresh Now", class = "btn-primary"),
       actionButton("refresh_structure", "Refresh Structure", class = "btn-secondary btn-sm",
                    title = "Reload pipeline stages and registered tasks"),
+      hr(),
+      div(style = "margin-bottom: 10px;",
+        h6("Process Monitor Status:"),
+        htmlOutput("monitor_status", style = "font-size: 12px;")
+      ),
       hr(),
       actionButton("start_debugger", "DEBUG", class = "btn-warning btn-sm", 
                    title = "Start R debugger (browser()) for troubleshooting"),
       hr(),
       textOutput("last_update")
     ),
-    # Error message banner
+    # Error/Info message banner
     conditionalPanel(
       condition = "output.has_error",
-      div(class = "alert alert-danger", style = "margin: 10px;",
-          tags$strong("Error: "),
-          tags$pre(style = "white-space: pre-wrap; margin-top: 10px; background: #fff; padding: 10px; border: 1px solid #ddd;",
-                  textOutput("error_display", inline = FALSE))
-      )
+      htmlOutput("error_banner")
     ),
     tabsetPanel(
       id = "main_tabs",
@@ -75,11 +76,18 @@ ui <- page_fluid(
                )
       ),
       tabPanel("SQL Queries",
-               div(class = "sql-queries-container", style = "padding: 15px;",
+               div(class = "sql-queries-container", style = "padding: 8px;",
                    fluidRow(
-                     column(12,
+                     column(6,
                             actionButton("sql_refresh_now", "Refresh Now", 
                                        class = "btn-primary")
+                     ),
+                     column(6,
+                            div(style = "margin-top: 5px;",
+                                checkboxInput("exclude_tasker_queries", 
+                                            "Exclude tasker queries", 
+                                            value = TRUE)
+                            )
                      )
                    ),
                    hr(),

@@ -1,6 +1,6 @@
 #' Get subtask progress for a task run
 #'
-#' @param run_id Run ID
+#' @param run_id Run ID (optional - defaults to most recent active task)
 #' @param conn Database connection (optional)
 #' 
 #' @return Data frame with subtask progress containing the following columns:
@@ -26,9 +26,13 @@
 #'
 #' @examples
 #' \dontrun{
+#' # Get subtasks for specific run
 #' get_subtask_progress(run_id)
+#' 
+#' # Get subtasks for most recent active task
+#' get_subtask_progress()
 #' }
-get_subtask_progress <- function(run_id, conn = NULL) {
+get_subtask_progress <- function(run_id = NULL, conn = NULL) {
   ensure_configured()
   
   close_on_exit <- FALSE
@@ -41,22 +45,58 @@ get_subtask_progress <- function(run_id, conn = NULL) {
   driver <- config$database$driver
   schema <- if (driver == "postgresql") config$database$schema else ""
   
-  table_ref <- if (nchar(schema) > 0) {
+  subtask_table_ref <- if (nchar(schema) > 0) {
     paste0(schema, ".subtask_progress")
   } else {
     "subtask_progress"
   }
   
+  task_runs_table_ref <- if (nchar(schema) > 0) {
+    paste0(schema, ".task_runs")
+  } else {
+    "task_runs"
+  }
+  
+  # If run_id not provided, find the most recent active task
+  if (is.null(run_id)) {
+    active_task_sql <- glue::glue_sql(
+      "SELECT run_id 
+       FROM {DBI::SQL(task_runs_table_ref)} 
+       WHERE status IN ('STARTED', 'RUNNING') 
+       ORDER BY start_time DESC 
+       LIMIT 1",
+      .con = conn
+    )
+    
+    result <- DBI::dbGetQuery(conn, active_task_sql)
+    
+    if (nrow(result) == 0) {
+      if (close_on_exit) {
+        DBI::dbDisconnect(conn)
+      }
+      stop("No active tasks found. Please provide a run_id or start a task.", call. = FALSE)
+    }
+    
+    run_id <- result$run_id[1]
+  }
+
+  # Build driver-appropriate SQL for integer casting
+  if (driver == "postgresql") {
+    items_select <- "items_total::INTEGER as items_total, items_complete::INTEGER as items_complete"
+  } else {
+    # SQLite and others: plain column selection
+    items_select <- "items_total as items_total, items_complete as items_complete"
+  }
+
   tryCatch({
     DBI::dbGetQuery(
       conn,
       glue::glue_sql("SELECT progress_id, run_id, subtask_number, subtask_name,
                              status, start_time, end_time, last_update,
                              percent_complete, progress_message,
-                             items_total::INTEGER as items_total,
-                             items_complete::INTEGER as items_complete,
+                             {DBI::SQL(items_select)},
                              error_message
-                      FROM {DBI::SQL(table_ref)} 
+                      FROM {DBI::SQL(subtask_table_ref)} 
                       WHERE run_id = {run_id} 
                       ORDER BY subtask_number", .con = conn)
     )

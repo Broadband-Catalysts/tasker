@@ -26,10 +26,15 @@
 #' task_start("STAGE", "Task")
 #' task_update(status = "RUNNING", overall_percent = 50)
 #' }
-task_update <- function(status, current_subtask = NULL,
-                       overall_percent = NULL, message = NULL,
-                       error_message = NULL, error_detail = NULL,
-                       quiet = FALSE, conn = NULL, run_id = NULL) {
+task_update <- function(status,
+                       current_subtask = NULL,
+                       overall_percent = NULL,
+                       message         = NULL,
+                       error_message   = NULL,
+                       error_detail    = NULL,
+                       quiet           = FALSE,
+                       conn            = NULL,
+                       run_id          = NULL) {
   ensure_configured()
   
   # Input validation
@@ -159,110 +164,4 @@ task_update <- function(status, current_subtask = NULL,
   }, error = function(e) {
     stop("Failed to update task status: ", conditionMessage(e), call. = FALSE)
   })
-}
-
-
-#' Complete a task execution
-#'
-#' @param message Final message (optional)
-#' @param quiet Suppress console messages (default: FALSE)
-#' @param conn Database connection (optional)
-#' @param run_id Run ID from task_start(), or NULL to use active context
-#' @return TRUE on success
-#' @export
-#'
-#' @examples
-#' \dontrun{
-#' # With explicit run_id
-#' task_complete(message = "All done", run_id = run_id)
-#'
-#' # With context (run_id optional)
-#' task_start("STAGE", "Task")
-#' task_complete(message = "All done")
-#' }
-task_complete <- function(message = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
-  # Resolve run_id if needed
-  if (is.null(run_id)) {
-    run_id <- get_active_run_id()
-  }
-  
-  result <- task_update(status = "COMPLETED", overall_percent = 100,
-                        message = message, quiet = quiet, conn = conn, run_id = run_id)
-  
-  # Close and remove the connection for this run_id
-  close_connection(run_id)
-  
-  result
-}
-
-
-#' Mark a task execution as failed
-#'
-#' @param error_message Error message
-#' @param error_detail Detailed error info (optional)
-#' @param quiet Suppress console messages (default: FALSE)
-#' @param conn Database connection (optional)
-#' @param run_id Run ID from task_start(), or NULL to use active context
-#' @return TRUE on success
-#' @export
-task_fail <- function(error_message, error_detail = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
-  # Resolve run_id if needed
-  if (is.null(run_id)) {
-    run_id <- get_active_run_id()
-  }
-  
-  result <- task_update(status = "FAILED", 
-                        error_message = error_message,
-                        error_detail = error_detail,
-                        quiet = quiet,
-                        conn = conn,
-                        run_id = run_id)
-  
-  # Close and remove the connection for this run_id
-  close_connection(run_id)
-  
-  result
-}
-
-
-#' End a task execution with specified status
-#'
-#' Generic function to end a task with any status. For convenience,
-#' use task_complete() or task_fail() instead.
-#'
-#' @param status Status: "COMPLETED", "FAILED", "CANCELLED", "SKIPPED"
-#' @param message Final message (optional)
-#' @param error_message Error message (for FAILED status)
-#' @param error_detail Detailed error info (optional)
-#' @param quiet Suppress console messages (default: FALSE)
-#' @param conn Database connection (optional)
-#' @param run_id Run ID from task_start(), or NULL to use active context
-#' @return TRUE on success
-#' @export
-task_end <- function(status, message = NULL, 
-                     error_message = NULL, error_detail = NULL, quiet = FALSE, conn = NULL, run_id = NULL) {
-  # Resolve run_id if needed
-  if (is.null(run_id)) {
-    run_id <- get_active_run_id()
-  }
-  
-  if (status == "COMPLETED") {
-    task_complete(message = message, quiet = quiet, conn = conn, run_id = run_id)
-  } else if (status == "FAILED") {
-    if (is.null(error_message)) error_message <- "Task failed"
-    task_fail(error_message = error_message, 
-              error_detail = error_detail, quiet = quiet, conn = conn, run_id = run_id)
-  } else {
-    # For CANCELLED, SKIPPED, or other terminal statuses
-    result <- task_update(status = status, message = message,
-                          error_message = error_message, error_detail = error_detail,
-                          quiet = quiet, conn = conn, run_id = run_id)
-    
-    # Close connection for terminal statuses
-    if (status %in% c("CANCELLED", "SKIPPED")) {
-      close_connection(run_id)
-    }
-    
-    result
-  }
 }

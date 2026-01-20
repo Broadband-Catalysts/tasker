@@ -84,7 +84,7 @@ test_that("subtask_increment works from parallel workers", {
     # Retry logic for SQLite database locks
     for (attempt in 1:5) {
       result <- tryCatch({
-        subtask_increment(run_id, 1, increment = 1, quiet = TRUE)
+        subtask_increment(increment = 1, run_id = run_id, subtask_number = 1, quiet = TRUE)
         TRUE
       }, error = function(e) {
         if (grepl("database is locked", e$message) && attempt < 5) {

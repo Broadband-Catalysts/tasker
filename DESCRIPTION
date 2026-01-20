@@ -1,12 +1,14 @@
 Package: tasker
 Type: Package
 Title: Task and Pipeline Execution Tracking
-Version: 0.5.0
+Version: 0.7.2
+Date: 2026-01-19
 Authors@R: person('Gregory', 'Warnes', email = 'greg@warnes.net', role = c('aut', 'cre'))
 Description: Track the status and progress of tasks, subtasks, and pipeline
     executions in a PostgreSQL database. Provides functions for initializing,
     updating, and querying task execution status with support for hierarchical
-    tracking (stages, tasks, subtasks) and detailed progress monitoring.
+    tracking (stages, tasks, subtasks) and detailed progress monitoring. 
+    Supports automatic script detection and database lookup of stage/task names.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -17,9 +19,14 @@ Imports:
     dplyr,
     dbplyr,
     yaml,
-    bbcDB
+    bbcDB,
+    this.path,
+    ps (>= 1.7.0),
+    callr (>= 3.7.0),
+    R.utils
 Suggests:
     RPostgres,
     RSQLite,
     RMariaDB,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    mockery

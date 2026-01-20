@@ -48,10 +48,11 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
   driver <- config$database$driver
   schema <- if (driver == "postgresql") config$database$schema else ""
   
+  # Use view with process metrics for comprehensive status
   table_ref <- if (nchar(schema) > 0) {
-    DBI::Id(schema = schema, table = "current_task_status")
+    DBI::Id(schema = schema, table = "current_task_status_with_metrics")
   } else {
-    "current_task_status"
+    "current_task_status_with_metrics"
   }
   
   tryCatch({

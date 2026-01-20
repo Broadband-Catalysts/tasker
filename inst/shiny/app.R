@@ -1,10 +1,12 @@
-library(shiny)
-library(bslib)
-library(DT)
-library(dplyr)
-library(lubridate)
-library(shinyWidgets)
-library(shinyjs)
+suppressPackageStartupMessages({
+  library(shiny)
+  library(bslib)
+  library(DT)
+  library(dplyr)
+  library(lubridate)
+  library(shinyWidgets)
+  library(shinyjs)
+})
 
 devtools::load_all()
 

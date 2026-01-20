@@ -17,6 +17,27 @@ Task and Pipeline Execution Tracking
 
 See the [API Simplification Proposal](inst/docs/API_SIMPLIFICATION_PROPOSAL.md) for details.
 
+## What's New in v0.6.0 🚀
+
+**Automatic Script Detection** - Zero-configuration task tracking:
+- **Auto-detect stage and task**: `task_start()` can now be called with no parameters!
+- **Database-driven configuration**: Task names are looked up from database based on script filename
+- **Cross-platform detection**: Works with `Rscript`, `R CMD BATCH`, `source()`, and RStudio
+- **Backward compatible**: Explicit parameters still supported - your existing code works unchanged
+
+```r
+# NEW: Zero-parameter call (auto-detects everything!)
+task_start()  # Detects script name, looks up stage/task from database
+subtask_start("Load data")
+subtask_complete()
+task_complete()
+
+# OLD: Still works (explicit parameters)
+task_start("STATIC", "Build Database")
+```
+
+See [inst/examples/README_auto_detect.md](inst/examples/README_auto_detect.md) for complete details.
+
 ## Features
 
 - **Hierarchical tracking**: Organize work into stages, tasks, and subtasks

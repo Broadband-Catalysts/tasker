@@ -2,11 +2,12 @@
 #'
 #' Calculates estimated time to completion using simple linear extrapolation:
 #' (elapsed time / items completed) * items remaining. 
-#' Provides 95% confidence intervals using normal approximation for the rate estimate.
+#' Provides confidence intervals using normal approximation for the rate estimate.
 #'
 #' @param progress_history_env Environment containing progress snapshot history
 #' @param run_id Task run ID
 #' @param subtask_number Subtask number (1-based)
+#' @param confidence_level Confidence level for intervals (default: 0.95 for 95% CI)
 #' @param quiet Suppress debug messages (default: FALSE)
 #' @return List with eta, confidence_interval, confidence level, rate, and items_remaining,
 #'   or NULL if insufficient data
@@ -16,8 +17,9 @@
 #' env <- new.env()
 #' # ... collect progress snapshots ...
 #' estimate <- get_completion_estimate(env, "run_123", 1)
+#' estimate_90 <- get_completion_estimate(env, "run_123", 1, confidence_level = 0.90)
 #' }
-get_completion_estimate <- function(progress_history_env, run_id, subtask_number, quiet = FALSE) {
+get_completion_estimate <- function(progress_history_env, run_id, subtask_number, confidence_level = 0.95, quiet = FALSE) {
   # Build storage key
   run_key <- paste0("run_", run_id)
   subtask_key <- paste0("subtask_", subtask_number)
@@ -80,7 +82,7 @@ get_completion_estimate <- function(progress_history_env, run_id, subtask_number
                      ", items_remaining: ", items_remaining, 
                      ", ETA: ", eta_seconds, " seconds")
   
-  # Calculate 95% upper confidence limit using normal approximation
+  # Calculate confidence intervals using normal approximation
   # For a Poisson process, the rate estimate has variance lambda/t
   # The completion time estimate has variance (items_remaining^2 / lambda^2) * (lambda / elapsed_time)
   lambda_estimate <- items_complete / elapsed_time  # items per second
@@ -88,9 +90,13 @@ get_completion_estimate <- function(progress_history_env, run_id, subtask_number
   # Standard error of the rate estimate
   se_lambda <- sqrt(lambda_estimate / elapsed_time)
   
-  # 95% confidence interval for lambda (using normal approximation)
+  # Calculate z-score for the specified confidence level
+  # For confidence_level, we want the (1 + confidence_level)/2 quantile
+  alpha <- 1 - confidence_level
+  z_score <- qnorm(1 - alpha/2)
+  
+  # Confidence interval for lambda (using normal approximation)
   # Lower bound for rate gives upper bound for time
-  z_score <- 1.96  # 95% confidence
   lambda_lower <- max(lambda_estimate - z_score * se_lambda, 1e-10)  # Prevent division by zero
   lambda_upper <- lambda_estimate + z_score * se_lambda
   

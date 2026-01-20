@@ -1,136 +1,97 @@
 # GitHub Copilot Instructions for tasker-dev
 
+# 🛑 STOP - READ THIS FIRST 🛑
+
+**Before responding to ANY request involving code changes or multi-step work:**
+
+☐ State which copilot-instructions.md sections apply to this request
+☐ Check if any Agent Skills apply (list them explicitly)
+☐ If multi-step work: Create todo list with #manage_todo_list
+☐ Mark tasks in-progress and completed as you work
+☐ Use #code-review before finalizing ANY code changes
+☐ Use "we" collaborative language and refer to user as "Dr. Greg"
+
+**If you cannot check ALL boxes above, STOP and ask for clarification.**
+
+**Example Response Format:**
+```
+**Following copilot-instructions.md sections: Shiny Patterns, Database Patterns**
+**Applicable Agent Skills: #code-review, #git-commit-message**
+**Will use #manage_todo_list for multi-step tracking**
+
+Dr. Greg, we need to...
+```
+
+---
+
+# 📖 REQUIRED READING
+
+**ALWAYS read the user-level copilot-instructions.md file first:**
+- **Location**: `/home/warnes/src/vscode-config/copilot-instructions.md`
+- **Contains**: Communication style, token monitoring, cross-project development patterns
+- **Why**: Establishes baseline behavior and standards across all projects
+
+**This file (project-specific) provides:**
+- Shiny application patterns and anti-patterns
+- Database connection handling in parallel workers
+- Unit testing requirements and code review standards
+- Agent Skills specific to tasker-dev workflows
+
+---
+
+## Quick Skill Reference
+
+- **#code-review** - REQUIRED before finalizing any code changes
+- **#git-commit-message** - For commit message generation  
+- **#shiny-ui-patterns** - For Shiny UI updates without flickering
+- **#database-patterns** - For database connection and query patterns
+- **#r-script-execution** - For running scripts and managing packages
+- **#unit-testing** - For creating and maintaining test coverage
+- **#manage_todo_list** - For multi-step task tracking and planning
+
+## ⚠️ CRITICAL WORKFLOW CHECKLIST
+
+**Before implementing ANY code changes, verify you will:**
+
+1. ✅ **Create/update unit tests** - Code changes and tests must be implemented together
+2. ✅ **Follow anti-patterns** - Check relevant sections below before coding
+3. ✅ **Review changes** - Use systematic code review before finalizing
+4. ✅ **Update documentation** - Regenerate docs if modifying exported functions
+
+**After making changes, verify you have:**
+
+1. ✅ **Tests passing** - All new/modified code has passing tests
+2. ✅ **Documentation updated** - roxygen2 comments and .Rd files current
+3. ✅ **No anti-patterns** - Reviewed against project-specific warnings
+4. ✅ **User informed** - Confirmed completion to user
+
 ## Shiny Application Development
 
-### Critical: Avoid renderUI() Anti-Pattern
+**See #shiny-ui-patterns skill for complete guidance.**
 
-**NEVER use `renderUI()` for updating dynamic content.** It causes:
-- UI flickering and poor user experience
-- Loss of scroll position in scrollable containers
-- Complete DOM reconstruction on every update
-- Memory overhead and performance degradation
-- Input focus loss and control state reset
+### CRITICAL Anti-Pattern: Never Use renderUI() for Content Updates
 
-### ✅ CORRECT: Static Structure + Reactive Updates
+**Causes:** UI flickering, lost scroll position, memory overhead, poor performance.
 
-**Pattern:** Create UI elements once, update values through reactive expressions and `updateXXX()` functions.
-
+**✅ CORRECT:** Static structure + reactive content
 ```r
-# ✅ CORRECT - UI structure created once
+# UI - Created once
 ui <- fluidPage(
-  div(
-    class = "log-terminal",
-    htmlOutput("log_text")  # Container stays in DOM
-  )
+  div(class = "log-terminal", htmlOutput("log_content"))
 )
 
+# Server - Only content updates
 server <- function(input, output, session) {
-  # Reactive data
-  log_content <- reactive({
-    # Depend on reactive trigger
-    rv$log_refresh_trigger
-    
-    # Read and format data
-    lines <- readLines(log_file)
-    format_log_lines(lines)
-  })
-  
-  # Render updates content only, not structure
-  output$log_text <- renderUI({
-    HTML(log_content())
-  })
-  
-  # Trigger updates via reactive value
-  observeEvent(input$refresh_button, {
-    rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+  output$log_content <- renderUI({
+    rv$trigger  # Reactive dependency
+    HTML(read_and_format_log())
   })
 }
 ```
 
-### ❌ INCORRECT: renderUI() Recreates Everything
+**❌ INCORRECT:** renderUI() recreates entire structure on every update.
 
-```r
-# ❌ INCORRECT - Recreates entire UI structure on every update
-output$log_content <- renderUI({
-  tagList(
-    div(class = "controls",
-      selectInput(...),  # Recreated every time
-      checkboxInput(...) # Recreated every time
-    ),
-    div(class = "log-terminal",
-      HTML(format_log_lines(lines))  # Entire container recreated
-    )
-  )
-})
-```
-
-### Preferred Update Patterns
-
-#### 1. Split Static Structure from Dynamic Content
-
-```r
-# Static UI with controls (rendered once)
-output$log_viewer <- renderUI({
-  tagList(
-    div(class = "controls",
-      selectInput("num_lines", ...),
-      actionButton("refresh", ...)
-    ),
-    div(class = "log-terminal",
-      htmlOutput("log_content")  # Only this updates
-    )
-  )
-})
-
-# Dynamic content only
-output$log_content <- renderUI({
-  rv$trigger  # Reactive dependency
-  HTML(read_and_format_log())
-})
-```
-
-#### 2. Use updateXXX() Functions
-
-```r
-# For Shiny inputs, use update functions in observers
-observeEvent(new_data(), {
-  updateSelectInput(session, "task_filter", choices = new_choices)
-  updateProgressBar(session, "progress_bar", value = new_progress)
-  updateTextInput(session, "status_text", value = new_status)
-})
-```
-
-#### 3. Use shinyjs for DOM Manipulation
-
-```r
-observeEvent(input$toggle_pane, {
-  if (pane_visible) {
-    shinyjs::hide("process_pane")
-    shinyjs::removeClass("toggle_btn", "expanded")
-  } else {
-    shinyjs::show("process_pane")
-    shinyjs::addClass("toggle_btn", "expanded")
-  }
-})
-```
-
-#### 4. Reactive Triggers for Content Updates
-
-```r
-# Use reactive value as trigger
-rv <- reactiveValues(content_trigger = 0)
-
-# Increment trigger to force re-render
-observeEvent(input$update_button, {
-  rv$content_trigger <- rv$content_trigger + 1
-})
-
-# Content depends on trigger
-output$content <- renderUI({
-  rv$content_trigger  # Re-renders when incremented
-  generate_content()
-})
-```
+**For details:** See #shiny-ui-patterns skill for update patterns, updateXXX() functions, shinyjs, reactive triggers.
 
 ## Parallel Processing with Database Connections
 
@@ -185,28 +146,25 @@ process_item <- function(item) {
 
 ## Database Patterns
 
-### COUNT() Query Results
+**See #database-patterns skill for complete guidance.**
 
-**Always cast COUNT() results to INTEGER** to avoid conversion issues:
+### Critical Anti-Patterns
 
+**COUNT() casting:**
 ```r
-# ✅ CORRECT - Cast COUNT to INTEGER
-dbGetQuery(con, "SELECT COUNT(*)::INTEGER as n FROM table_name")
-dbGetQuery(con, "SELECT COUNT(DISTINCT column)::INTEGER as count FROM table_name")
+# ✅ CORRECT
+dbGetQuery(con, "SELECT COUNT(*)::INTEGER as n FROM table")
 
-# ❌ INCORRECT - Returns bigint which causes problems in R
-dbGetQuery(con, "SELECT COUNT(*) as n FROM table_name")
+# ❌ INCORRECT - Returns bigint
+dbGetQuery(con, "SELECT COUNT(*) as n FROM table")
 ```
 
-**Why:** PostgreSQL's `COUNT()` returns bigint (int64), which R's RPostgres package converts to numeric, causing precision loss and scientific notation display.
+**Connection management:**
+- `dbConnectBBC(mode="rw")` - Read-write
+- `dbConnectBBC(mode="r")` - Read-only (note: 'r', not 'ro')
+- Use read-write for monitoring/status updates
 
-### Connection Management
-
-- Use `dbConnectBBC(mode="rw")` for read-write connections
-- Use `dbConnectBBC(mode="r")` for read-only connections (note: 'r', not 'ro')
-- Main process connection: `con <- dbConnectBBC(mode="rw")`
-- Worker connections: Created in each worker via `clusterEvalQ()`
-- Use read-write connections for monitoring progress/status updates
+**For details:** See #database-patterns skill.
 
 ## Error Handling Patterns
 
@@ -229,47 +187,41 @@ Scripts support automatic retry for failed items:
 
 ## Running R Scripts
 
-**Always run R and R scripts from the project root directory** to ensure proper environment setup:
+**See #r-script-execution skill for complete guidance.**
 
+### Critical Patterns
+
+**Always run from project root:**
 ```bash
-# ✅ CORRECT - From project root
-cd /home/warnes/src/tasker-dev
-Rscript inst/scripts/my_script.R
-
-# ❌ INCORRECT - From scripts directory (won't pick up renv or .Renviron)
-cd /home/warnes/src/tasker-dev/inst/scripts
-Rscript my_script.R
+cd /home/warnes/src/tasker-dev && Rscript inst/scripts/my_script.R
 ```
 
-**Why:** Running from the project root ensures:
-- `renv` package environment is activated
-- `.Renviron` file is sourced for environment variables
-- Relative paths work correctly
-- `devtools::load_all()` can find the package source
-
-**Avoid using `--vanilla` flag** with Rscript as it prevents loading of `.Renviron` and startup files.
-
-### Shell Quoting for R Commands
-
-**Always use single quotes `'...'` when passing R code to `R` or `Rscript` commands:**
-
+**Shell quoting:**
 ```bash
-# ✅ CORRECT - Single quotes prevent shell interpretation
-Rscript -e 'cat("Hello!\n")'
-R --slave -e 'result <- 2 + 2; print(result)'
-
-# ❌ INCORRECT - Double quotes allow shell expansion
-Rscript -e "cat('Hello!\n')"  # Shell interprets ! as history expansion
-R --slave -e "result <- 2 + 2; print(result)"  # Variables like $var get expanded
+Rscript -e 'cat("Use single quotes!\n")'  # ✅ Correct
 ```
 
-**Why:** In bash, double quotes allow:
-- Variable expansion: `$var` gets replaced with variable value
-- Command substitution: `$(command)` gets executed
-- History expansion: `!` triggers history substitution (if enabled)
-- Escape sequences: `\n`, `\t` may be interpreted by shell
+**Use argparse for arguments:**
+```r
+library(argparse)
+parser <- ArgumentParser(description = "...")
+parser$add_argument("--input", type = "character", required = TRUE)
+args <- parser$parse_args()
+```
 
-Single quotes preserve the literal string, preventing shell interpretation and ensuring R code is passed exactly as written.
+**Use tee for test/script output monitoring:**
+```bash
+# ✅ CORRECT - Allows user monitoring + agent analysis
+Rscript -e 'devtools::load_all(); test_file("tests/testthat/test-file.R")' |& tee /tmp/output.log
+grep "FAIL" /tmp/output.log
+
+# ❌ INCORRECT - User can't monitor progress
+Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
+```
+
+**Why:** Piping directly to grep/head/tail prevents user from observing unanticipated errors or issues during execution. Using tee allows simultaneous user monitoring and agent analysis of specific output.
+
+**For details:** See #r-script-execution skill.
 
 ## Code Review Practices
 
@@ -330,6 +282,60 @@ subtask_increment <- function(run_id, subtask_number, increment = 1, quiet = TRU
 }
 ```
 
+## Unit Tests
+
+**Always create or update unit tests when creating or modifying functions:**
+
+- **New functions**: Create test file in `tests/testthat/test-{function_name}.R`
+- **Modified functions**: Update existing tests to cover new behavior
+- **Bug fixes**: Add test case that reproduces the bug before fixing
+
+**Test structure using testthat:**
+```r
+# tests/testthat/test-my_function.R
+test_that("my_function validates input", {
+  expect_error(my_function(NULL), "input.*required")
+  expect_error(my_function("invalid"), "must be numeric")
+})
+
+test_that("my_function handles edge cases", {
+  expect_equal(my_function(0), expected_result)
+  expect_equal(my_function(c()), numeric(0))
+})
+
+test_that("my_function produces correct output", {
+  result <- my_function(valid_input)
+  expect_true(is.numeric(result))
+  expect_equal(length(result), expected_length)
+  expect_equal(result, expected_value)
+})
+```
+
+**What to test:**
+- **Input validation**: Invalid/missing parameters, type checking, boundary conditions
+- **Edge cases**: Empty inputs, NULL values, single element vectors, large datasets
+- **Core functionality**: Expected outputs for typical inputs
+- **Error handling**: Proper error messages and graceful failures
+- **Side effects**: Database operations, file I/O (use mocking when appropriate)
+
+**Test coverage guidelines:**
+- All exported functions must have tests
+- Critical internal functions should have tests
+- Bug fixes must include regression tests
+- Aim for >80% code coverage on new code
+
+**Run tests before committing:**
+```r
+# Run all tests
+devtools::test()
+
+# Run specific test file
+testthat::test_file("tests/testthat/test-my_function.R")
+
+# Check test coverage
+covr::package_coverage()
+```
+
 ## Git Commit Messages
 
 ### Summarizing Changes
@@ -361,10 +367,11 @@ Update R/subtask_update.R
 
 ## Common Gotchas
 
-1. **Don't use renderUI() for content updates** - Use reactive data + renderText/renderUI for structure only
-2. **Don't serialize connection objects** - Always return `NULL` from `clusterEvalQ()` when creating connections
-3. **Use atomic increments** - `subtask_increment()` for parallel workers, not `subtask_update()`
-4. **Cast COUNT() to INTEGER** - Avoid bigint conversion issues
-5. **Run from project root** - Ensure renv and .Renviron are loaded
-6. **Single quote shell commands** - Prevent shell variable expansion
-7. **Export all needed variables** - Use `clusterExport()` for global variables needed by workers
+1. **Register tasks with script_filename** - Required for auto-detection to work
+2. **Don't use renderUI() for content updates** - Use reactive data + renderText/renderUI for structure only
+3. **Don't serialize connection objects** - Always return `NULL` from `clusterEvalQ()` when creating connections
+4. **Use atomic increments** - `subtask_increment()` for parallel workers, not `subtask_update()`
+5. **Cast COUNT() to INTEGER** - Avoid bigint conversion issues
+6. **Run from project root** - Ensure renv and .Renviron are loaded
+7. **Single quote shell commands** - Prevent shell variable expansion
+8. **Export all needed variables** - Use `clusterExport()` for global variables needed by workers
