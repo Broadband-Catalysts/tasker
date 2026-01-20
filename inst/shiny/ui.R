@@ -53,7 +53,7 @@ ui <- page_fluid(
                    title = "Reload pipeline stages and registered tasks"),
       hr(),
       div(style = "margin-bottom: 10px;",
-        h6("Process Monitor Status:"),
+        h6("Reporter Status:"),
         htmlOutput("monitor_status", style = "font-size: 12px;")
       ),
       hr(),
