@@ -54,15 +54,15 @@ test_that("task_update modifies execution state", {
   expect_equal(result$overall_percent_complete, 10.0)
 })
 
-test_that("task_end finalizes execution", {
+test_that("task_complete finalizes execution", {
   skip_on_cran()
   setup_test_db()
   
   register_task(stage = "TEST", name = "test_end", type = "R")
   run_id <- task_start(stage = "TEST", task = "test_end")
   
-  # End the task
-  task_end(run_id = run_id, status = "COMPLETED")
+  # Complete the task
+  task_complete(run_id = run_id)
   
   conn <- get_test_db_connection()
   on.exit(DBI::dbDisconnect(conn))
@@ -76,17 +76,16 @@ test_that("task_end finalizes execution", {
   expect_equal(result$overall_percent_complete, 100.0)
 })
 
-test_that("task_end handles failures", {
+test_that("task_fail handles failures", {
   skip_on_cran()
   setup_test_db()
   
   register_task(stage = "TEST", name = "test_fail", type = "R")
   run_id <- task_start(stage = "TEST", task = "test_fail")
   
-  # End with failure
-  task_end(
+  # Fail the task
+  task_fail(
     run_id = run_id,
-    status = "FAILED",
     error_message = "Test error",
     error_detail = "Detailed error information"
   )

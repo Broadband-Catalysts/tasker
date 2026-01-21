@@ -23,7 +23,8 @@ Imports:
     this.path,
     ps (>= 1.7.0),
     callr (>= 3.7.0),
-    R.utils
+    R.utils,
+    stringr
 Suggests:
     RPostgres,
     RSQLite,

@@ -11,7 +11,6 @@ update_reporter_heartbeat <- function(con, hostname) {
   tryCatch({
     table_name <- get_table_name("reporter_status", con, char = TRUE)
     current_pid <- Sys.getpid()
-    current_time_str <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
     version <- as.character(utils::packageVersion("tasker"))
     config <- getOption("tasker.config")
 
@@ -36,8 +35,8 @@ update_reporter_heartbeat <- function(con, hostname) {
           DBI::dbExecute(con, sprintf("INSERT INTO %s (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested) VALUES (%s, %d, datetime('now'), datetime('now'), %s, 0)", table_name, host_lit, as.integer(current_pid), ver_lit))
         } else {
           DBI::dbExecute(con, sprintf("DELETE FROM %s WHERE hostname = $1", table_name), params = list(hostname))
-          insert_sql <- sprintf("INSERT INTO %s (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested) VALUES ($1, $2, $3, $4, $5, FALSE)", table_name)
-          DBI::dbExecute(con, insert_sql, params = list(hostname, current_pid, current_time_str, current_time_str, version))
+          insert_sql <- sprintf("INSERT INTO %s (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested) VALUES ($1, $2, NOW(), NOW(), $3, FALSE)", table_name)
+          DBI::dbExecute(con, insert_sql, params = list(hostname, current_pid, version))
         }
         DBI::dbCommit(con)
       }, error = function(e) { DBI::dbRollback(con); stop("Transaction failed: ", e$message) })

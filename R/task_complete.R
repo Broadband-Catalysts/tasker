@@ -8,7 +8,7 @@
 #' @export
 #'
 #' @seealso [task_update()] for updating task progress, [task_start()] to begin a task,
-#'   [task_fail()] to mark a task as failed, [task_end()] for generic status updates
+#'   [task_fail()] to mark a task as failed
 #'
 #' @examples
 #' \dontrun{

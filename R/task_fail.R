@@ -9,7 +9,7 @@
 #' @export
 #'
 #' @seealso [task_update()] for updating task progress, [task_start()] to begin a task,
-#'   [task_complete()] to mark a task as complete, [task_end()] for generic status updates
+#'   [task_complete()] to mark a task as complete
 #'
 #' @examples
 #' \dontrun{
@@ -31,7 +31,7 @@ task_fail <- function(error_message, error_detail = NULL, quiet = FALSE, conn = 
   if (is.null(conn)) {
     conn <- get_connection(run_id)
     if (is.null(conn)) {
-      conn <- create_connection()
+      conn <- get_db_connection()
       close_on_exit <- TRUE
     }
   }

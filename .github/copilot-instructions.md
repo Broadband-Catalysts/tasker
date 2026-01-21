@@ -164,6 +164,31 @@ dbGetQuery(con, "SELECT COUNT(*) as n FROM table")
 - `dbConnectBBC(mode="r")` - Read-only (note: 'r', not 'ro')
 - Use read-write for monitoring/status updates
 
+**Database-agnostic SQL patterns:**
+
+Remember: tasker must support PostgreSQL, SQLite, and MySQL/MariaDB.
+
+Either use database-agnostic SQL syntax or handle each database's dialect appropriately:
+
+```r
+# ✅ CORRECT - Database-agnostic case-insensitive matching
+WHERE UPPER(column_name) LIKE UPPER('%pattern%')
+
+# ✅ ALSO CORRECT - Dialect-specific with fallback
+if (driver == "postgresql") {
+  WHERE column_name ILIKE '%pattern%'
+} else {
+  WHERE UPPER(column_name) LIKE UPPER('%pattern%')
+}
+
+# ❌ INCORRECT - PostgreSQL-only without handling other databases
+WHERE column_name ILIKE '%pattern%'
+```
+
+**For complete database patterns:** See #database-patterns skill for detailed examples, query patterns, schema operations.
+
+**Why:** `ILIKE` is PostgreSQL-specific and will fail on SQLite/MySQL with "syntax error". Use `UPPER(column) LIKE UPPER(pattern)` for case-insensitive matching across all supported databases.
+
 **For details:** See #database-patterns skill.
 
 ## Error Handling Patterns

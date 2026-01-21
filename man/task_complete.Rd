@@ -33,5 +33,5 @@ task_complete(message = "All done")
 }
 \seealso{
 \code{\link[=task_update]{task_update()}} for updating task progress, \code{\link[=task_start]{task_start()}} to begin a task,
-\code{\link[=task_fail]{task_fail()}} to mark a task as failed, \code{\link[=task_end]{task_end()}} for generic status updates
+\code{\link[=task_fail]{task_fail()}} to mark a task as failed
 }

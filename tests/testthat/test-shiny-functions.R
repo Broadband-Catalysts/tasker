@@ -195,7 +195,7 @@ test_that("task functions handle errors gracefully", {
   
   # Start subtask then fail it
   subtask_start("Will fail", items_total = 10, run_id = run_id, subtask_number = 1)
-  subtask_fail(error_message = "Test error", run_id = run_id, subtask_number = 1)
+  subtask_update(status = "FAILED", error_message = "Test error", run_id = run_id, subtask_number = 1)
   
   # Fail the task
   task_fail(run_id = run_id, error_message = "Task failed intentionally")
@@ -217,8 +217,6 @@ test_that("task functions handle errors gracefully", {
       stop(e)
     }
   })
-})
-
 test_that("lookup_task_by_script finds tasks by filename", {
   skip_on_cran()
   setup_test_db()
@@ -239,18 +237,41 @@ test_that("lookup_task_by_script finds tasks by filename", {
   # Check what's actually in the database
   tasks <- DBI::dbGetQuery(con, "SELECT task_name, script_filename FROM tasks WHERE stage_id IN (SELECT stage_id FROM stages WHERE stage_name = 'TEST')")
   
-  # If script_filename was extracted from script_path, test it
-  if (nrow(tasks) > 0 && !is.na(tasks$script_filename[1])) {
-    # Lookup by exact filename
-    result <- lookup_task_by_script(tasks$script_filename[1], conn = con)
-    expect_false(is.null(result))
-    expect_true(is.data.frame(result))
-    expect_equal(nrow(result), 1)
-    expect_equal(result$stage_name, "TEST")
-    expect_equal(result$task_name, "script_task")
-  } else {
-    skip("register_task does not populate script_filename from script_path")
-  }
+  # script_filename should be auto-extracted from script_path
+  expect_equal(nrow(tasks), 1)
+  expect_equal(tasks$script_filename[1], "01_TEST_01_My_Script.R")
+  
+  # Lookup by exact filename
+  result <- lookup_task_by_script(tasks$script_filename[1], conn = con)
+  expect_false(is.null(result))
+  expect_true(is.data.frame(result))
+  expect_equal(nrow(result), 1)
+  expect_equal(result$stage_name, "TEST")
+  expect_equal(result$task_name, "script_task")
+})
+
+test_that("register_task explicit script_filename overrides auto-extraction", {
+  skip_on_cran()
+  setup_test_db()
+  on.exit(cleanup_test_db())
+  
+  # Register task with both script_path and explicit script_filename
+  register_task(
+    stage = "TEST", 
+    name = "override_task", 
+    type = "R",
+    script_path = "/path/to/some_script.R",
+    script_filename = "custom_filename.R"
+  )
+  
+  # Check that explicit script_filename is used, not auto-extracted
+  con <- get_test_db_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  tasks <- DBI::dbGetQuery(con, "SELECT script_filename FROM tasks WHERE stage_id IN (SELECT stage_id FROM stages WHERE stage_name = 'TEST') AND task_name = 'override_task'")
+  
+  expect_equal(nrow(tasks), 1)
+  expect_equal(tasks$script_filename[1], "custom_filename.R")
 })
 
 test_that("get_task_history returns historical runs", {
@@ -316,11 +337,11 @@ test_that("active task monitoring functions are available", {
   
   # Verify get_active_tasks function exists and is callable
   # This is an internal function used by reporter
-  # It requires connection and hostname parameters
+  # It requires only a connection parameter
   expect_true(exists("get_active_tasks", where = "package:tasker", mode = "function"))
   
   # For SQLite, calling with proper parameters should work
-  # (though it may return empty if hostname doesn't match)
-  result <- tasker:::get_active_tasks(con, Sys.info()[["nodename"]])
+  result <- tasker::get_active_tasks(conn = con)
   expect_true(is.list(result) || is.data.frame(result))
 })
+
