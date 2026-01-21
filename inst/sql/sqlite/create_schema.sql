@@ -335,22 +335,57 @@ ORDER BY stage_order, task_order;
 CREATE VIEW IF NOT EXISTS current_task_status_with_metrics AS
 SELECT 
     cts.*,
-    pm.cpu_percent,
-    pm.memory_mb,
-    pm.memory_percent,
-    pm.child_count,
-    pm.child_total_cpu_percent,
-    pm.child_total_memory_mb,
-    pm.is_alive,
-    pm.collection_error,
+    pm.cpu_percent AS metrics_cpu_percent,
+    pm.memory_mb AS metrics_memory_mb,
+    pm.memory_percent AS metrics_memory_percent,
+    pm.child_count AS metrics_child_count,
+    pm.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm.is_alive AS metrics_is_alive,
+    pm.collection_error AS metrics_collection_error,
     pm.error_message AS metrics_error_message,
     pm.error_type AS metrics_error_type,
     pm.timestamp AS metrics_timestamp,
-    CAST((julianday('now') - julianday(pm.timestamp)) * 86400 AS INTEGER) AS metrics_age_seconds
+    CAST((julianday('now') - julianday(pm.timestamp)) * 86400 AS INTEGER) AS metrics_age_seconds,
+    -- Aggregated metrics (average values)
+    pm_agg.avg_cpu_percent,
+    pm_agg.avg_memory_mb,
+    pm_agg.avg_memory_percent,
+    pm_agg.avg_child_count,
+    pm_agg.avg_child_total_cpu_percent,
+    pm_agg.avg_child_total_memory_mb,
+    -- Aggregated metrics (maximum values)
+    pm_agg.max_cpu_percent,
+    pm_agg.max_memory_mb,
+    pm_agg.max_memory_percent,
+    pm_agg.max_child_count,
+    pm_agg.max_child_total_cpu_percent,
+    pm_agg.max_child_total_memory_mb,
+    pm_agg.metrics_count
 FROM current_task_status cts
 LEFT JOIN process_metrics pm ON pm.run_id = cts.run_id 
     AND pm.timestamp = (
         SELECT MAX(timestamp) 
         FROM process_metrics pm2 
         WHERE pm2.run_id = cts.run_id
-    );
+    )
+LEFT JOIN (
+    SELECT 
+        run_id,
+        AVG(cpu_percent) AS avg_cpu_percent,
+        AVG(memory_mb) AS avg_memory_mb,
+        AVG(memory_percent) AS avg_memory_percent,
+        AVG(child_count) AS avg_child_count,
+        AVG(child_total_cpu_percent) AS avg_child_total_cpu_percent,
+        AVG(child_total_memory_mb) AS avg_child_total_memory_mb,
+        MAX(cpu_percent) AS max_cpu_percent,
+        MAX(memory_mb) AS max_memory_mb,
+        MAX(memory_percent) AS max_memory_percent,
+        MAX(child_count) AS max_child_count,
+        MAX(child_total_cpu_percent) AS max_child_total_cpu_percent,
+        MAX(child_total_memory_mb) AS max_child_total_memory_mb,
+        COUNT(*) AS metrics_count
+    FROM process_metrics
+    WHERE collection_error = 0  -- Only use successful metrics
+    GROUP BY run_id
+) pm_agg ON pm_agg.run_id = cts.run_id;

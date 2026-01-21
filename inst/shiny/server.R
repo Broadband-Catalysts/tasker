@@ -398,6 +398,14 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   html_parts <- c(html_parts, "<h5 class='process-info-header'>Process Info</h5>")
   
   # Process details
+  # Get browser timezone for embedded timestamps (uses shinyTZ automatic detection)
+  browser_tz <- tryCatch({
+    shinyTZ::get_browser_tz()
+  }, error = function(e) {
+    # Fallback to TASKER_DISPLAY_TIMEZONE if session not available
+    TASKER_DISPLAY_TIMEZONE
+  })
+  
   process_details <- sprintf(
     "<div class='process-details compact'>
       <span class='detail-item'><strong>PID:</strong> %s</span>
@@ -408,7 +416,10 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     htmltools::htmlEscape(if (!is.null(task_data$process_id)) as.character(task_data$process_id) else "N/A"),
     htmltools::htmlEscape(if (!is.null(task_data$hostname)) task_data$hostname else "N/A"),
     htmltools::htmlEscape(status),
-    htmltools::htmlEscape(if (!is.null(task_data$start_time)) format(task_data$start_time, "%Y-%m-%d %H:%M:%S") else "N/A")
+    htmltools::htmlEscape(if (!is.null(task_data$start_time)) {
+      # Use shinyTZ helper to format in browser timezone
+      shinyTZ::format_in_tz(task_data$start_time, tz = browser_tz, format = "%Y-%m-%d %H:%M:%S %Z")
+    } else "N/A")
   )
   html_parts <- c(html_parts, process_details)
   
@@ -455,9 +466,29 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     } else {
       "N/A"
     }
+    
+    # Add average and max CPU if available
+    cpu_avg_max <- ""
+    if (!is.null(task_data$avg_cpu_percent) && !is.na(task_data$avg_cpu_percent) &&
+        !is.null(task_data$max_cpu_percent) && !is.na(task_data$max_cpu_percent)) {
+      cpu_avg_max <- sprintf(" (avg: %.1f%%, max: %.1f%%)", 
+                            task_data$avg_cpu_percent, 
+                            task_data$max_cpu_percent)
+    }
+    cpu_display <- paste0(cpu_display, cpu_avg_max)
+    
     memory_display <- if (!is.null(task_data$memory_mb) && !is.na(task_data$memory_mb)) {
-      sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
+      mem_text <- sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
               if (!is.null(task_data$memory_percent) && !is.na(task_data$memory_percent)) task_data$memory_percent else 0)
+      # Add average and max memory if available
+      if (!is.null(task_data$avg_memory_mb) && !is.na(task_data$avg_memory_mb) &&
+          !is.null(task_data$max_memory_mb) && !is.na(task_data$max_memory_mb)) {
+        mem_text <- sprintf("%s (avg: %.1f MB, max: %.1f MB)", 
+                           mem_text,
+                           task_data$avg_memory_mb,
+                           task_data$max_memory_mb)
+      }
+      mem_text
     } else {
       "N/A"
     }
@@ -534,17 +565,34 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       } else {
         cpu_text
       }
+      # Add average and max CPU if available
+      if (!is.null(task_data$avg_cpu_percent) && !is.na(task_data$avg_cpu_percent) &&
+          !is.null(task_data$max_cpu_percent) && !is.na(task_data$max_cpu_percent)) {
+        cpu_text <- sprintf("%s (avg: %.1f%%, max: %.1f%%)", 
+                           cpu_text,
+                           task_data$avg_cpu_percent, 
+                           task_data$max_cpu_percent)
+      }
+      cpu_text
     } else {
       "N/A"
     }
     
     memory_display <- if (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) {
-      sprintf("%.1f MB", task_data$metrics_memory_mb)
-      if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) {
+      mem_text <- if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) {
         sprintf("%.1f MB (%.1f%%)", task_data$metrics_memory_mb, task_data$metrics_memory_percent)
       } else {
         sprintf("%.1f MB", task_data$metrics_memory_mb)
       }
+      # Add average and max memory if available
+      if (!is.null(task_data$avg_memory_mb) && !is.na(task_data$avg_memory_mb) &&
+          !is.null(task_data$max_memory_mb) && !is.na(task_data$max_memory_mb)) {
+        mem_text <- sprintf("%s (avg: %.1f MB, max: %.1f MB)", 
+                           mem_text,
+                           task_data$avg_memory_mb,
+                           task_data$max_memory_mb)
+      }
+      mem_text
     } else {
       "N/A"
     }
@@ -2179,15 +2227,13 @@ server <- function(input, output, session) {
   })
   
   # Last update time
-  output$last_update <- renderText({
+  output$last_update <- renderDatetime({
     if (!is.null(rv$last_update)) {
-      # Convert to US Eastern timezone
-      eastern_time <- lubridate::with_tz(rv$last_update, "America/New_York")
-      paste("Last update:", format(eastern_time, "%H:%M:%S %Z"))
+      rv$last_update  # shinyTZ automatically handles timezone conversion
     } else {
-      "No data loaded"
+      NULL  # renderDatetime handles NULL gracefully
     }
-  })
+  }, format = "Last update: %H:%M:%S %Z")
   
   # Process monitor status
   monitor_status_reactive <- reactive({

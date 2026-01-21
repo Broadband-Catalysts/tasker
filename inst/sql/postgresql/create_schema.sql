@@ -204,7 +204,22 @@ SELECT
     pm.error_message AS metrics_error_message,
     pm.error_type AS metrics_error_type,
     pm.timestamp AS metrics_timestamp,
-    EXTRACT(EPOCH FROM (NOW() - pm.timestamp))::INTEGER AS metrics_age_seconds
+    EXTRACT(EPOCH FROM (NOW() - pm.timestamp))::INTEGER AS metrics_age_seconds,
+    -- Aggregated metrics (average values)
+    pm_agg.avg_cpu_percent,
+    pm_agg.avg_memory_mb,
+    pm_agg.avg_memory_percent,
+    pm_agg.avg_child_count,
+    pm_agg.avg_child_total_cpu_percent,
+    pm_agg.avg_child_total_memory_mb,
+    -- Aggregated metrics (maximum values)
+    pm_agg.max_cpu_percent,
+    pm_agg.max_memory_mb,
+    pm_agg.max_memory_percent,
+    pm_agg.max_child_count,
+    pm_agg.max_child_total_cpu_percent,
+    pm_agg.max_child_total_memory_mb,
+    pm_agg.metrics_count
 FROM tasker.current_task_status cts
 LEFT JOIN LATERAL (
     SELECT *
@@ -212,7 +227,26 @@ LEFT JOIN LATERAL (
     WHERE process_metrics.run_id = cts.run_id
     ORDER BY timestamp DESC
     LIMIT 1
-) pm ON TRUE;
+) pm ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        AVG(cpu_percent) AS avg_cpu_percent,
+        AVG(memory_mb) AS avg_memory_mb,
+        AVG(memory_percent) AS avg_memory_percent,
+        AVG(child_count) AS avg_child_count,
+        AVG(child_total_cpu_percent) AS avg_child_total_cpu_percent,
+        AVG(child_total_memory_mb) AS avg_child_total_memory_mb,
+        MAX(cpu_percent) AS max_cpu_percent,
+        MAX(memory_mb) AS max_memory_mb,
+        MAX(memory_percent) AS max_memory_percent,
+        MAX(child_count) AS max_child_count,
+        MAX(child_total_cpu_percent) AS max_child_total_cpu_percent,
+        MAX(child_total_memory_mb) AS max_child_total_memory_mb,
+        COUNT(*)::INTEGER AS metrics_count
+    FROM tasker.process_metrics
+    WHERE process_metrics.run_id = cts.run_id
+      AND collection_error = FALSE  -- Only use successful metrics
+) pm_agg ON TRUE;
 
 COMMENT ON SCHEMA tasker IS 'Task and pipeline execution tracking';
 COMMENT ON TABLE tasker.stages IS 'Pipeline stages (e.g., PREREQ, STATIC, DAILY)';

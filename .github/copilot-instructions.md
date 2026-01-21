@@ -1,15 +1,14 @@
 # GitHub Copilot Instructions for tasker-dev
 
-# 🛑 STOP - READ THIS FIRST 🛑
+# 🛑🛑🛑 STOP - MANDATORY PRE-FLIGHT - READ THIS BEFORE RESPONDING 🛑🛑🛑
 
-**Before responding to ANY request involving code changes or multi-step work:**
-
-☐ State which copilot-instructions.md sections apply to this request
+☐ State which user and project copilot-instructions.md sections apply to this request
 ☐ Check if any Agent Skills apply (list them explicitly)
 ☐ If multi-step work: Create todo list with #manage_todo_list
 ☐ Mark tasks in-progress and completed as you work
 ☐ Use #code-review before finalizing ANY code changes
 ☐ Use "we" collaborative language and refer to user as "Dr. Greg"
+☐ Monitor and report token usage at checkpoints (700K/850K/950K)
 
 **If you cannot check ALL boxes above, STOP and ask for clarification.**
 

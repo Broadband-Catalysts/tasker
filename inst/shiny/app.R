@@ -6,6 +6,7 @@ suppressPackageStartupMessages({
   library(lubridate)
   library(shinyWidgets)
   library(shinyjs)
+  library(shinyTZ)
 })
 
 devtools::load_all()
@@ -21,6 +22,7 @@ search_paths <- c(
 
 TASKER_MONITOR_HOST <- Sys.getenv("TASKER_MONITOR_HOST", unset = "0.0.0.0")
 TASKER_MONITOR_PORT <- as.numeric(Sys.getenv("TASKER_MONITOR_PORT", unset = "3838"))
+TASKER_DISPLAY_TIMEZONE <- Sys.getenv("TASKER_DISPLAY_TIMEZONE", unset = Sys.timezone())
 
 # ============================================================================
 # PROGRESS DATA HARVESTING: Non-reactive storage for completion time prediction

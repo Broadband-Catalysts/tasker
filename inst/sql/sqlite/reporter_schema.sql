@@ -122,17 +122,17 @@ CREATE INDEX IF NOT EXISTS idx_task_runs_active_host ON task_runs(hostname, stat
 CREATE VIEW IF NOT EXISTS task_runs_with_latest_metrics AS
 SELECT 
     tr.*,
-    pm.cpu_percent,
-    pm.cpu_cores,
-    pm.memory_mb,
-    pm.memory_percent,
-    pm.child_count,
-    pm.child_total_cpu_percent,
-    pm.child_total_memory_mb,
-    pm.is_alive,
-    pm.collection_error,
-    pm.error_message,
-    pm.error_type,
+    pm.cpu_percent AS metrics_cpu_percent,
+    pm.cpu_cores AS metrics_cpu_cores,
+    pm.memory_mb AS metrics_memory_mb,
+    pm.memory_percent AS metrics_memory_percent,
+    pm.child_count AS metrics_child_count,
+    pm.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm.is_alive AS metrics_is_alive,
+    pm.collection_error AS metrics_collection_error,
+    pm.error_message AS metrics_error_message,
+    pm.error_type AS metrics_error_type,
     pm.timestamp AS metrics_timestamp,
     CAST((julianday('now') - julianday(pm.timestamp)) * 86400 AS INTEGER) AS metrics_age_seconds
 FROM task_runs tr
@@ -142,3 +142,69 @@ LEFT JOIN process_metrics pm ON pm.run_id = tr.run_id
         FROM process_metrics pm2 
         WHERE pm2.run_id = tr.run_id
     );
+
+-- ============================================================================
+-- View: task_runs_with_aggregated_metrics
+-- Join task runs with latest metrics AND aggregated statistics (avg/max)
+-- SQLite version using subquery and LEFT JOIN
+-- ============================================================================
+
+CREATE VIEW IF NOT EXISTS task_runs_with_aggregated_metrics AS
+SELECT 
+    tr.*,
+    -- Latest metrics (current values)
+    pm_latest.cpu_percent AS metrics_cpu_percent,
+    pm_latest.cpu_cores AS metrics_cpu_cores,
+    pm_latest.memory_mb AS metrics_memory_mb,
+    pm_latest.memory_percent AS metrics_memory_percent,
+    pm_latest.child_count AS metrics_child_count,
+    pm_latest.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm_latest.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm_latest.is_alive AS metrics_is_alive,
+    pm_latest.collection_error AS metrics_collection_error,
+    pm_latest.error_message AS metrics_error_message,
+    pm_latest.error_type AS metrics_error_type,
+    pm_latest.timestamp AS metrics_timestamp,
+    CAST((julianday('now') - julianday(pm_latest.timestamp)) * 86400 AS INTEGER) AS metrics_age_seconds,
+    -- Aggregated metrics (average values)
+    pm_agg.avg_cpu_percent,
+    pm_agg.avg_memory_mb,
+    pm_agg.avg_memory_percent,
+    pm_agg.avg_child_count,
+    pm_agg.avg_child_total_cpu_percent,
+    pm_agg.avg_child_total_memory_mb,
+    -- Aggregated metrics (maximum values)
+    pm_agg.max_cpu_percent,
+    pm_agg.max_memory_mb,
+    pm_agg.max_memory_percent,
+    pm_agg.max_child_count,
+    pm_agg.max_child_total_cpu_percent,
+    pm_agg.max_child_total_memory_mb,
+    pm_agg.metrics_count
+FROM task_runs tr
+LEFT JOIN process_metrics pm_latest ON pm_latest.run_id = tr.run_id 
+    AND pm_latest.timestamp = (
+        SELECT MAX(timestamp) 
+        FROM process_metrics pm2 
+        WHERE pm2.run_id = tr.run_id
+    )
+LEFT JOIN (
+    SELECT 
+        run_id,
+        AVG(cpu_percent) AS avg_cpu_percent,
+        AVG(memory_mb) AS avg_memory_mb,
+        AVG(memory_percent) AS avg_memory_percent,
+        AVG(child_count) AS avg_child_count,
+        AVG(child_total_cpu_percent) AS avg_child_total_cpu_percent,
+        AVG(child_total_memory_mb) AS avg_child_total_memory_mb,
+        MAX(cpu_percent) AS max_cpu_percent,
+        MAX(memory_mb) AS max_memory_mb,
+        MAX(memory_percent) AS max_memory_percent,
+        MAX(child_count) AS max_child_count,
+        MAX(child_total_cpu_percent) AS max_child_total_cpu_percent,
+        MAX(child_total_memory_mb) AS max_child_total_memory_mb,
+        COUNT(*) AS metrics_count
+    FROM process_metrics
+    WHERE collection_error = 0  -- Only use successful metrics
+    GROUP BY run_id
+) pm_agg ON pm_agg.run_id = tr.run_id;

@@ -17,6 +17,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-bslib \
     r-cran-callr \
     r-cran-cli \
+    r-cran-cpp11 \
     r-cran-crayon \
     r-cran-dbi \
     r-cran-dbplyr \
@@ -66,6 +67,7 @@ COPY bbcDB /home/warnes/src/bbcDB
 # Install packages and unmet dependencies
 RUN  \
    R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE)" && \
+   R -e "remotes::install_github('Warnes-Innovations/shinyTZ')" && \
    R -e "remotes::install_local('/home/warnes/src/${TASKER_DIR}', dependencies=TRUE)" 
 
 # Set working directory to host-like path

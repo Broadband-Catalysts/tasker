@@ -24,10 +24,13 @@ Imports:
     ps (>= 1.7.0),
     callr (>= 3.7.0),
     R.utils,
-    stringr
+    stringr,
+    shinyTZ
 Suggests:
     RPostgres,
     RSQLite,
     RMariaDB,
     testthat (>= 3.0.0),
     mockery
+Remotes:
+    Warnes-Innovations/shinyTZ

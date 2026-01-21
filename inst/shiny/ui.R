@@ -6,11 +6,13 @@ library(dplyr)
 library(lubridate)
 library(shinyWidgets)
 library(shinyjs)
+library(shinyTZ)
 
 
 ui <- page_fluid(
   theme = bs_theme(version = 5),
   useShinyjs(),
+  useShinyTZ(),  # Enable timezone detection
   tags$head(
     tags$title("FCC Data Pipeline - Tasker Monitor"),
     tags$link(rel = "stylesheet", type = "text/css", href = "www/styles.css"),
@@ -60,7 +62,7 @@ ui <- page_fluid(
       actionButton("start_debugger", "DEBUG", class = "btn-warning btn-sm", 
                    title = "Start R debugger (browser()) for troubleshooting"),
       hr(),
-      textOutput("last_update")
+      datetimeOutput("last_update")
     ),
     # Error/Info message banner
     conditionalPanel(
