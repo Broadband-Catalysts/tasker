@@ -5,16 +5,49 @@
   max-height: 100vh;
   overflow-y: auto;
   z-index: 100;
+  background-color: #f5f7fa !important;
+  border-right: 1px solid #d1d5db;
 }
 
-/* Page Title Styles */
-h2 {
+/* Page Header - Fixed position */
+.page-header-fixed {
+  position: sticky;
+  top: 0;
+  z-index: 1001;
+  background-color: lightskyblue;
+  padding: 10px 20px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid #3498db;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.page-header-fixed .page-title {
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 1.75rem;
+  margin: 0;
+}
+
+.page-header-fixed .build-info-inline {
+  color: #34495e;
+  font-size: 0.85rem;
+  font-weight: normal;
+  margin-left: 15px;
+}
+
+/* Page Title Styles (legacy - keep for backwards compatibility) */
+.container-fluid > h2 {
   color: #2c3e50;
   font-weight: 600;
   font-size: 1.75rem;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
   border-bottom: 2px solid #3498db;
+  margin-bottom: 8px !important;
+  background-color: lightskyblue;
+  padding-left: 20px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 /* Build Info Styles */
@@ -23,12 +56,11 @@ h2 {
   top: 0px;
   right: 10px;
   font-size: 0.75rem;
-  color: #999;
   text-align: right;
   line-height: 1.4;
   z-index: 1000;
-  padding: 5px 10px;
-  border-radius: 4px;
+  padding-top: 15px;
+  padding-right: 10px;
 }
 
 /* Animations */
@@ -927,79 +959,10 @@ span[id^="stage_progress_"] {
 }
 
 /* Prevent Shiny from graying out during recalculation */
-.log-terminal.recalculating,
-.log-terminal .recalculating,
-.log-line.recalculating,
-.log-file-info-bar.recalculating,
-.process-info-header.recalculating,
-.process-details.recalculating,
-.process-detail-item.recalculating,
-.child-process-header.recalculating,
-.child-process-list.recalculating,
-.child-process-item.recalculating,
-.subtask-table.recalculating,
-.process-error-banner.recalculating {
-  opacity: 1 !important;
-  color: inherit !important;
-}
-
-.shiny-html-output.recalculating,
-.shiny-html-output.recalculating .log-terminal,
-.shiny-html-output.recalculating .log-line,
-.shiny-html-output.recalculating .log-file-info-bar,
-.shiny-html-output.recalculating .process-info-header,
-.shiny-html-output.recalculating .process-details,
-.shiny-html-output.recalculating .process-detail-item,
-.shiny-html-output.recalculating .child-process-header,
-.shiny-html-output.recalculating .child-process-list,
-.shiny-html-output.recalculating .child-process-item,
-.shiny-html-output.recalculating .subtask-table,
-.shiny-html-output.recalculating .process-error-banner,
-.shiny-html-output.recalculating td,
-.shiny-html-output.recalculating th {
-  opacity: 1 !important;
-  color: inherit !important;
-}
-
-/* Preserve badge colors during recalculation */
-.shiny-html-output.recalculating .task-status-badge.status-COMPLETED,
-.shiny-html-output.recalculating .stage-badge.status-COMPLETED,
-.task-status-badge.status-COMPLETED.recalculating,
-.stage-badge.status-COMPLETED.recalculating {
-  background: #81c784 !important;
-  color: #2e7d32 !important;
-}
-
-.shiny-html-output.recalculating .task-status-badge.status-RUNNING,
-.shiny-html-output.recalculating .stage-badge.status-RUNNING,
-.task-status-badge.status-RUNNING.recalculating,
-.stage-badge.status-RUNNING.recalculating {
-  background: #ffd54f !important;
-  color: #444 !important;
-}
-
-.shiny-html-output.recalculating .task-status-badge.status-STARTED,
-.shiny-html-output.recalculating .stage-badge.status-STARTED,
-.task-status-badge.status-STARTED.recalculating,
-.stage-badge.status-STARTED.recalculating {
-  background: #ffd54f !important;
-  color: #f57f17 !important;
-}
-
-.shiny-html-output.recalculating .task-status-badge.status-FAILED,
-.shiny-html-output.recalculating .stage-badge.status-FAILED,
-.task-status-badge.status-FAILED.recalculating,
-.stage-badge.status-FAILED.recalculating {
-  background: #e57373 !important;
-  color: #c62828 !important;
-}
-
-.shiny-html-output.recalculating .task-status-badge.status-NOT_STARTED,
-.shiny-html-output.recalculating .stage-badge.status-NOT_STARTED,
-.task-status-badge.status-NOT_STARTED.recalculating,
-.stage-badge.status-NOT_STARTED.recalculating {
-  background: #e0e0e0 !important;
-  color: #444 !important;
+.recalculating {
+  --_shiny-fade-opacity: inherit !important;
+  opacity: inherit !important;
+  transition: inherit !important;
 }
 
 /* ========================================================================== */
@@ -1227,6 +1190,8 @@ hr {
   flex-direction: column;
   gap: var(--bslib-spacer, 1rem);
   padding: var(--_padding);
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .bslib-sidebar-layout .sidebar-title
@@ -1259,4 +1224,51 @@ table.dataTable tr.odd {
 table.dataTable tr.even {
   background-color: white;
   /* Your custom white/light color */
+}
+
+/* Disconnection Alert Styles */
+#shiny-disconnection-alert {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 99999;
+  background-color: #ff4444;
+  color: white;
+  padding: 30px 50px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-align: center;
+  min-width: 400px;
+  animation: alert-pulse 1.5s infinite;
+}
+
+#shiny-disconnection-alert .alert-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+  display: block;
+}
+
+#shiny-disconnection-alert .alert-message {
+  display: block;
+  margin-bottom: 10px;
+}
+
+#shiny-disconnection-alert .alert-submessage {
+  display: block;
+  font-size: 1rem;
+  font-weight: normal;
+  opacity: 0.9;
+}
+
+@keyframes alert-pulse {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 8px 48px rgba(255, 68, 68, 0.6);
+  }
 }

@@ -25,6 +25,12 @@ cat("\n=== Starting Data Cleaning Task ===\n")
 run_id <- task_start("TRANSFORM", "Clean Data", total_subtasks = 3,
                      message = "Beginning data cleaning process")
 
+.Last <- function() {
+  if (exists("run_id") && !is.null(run_id)) {
+    task_fail(error_message = "Script terminated unexpectedly")
+  }
+}
+
 # Subtask 1: Validate data
 cat("\nSubtask 1: Validating data...\n")
 subtask_start(run_id, 1, "Validate Data", items_total = 100)
@@ -80,6 +86,8 @@ task_update(run_id, status = "RUNNING",
 
 # Complete the task
 Sys.sleep(0.5)
+
+rm(.Last)
 task_complete(run_id, "Data cleaning completed successfully")
 
 cat("\n=== Task Completed ===\n")

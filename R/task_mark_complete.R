@@ -161,14 +161,28 @@ task_mark_complete <- function(stage,
     }
     
     if (!quiet) {
-      timestamp_str <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-      task_num <- if (!is.na(task_order)) paste0("Task ", task_order) else "Task"
-      log_message <- sprintf("[%s] %s MARKED COMPLETE | %s / %s | run_id: %s", 
-                            timestamp_str, task_num, stage, task, run_id)
-      if (!is.null(message)) {
-        log_message <- paste0(log_message, " | ", message)
-      }
-      message(log_message)
+      script_filename <- tryCatch({
+        get_script_filename()
+      }, error = function(e) NULL)
+      
+      # Get stage_order from database
+      task_info <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql("SELECT s.stage_order FROM {task_runs_table} tr
+                 JOIN {tasks_table} t ON tr.task_id = t.task_id
+                 JOIN {stages_table} s ON t.stage_id = s.stage_id
+                 WHERE tr.run_id = {run_id}", .con = conn)
+      )
+      stage_order <- if (nrow(task_info) > 0) task_info$stage_order[1] else NULL
+      
+      tasker_log_message(
+        event_type = "MARKED COMPLETE",
+        stage_order = stage_order,
+        task_order = task_order,
+        message = message,
+        script_filename = script_filename,
+        quiet = FALSE
+      )
     }
     
     invisible(run_id)

@@ -31,6 +31,7 @@ Suggests:
     RSQLite,
     RMariaDB,
     testthat (>= 3.0.0),
-    mockery
+    mockery,
+    crayon
 Remotes:
     Warnes-Innovations/shinyTZ

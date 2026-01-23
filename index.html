@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <script type="application/shiny-singletons">add739c82ab207ed2c80be4b7e4b181525eb7a75,94ecb404e527eff60fd3f49490f90686f0a58467</script>
+  <script type="application/html-dependencies">jquery[3.7.1];shiny-sass[1.12.1];shiny-busy-indicators[1.12.1];shiny-javascript[1.12.1];bootstrap[5.3.1];bs3compat[0.9.0];bslib-component-js[0.9.0];bslib-component-css[0.9.0];htmltools-fill[0.5.9];htmlwidgets[1.6.4];datatables-css[0.0.0];datatables-binding[0.34.0];crosstalk[1.2.2];selectize[0.15.2];bslib-tag-require[0.9.0]</script>
+<script src="jquery-3.7.1/jquery.min.js"></script>
+<link href="shiny-sass-1.12.1/shiny-sass.css" rel="stylesheet" />
+<link href="shiny-busy-indicators-1.12.1/busy-indicators.css" rel="stylesheet" />
+<script src="shiny-javascript-1.12.1/shiny.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+<link href="bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet" />
+<script src="bootstrap-5.3.1/bootstrap.bundle.min.js"></script>
+<script src="bs3compat-0.9.0/transition.js"></script>
+<script src="bs3compat-0.9.0/tabs.js"></script>
+<script src="bs3compat-0.9.0/bs3compat.js"></script>
+<script src="bslib-component-js-0.9.0/components.min.js"></script>
+<script src="bslib-component-js-0.9.0/web-components.min.js" type="module"></script>
+<link href="bslib-component-css-0.9.0/components.css" rel="stylesheet" />
+<link href="htmltools-fill-0.5.9/fill.css" rel="stylesheet" />
+<script src="htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<link href="datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet" />
+<script src="datatables-binding-0.34.0/datatables.js"></script>
+<link href="crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet" />
+<script src="crosstalk-1.2.2/js/crosstalk.min.js"></script>
+<link href="selectize-0.15.2/selectize.css" rel="stylesheet" />
+<script src="selectize-0.15.2/selectize.min.js"></script>
+<script src="selectize-0.15.2/selectize-plugin-a11y.min.js"></script>
+<script src="bslib-tag-require-0.9.0/tag-require.js"></script>  <style>.shinyjs-hide { display: none !important; }</style>
+  <script>Shiny.addCustomMessageHandler('shinyjs-show', function(params) { shinyjs.debugMessage('shinyjs: calling function "show" with parameters:'); shinyjs.debugMessage(params); shinyjs.show(params);});
+Shiny.addCustomMessageHandler('shinyjs-hide', function(params) { shinyjs.debugMessage('shinyjs: calling function "hide" with parameters:'); shinyjs.debugMessage(params); shinyjs.hide(params);});
+Shiny.addCustomMessageHandler('shinyjs-toggle', function(params) { shinyjs.debugMessage('shinyjs: calling function "toggle" with parameters:'); shinyjs.debugMessage(params); shinyjs.toggle(params);});
+Shiny.addCustomMessageHandler('shinyjs-enable', function(params) { shinyjs.debugMessage('shinyjs: calling function "enable" with parameters:'); shinyjs.debugMessage(params); shinyjs.enable(params);});
+Shiny.addCustomMessageHandler('shinyjs-disable', function(params) { shinyjs.debugMessage('shinyjs: calling function "disable" with parameters:'); shinyjs.debugMessage(params); shinyjs.disable(params);});
+Shiny.addCustomMessageHandler('shinyjs-toggleState', function(params) { shinyjs.debugMessage('shinyjs: calling function "toggleState" with parameters:'); shinyjs.debugMessage(params); shinyjs.toggleState(params);});
+Shiny.addCustomMessageHandler('shinyjs-addClass', function(params) { shinyjs.debugMessage('shinyjs: calling function "addClass" with parameters:'); shinyjs.debugMessage(params); shinyjs.addClass(params);});
+Shiny.addCustomMessageHandler('shinyjs-removeClass', function(params) { shinyjs.debugMessage('shinyjs: calling function "removeClass" with parameters:'); shinyjs.debugMessage(params); shinyjs.removeClass(params);});
+Shiny.addCustomMessageHandler('shinyjs-toggleClass', function(params) { shinyjs.debugMessage('shinyjs: calling function "toggleClass" with parameters:'); shinyjs.debugMessage(params); shinyjs.toggleClass(params);});
+Shiny.addCustomMessageHandler('shinyjs-html', function(params) { shinyjs.debugMessage('shinyjs: calling function "html" with parameters:'); shinyjs.debugMessage(params); shinyjs.html(params);});
+Shiny.addCustomMessageHandler('shinyjs-onevent', function(params) { shinyjs.debugMessage('shinyjs: calling function "onevent" with parameters:'); shinyjs.debugMessage(params); shinyjs.onevent(params);});
+Shiny.addCustomMessageHandler('shinyjs-removeEvent', function(params) { shinyjs.debugMessage('shinyjs: calling function "removeEvent" with parameters:'); shinyjs.debugMessage(params); shinyjs.removeEvent(params);});
+Shiny.addCustomMessageHandler('shinyjs-alert', function(params) { shinyjs.debugMessage('shinyjs: calling function "alert" with parameters:'); shinyjs.debugMessage(params); shinyjs.alert(params);});
+Shiny.addCustomMessageHandler('shinyjs-logjs', function(params) { shinyjs.debugMessage('shinyjs: calling function "logjs" with parameters:'); shinyjs.debugMessage(params); shinyjs.logjs(params);});
+Shiny.addCustomMessageHandler('shinyjs-runjs', function(params) { shinyjs.debugMessage('shinyjs: calling function "runjs" with parameters:'); shinyjs.debugMessage(params); shinyjs.runjs(params);});
+Shiny.addCustomMessageHandler('shinyjs-reset', function(params) { shinyjs.debugMessage('shinyjs: calling function "reset" with parameters:'); shinyjs.debugMessage(params); shinyjs.reset(params);});
+Shiny.addCustomMessageHandler('shinyjs-delay', function(params) { shinyjs.debugMessage('shinyjs: calling function "delay" with parameters:'); shinyjs.debugMessage(params); shinyjs.delay(params);});
+Shiny.addCustomMessageHandler('shinyjs-click', function(params) { shinyjs.debugMessage('shinyjs: calling function "click" with parameters:'); shinyjs.debugMessage(params); shinyjs.click(params);});
+Shiny.addCustomMessageHandler('shinyjs-refresh', function(params) { shinyjs.debugMessage('shinyjs: calling function "refresh" with parameters:'); shinyjs.debugMessage(params); shinyjs.refresh(params);});</script>
+  <script src="shinyjs/shinyjs-default-funcs.js"></script>
+  <script>shinyjs.debug = false;</script>
+  <script src="shinytz/shinytz.js"></script>
+  <title>FCC Data Pipeline - Tasker Monitor</title>
+  <link rel="stylesheet" type="text/css" href="www/styles.css"/>
+  <script>
+      $(document).on('click', '.kill-query-btn', function() {
+        var pid = $(this).data('pid');
+        var username = $(this).data('username');
+        Shiny.setInputValue('kill_query_pid', pid, {priority: 'event'});
+        Shiny.setInputValue('kill_query_username', username, {priority: 'event'});
+      });
+    </script>
+  <title>FCC Data Pipeline - Tasker Monitor</title>
+</head>
+<body>
+  <div class="container-fluid">
+    <h2>FCC Data Pipeline - Tasker Monitor</h2>
+    <div class="build-info">
+      Branch: devel
+      <br/>
+      Build: 2026-01-21 13:51:38 EST
+    </div>
+    <div class="bslib-sidebar-layout bslib-mb-spacing html-fill-item" data-bslib-sidebar-init="TRUE" data-collapsible-desktop="true" data-collapsible-mobile="true" data-open-desktop="open" data-open-mobile="closed" data-require-bs-caller="layout_sidebar()" data-require-bs-version="5" style="--_sidebar-width:250px;">
+      <div class="main bslib-gap-spacing html-fill-container">
+        <div class="shiny-panel-conditional" data-display-if="output.has_error" data-ns-prefix="">
+          <div id="error_banner" class="shiny-html-output"></div>
+        </div>
+        <div class="tabbable">
+          <ul class="nav nav-tabs shiny-tab-input" id="main_tabs" data-tabsetid="7926">
+            <li class="nav-item">
+              <a href="#tab-7926-1" data-toggle="tab" data-bs-toggle="tab" data-value="Pipeline Status" class="nav-link active">Pipeline Status</a>
+            </li>
+            <li class="nav-item">
+              <a href="#tab-7926-2" data-toggle="tab" data-bs-toggle="tab" data-value="SQL Queries" class="nav-link">SQL Queries</a>
+            </li>
+          </ul>
+          <div class="tab-content" data-tabsetid="7926">
+            <div class="tab-pane active" data-value="Pipeline Status" id="tab-7926-1">
+              <div class="pipeline-status-container">
+                <div id="pipeline_stages_accordion" class="shiny-html-output"></div>
+              </div>
+            </div>
+            <div class="tab-pane" data-value="SQL Queries" id="tab-7926-2">
+              <div class="sql-queries-container" style="padding: 8px;">
+                <div class="row">
+                  <div class="col-sm-6">
+                    <button class="btn btn-default action-button btn-primary" id="sql_refresh_now" type="button">
+                      <span class="action-label">Refresh Now</span>
+                    </button>
+                  </div>
+                  <div class="col-sm-6">
+                    <div style="margin-top: 5px;">
+                      <div class="form-group shiny-input-container">
+                        <div class="checkbox">
+                          <label>
+                            <input id="exclude_tasker_queries" type="checkbox" class="shiny-input-checkbox" checked="checked"/>
+                            <span>Exclude tasker queries</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <hr/>
+                <div style="overflow: auto;">
+                  <div class="datatables html-widget html-widget-output shiny-report-size html-fill-item" id="sql_queries_table" style="width:100%;height:auto;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <aside id="bslib-sidebar-7399" class="sidebar" hidden>
+        <div class="sidebar-content bslib-gap-spacing">
+          <header class="sidebar-title">Filters &amp; Controls</header>
+          <div class="form-group shiny-input-container">
+            <label class="control-label" id="stage_filter-label" for="stage_filter">Filter by Stage:</label>
+            <div>
+              <select id="stage_filter" class="shiny-input-select" multiple="multiple"><option value="">All</option></select>
+              <script type="application/json" data-for="stage_filter">{"plugins":["selectize-plugin-a11y"]}</script>
+            </div>
+          </div>
+          <div class="form-group shiny-input-container">
+            <label class="control-label" id="status_filter-label" for="status_filter">Filter by Status:</label>
+            <div>
+              <select id="status_filter" class="shiny-input-select" multiple="multiple"><option value="">All</option>
+<option value="NOT_STARTED">NOT_STARTED</option>
+<option value="STARTED">STARTED</option>
+<option value="RUNNING">RUNNING</option>
+<option value="COMPLETED">COMPLETED</option>
+<option value="FAILED">FAILED</option>
+<option value="SKIPPED">SKIPPED</option></select>
+              <script type="application/json" data-for="status_filter">{"plugins":["selectize-plugin-a11y"]}</script>
+            </div>
+          </div>
+          <div class="form-group shiny-input-container">
+            <label class="control-label" id="refresh_interval-label" for="refresh_interval">Auto-refresh (seconds):</label>
+            <input id="refresh_interval" type="number" class="shiny-input-number form-control" value="5" data-update-on="change" min="1" max="60"/>
+          </div>
+          <div class="form-group shiny-input-container">
+            <div class="checkbox">
+              <label>
+                <input id="auto_refresh" type="checkbox" class="shiny-input-checkbox" checked="checked"/>
+                <span>Auto-refresh</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group shiny-input-container">
+            <div class="checkbox">
+              <label>
+                <input id="show_script_name" type="checkbox" class="shiny-input-checkbox" checked="checked"/>
+                <span>Show script names</span>
+              </label>
+            </div>
+          </div>
+          <hr/>
+          <button class="btn btn-default action-button btn-primary" id="refresh" type="button">
+            <span class="action-label">Refresh Now</span>
+          </button>
+          <button class="btn btn-default action-button btn-secondary btn-sm" id="refresh_structure" title="Reload pipeline stages and registered tasks" type="button">
+            <span class="action-label">Refresh Structure</span>
+          </button>
+          <hr/>
+          <div style="margin-bottom: 10px;">
+            <h6>Reporter Status:</h6>
+            <div id="monitor_status" class="shiny-html-output" style="font-size: 12px;"></div>
+          </div>
+          <hr/>
+          <button class="btn btn-default action-button btn-warning btn-sm" id="start_debugger" title="Start R debugger (browser()) for troubleshooting" type="button">
+            <span class="action-label">DEBUG</span>
+          </button>
+          <hr/>
+          <div id="last_update" class="shiny-text-output shinytz-datetime" data-tz-display="true">Loading...</div>
+        </div>
+      </aside>
+      <button class="collapse-toggle" type="button" title="Toggle sidebar" aria-expanded="true" aria-controls="bslib-sidebar-7399"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" class="bi bi-chevron-left collapse-icon" style="fill:currentColor;" aria-hidden="true" role="img" ><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"></path></svg></button>
+      <script data-bslib-sidebar-init>bslib.Sidebar.initCollapsibleAll()</script>
+    </div>
+  </div>
+</body>
+</html>
