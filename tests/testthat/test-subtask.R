@@ -5,7 +5,7 @@ test_that("subtask tracking validates input", {
   expect_true(exists("subtask_start"))
   expect_true(exists("subtask_update"))
   expect_true(exists("subtask_complete"))
-  expect_true(exists("subtask_fail"))
+  expect_true(exists("subtask_increment"))
 })
 
 test_that("subtask progress updates correctly", {

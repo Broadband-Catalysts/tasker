@@ -17,7 +17,9 @@ tasker_cluster(
 \item{ncores}{Number of cores (default: auto-detect as detectCores() - 2, max 32)}
 
 \item{packages}{Character vector of package names to load on workers (optional).
-The tasker package is always loaded automatically.}
+The tasker package is always loaded automatically. Additionally, all packages
+currently attached in the main session (excluding base packages) are
+automatically detected and loaded on workers.}
 
 \item{export}{Character vector of object names to export to workers (optional).
 The active run_id is always exported automatically if one exists.}
@@ -39,14 +41,23 @@ automatically handling package loading, object export, and context initializatio
 on all workers. It encapsulates the common pattern of cluster setup, reducing
 boilerplate from 8-10 lines to 1-2 lines.
 }
+\details{
+All packages currently attached in the main session (except base packages) are
+automatically loaded on workers, eliminating the need to manually specify common
+dependencies.
+}
 \examples{
 \dontrun{
 # Simple setup with auto-detection
+# All currently attached packages will be loaded on workers
+library(dplyr)
+library(sf)
 cl <- tasker_cluster()
 results <- parLapply(cl, items, worker_function)
 stop_tasker_cluster(cl)
 
 # With custom packages and objects
+# Both specified packages and attached packages will be loaded
 cl <- tasker_cluster(
   ncores = 16,
   packages = c("dplyr", "sf"),

@@ -439,7 +439,14 @@ setup_tasker_db <- function(conn = NULL, schema_name = "tasker", force = FALSE, 
 
         DBI::dbCommit(conn)
       }, error = function(e) {
-        DBI::dbRollback(conn)
+        # Only rollback if a transaction is active
+        if (DBI::dbIsValid(conn)) {
+          # RSQLite doesn't have dbIsTransaction(), so use tryCatch
+          tryCatch(DBI::dbRollback(conn), error = function(rollback_err) {
+            # Transaction may already be rolled back or not started
+            NULL
+          })
+        }
         stop(e)
       })
       

@@ -283,8 +283,9 @@ test_that("get_database_queries fails with unsupported database type", {
   temp_db <- tempfile(fileext = ".db")
   con <- DBI::dbConnect(RSQLite::SQLite(), temp_db)
   
+  # Test error for unsupported database type
   expect_error(
-    get_database_queries(con, "oracle"),
+    get_database_queries(con, db_type = "oracle"),
     "Unsupported database type: oracle"
   )
   
@@ -302,7 +303,7 @@ test_that("get_database_queries returns data frame", {
   con <- DBI::dbConnect(RSQLite::SQLite(), temp_db)
   
   # SQLite returns empty data frame
-  result <- get_database_queries(con, "sqlite")
+  result <- get_database_queries(con, db_type = "sqlite")
   
   expect_s3_class(result, "data.frame")
   expect_equal(nrow(result), 0)

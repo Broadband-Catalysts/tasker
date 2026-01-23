@@ -142,3 +142,68 @@ LEFT JOIN LATERAL (
     ORDER BY timestamp DESC
     LIMIT 1
 ) pm ON TRUE;
+
+-- ============================================================================
+-- View: task_runs_with_aggregated_metrics
+-- Join task runs with latest metrics AND aggregated statistics (avg/max)
+-- ============================================================================
+
+CREATE OR REPLACE VIEW tasker.task_runs_with_aggregated_metrics AS
+SELECT 
+    tr.*,
+    -- Latest metrics (current values)
+    pm_latest.cpu_percent AS metrics_cpu_percent,
+    pm_latest.cpu_cores AS metrics_cpu_cores,
+    pm_latest.memory_mb AS metrics_memory_mb,
+    pm_latest.memory_percent AS metrics_memory_percent,
+    pm_latest.child_count AS metrics_child_count,
+    pm_latest.child_total_cpu_percent AS metrics_child_total_cpu_percent,
+    pm_latest.child_total_memory_mb AS metrics_child_total_memory_mb,
+    pm_latest.is_alive AS metrics_is_alive,
+    pm_latest.collection_error AS metrics_collection_error,
+    pm_latest.error_message AS metrics_error_message,
+    pm_latest.error_type AS metrics_error_type,
+    pm_latest.timestamp AS metrics_timestamp,
+    EXTRACT(EPOCH FROM (NOW() - pm_latest.timestamp))::INTEGER AS metrics_age_seconds,
+    -- Aggregated metrics (average values)
+    pm_agg.avg_cpu_percent,
+    pm_agg.avg_memory_mb,
+    pm_agg.avg_memory_percent,
+    pm_agg.avg_child_count,
+    pm_agg.avg_child_total_cpu_percent,
+    pm_agg.avg_child_total_memory_mb,
+    -- Aggregated metrics (maximum values)
+    pm_agg.max_cpu_percent,
+    pm_agg.max_memory_mb,
+    pm_agg.max_memory_percent,
+    pm_agg.max_child_count,
+    pm_agg.max_child_total_cpu_percent,
+    pm_agg.max_child_total_memory_mb,
+    pm_agg.metrics_count
+FROM tasker.task_runs tr
+LEFT JOIN LATERAL (
+    SELECT *
+    FROM tasker.process_metrics
+    WHERE process_metrics.run_id = tr.run_id
+    ORDER BY timestamp DESC
+    LIMIT 1
+) pm_latest ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        AVG(cpu_percent) AS avg_cpu_percent,
+        AVG(memory_mb) AS avg_memory_mb,
+        AVG(memory_percent) AS avg_memory_percent,
+        AVG(child_count) AS avg_child_count,
+        AVG(child_total_cpu_percent) AS avg_child_total_cpu_percent,
+        AVG(child_total_memory_mb) AS avg_child_total_memory_mb,
+        MAX(cpu_percent) AS max_cpu_percent,
+        MAX(memory_mb) AS max_memory_mb,
+        MAX(memory_percent) AS max_memory_percent,
+        MAX(child_count) AS max_child_count,
+        MAX(child_total_cpu_percent) AS max_child_total_cpu_percent,
+        MAX(child_total_memory_mb) AS max_child_total_memory_mb,
+        COUNT(*)::INTEGER AS metrics_count
+    FROM tasker.process_metrics
+    WHERE process_metrics.run_id = tr.run_id
+      AND collection_error = FALSE  -- Only use successful metrics
+) pm_agg ON TRUE;

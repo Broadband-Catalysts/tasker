@@ -128,7 +128,7 @@ task_start <- function(stage         = NULL,
   tryCatch({
     task_info <- DBI::dbGetQuery(
       conn,
-      glue::glue_sql("SELECT t.task_id, t.task_order FROM {tasks_table} t
+      glue::glue_sql("SELECT t.task_id, t.task_order, s.stage_order FROM {tasks_table} t
                JOIN {stages_table} s ON t.stage_id = s.stage_id
                WHERE s.stage_name = {stage} AND t.task_name = {task}",
               .con = conn)
@@ -140,6 +140,7 @@ task_start <- function(stage         = NULL,
     
     task_id <- task_info$task_id
     task_order <- task_info$task_order
+    stage_order <- task_info$stage_order
     
     hostname <- Sys.info()["nodename"]
     process_id <- Sys.getpid()
@@ -169,14 +170,15 @@ task_start <- function(stage         = NULL,
     })
     
     if (!quiet) {
-      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-      task_num <- if (!is.na(task_order)) paste0("Task ", task_order) else "Task"
-      log_message <- sprintf("[%s] %s START | %s / %s | run_id: %s", 
-                            timestamp, task_num, stage, task, run_id)
-      if (!is.null(message)) {
-        log_message <- paste0(log_message, " | ", message)
-      }
-      message(log_message)
+      script_filename <- get_script_filename()
+      tasker_log_message(
+        event_type = "START",
+        stage_order = stage_order,
+        task_order = task_order,
+        message = message,
+        script_filename = script_filename,
+        quiet = FALSE
+      )
     }
     
     # Set as active context if requested

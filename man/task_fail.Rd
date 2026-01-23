@@ -41,5 +41,5 @@ task_fail(error_message = "Something went wrong")
 }
 \seealso{
 \code{\link[=task_update]{task_update()}} for updating task progress, \code{\link[=task_start]{task_start()}} to begin a task,
-\code{\link[=task_complete]{task_complete()}} to mark a task as complete, \code{\link[=task_end]{task_end()}} for generic status updates
+\code{\link[=task_complete]{task_complete()}} to mark a task as complete
 }

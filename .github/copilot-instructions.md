@@ -1,15 +1,14 @@
 # GitHub Copilot Instructions for tasker-dev
 
-# 🛑 STOP - READ THIS FIRST 🛑
+# 🛑🛑🛑 STOP - MANDATORY PRE-FLIGHT - READ THIS BEFORE RESPONDING 🛑🛑🛑
 
-**Before responding to ANY request involving code changes or multi-step work:**
-
-☐ State which copilot-instructions.md sections apply to this request
+☐ State which user and project copilot-instructions.md sections apply to this request
 ☐ Check if any Agent Skills apply (list them explicitly)
 ☐ If multi-step work: Create todo list with #manage_todo_list
 ☐ Mark tasks in-progress and completed as you work
 ☐ Use #code-review before finalizing ANY code changes
 ☐ Use "we" collaborative language and refer to user as "Dr. Greg"
+☐ Monitor and report token usage at checkpoints (700K/850K/950K)
 
 **If you cannot check ALL boxes above, STOP and ask for clarification.**
 
@@ -163,6 +162,31 @@ dbGetQuery(con, "SELECT COUNT(*) as n FROM table")
 - `dbConnectBBC(mode="rw")` - Read-write
 - `dbConnectBBC(mode="r")` - Read-only (note: 'r', not 'ro')
 - Use read-write for monitoring/status updates
+
+**Database-agnostic SQL patterns:**
+
+Remember: tasker must support PostgreSQL, SQLite, and MySQL/MariaDB.
+
+Either use database-agnostic SQL syntax or handle each database's dialect appropriately:
+
+```r
+# ✅ CORRECT - Database-agnostic case-insensitive matching
+WHERE UPPER(column_name) LIKE UPPER('%pattern%')
+
+# ✅ ALSO CORRECT - Dialect-specific with fallback
+if (driver == "postgresql") {
+  WHERE column_name ILIKE '%pattern%'
+} else {
+  WHERE UPPER(column_name) LIKE UPPER('%pattern%')
+}
+
+# ❌ INCORRECT - PostgreSQL-only without handling other databases
+WHERE column_name ILIKE '%pattern%'
+```
+
+**For complete database patterns:** See #database-patterns skill for detailed examples, query patterns, schema operations.
+
+**Why:** `ILIKE` is PostgreSQL-specific and will fail on SQLite/MySQL with "syntax error". Use `UPPER(column) LIKE UPPER(pattern)` for case-insensitive matching across all supported databases.
 
 **For details:** See #database-patterns skill.
 

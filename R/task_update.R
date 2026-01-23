@@ -137,26 +137,29 @@ task_update <- function(status,
     )
     
     if (!quiet) {
-      # Get task_order for display
-      task_order_info <- DBI::dbGetQuery(
+      # Get task_order and task info for display
+      task_info <- DBI::dbGetQuery(
         conn,
-        glue::glue_sql("SELECT t.task_order FROM {task_runs_table} tr
+        glue::glue_sql("SELECT t.task_order, s.stage_order 
+                 FROM {task_runs_table} tr
                  JOIN {`get_table_name('tasks', conn)`} t ON tr.task_id = t.task_id
+                 JOIN {`get_table_name('stages', conn)`} s ON t.stage_id = s.stage_id
                  WHERE tr.run_id = {run_id}", .con = conn)
       )
       
-      timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-      task_num <- if (nrow(task_order_info) > 0 && !is.na(task_order_info$task_order[1])) {
-        paste0("Task ", task_order_info$task_order[1])
-      } else {
-        "Task"
-      }
-      log_message <- sprintf("[%s] %s %s | run_id: %s", 
-                            timestamp, task_num, status, run_id)
-      if (!is.na(message)) {
-        log_message <- paste0(log_message, " | ", message)
-      }
-      message(log_message)
+      task_order_val <- if (nrow(task_info) > 0) task_info$task_order[1] else NULL
+      stage_order_val <- if (nrow(task_info) > 0) task_info$stage_order[1] else NULL
+      
+      script_filename <- get_script_filename()
+      
+      tasker_log_message(
+        event_type = status,
+        stage_order = stage_order_val,
+        task_order = task_order_val,
+        message = message,
+        script_filename = script_filename,
+        quiet = FALSE
+      )
     }
     
     TRUE

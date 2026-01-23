@@ -3,6 +3,7 @@ FROM rocker/r2u:jammy
 # Accept build argument for directory name (tasker or tasker-dev)
 ARG TASKER_DIR=tasker
 ARG GIT_BRANCH=unknown
+ARG GITHUB_PAT
 
 # Install system dependencies and R packages from r2u
 # Use --mount=type=cache for apt to cache package downloads
@@ -17,6 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-bslib \
     r-cran-callr \
     r-cran-cli \
+    r-cran-cpp11 \
     r-cran-crayon \
     r-cran-dbi \
     r-cran-dbplyr \
@@ -64,9 +66,11 @@ COPY ${TASKER_DIR} /home/warnes/src/${TASKER_DIR}
 COPY bbcDB /home/warnes/src/bbcDB
 
 # Install packages and unmet dependencies
-RUN  \
-   R -e "remotes::install_local('/home/warnes/src/bbcDB', dependencies=TRUE)" && \
-   R -e "remotes::install_local('/home/warnes/src/${TASKER_DIR}', dependencies=TRUE)" 
+RUN --mount=type=secret,id=github_pat \
+    export GITHUB_PAT=$(cat /run/secrets/github_pat) && \
+    R -e "remotes::install_github('brianrathbone/bbcDB',           dependencies=TRUE)" && \
+    R -e "remotes::install_github('Warnes-Innovations/shinyTZ@main',    dependencies=TRUE, force=TRUE)" && \
+    R -e "remotes::install_local('/home/warnes/src/${TASKER_DIR}', dependencies=TRUE)" 
 
 # Set working directory to host-like path
 WORKDIR /home/warnes/src/${TASKER_DIR}/inst/shiny

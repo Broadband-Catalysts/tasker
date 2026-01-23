@@ -398,6 +398,14 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   html_parts <- c(html_parts, "<h5 class='process-info-header'>Process Info</h5>")
   
   # Process details
+  # Get browser timezone for embedded timestamps (uses shinyTZ automatic detection)
+  browser_tz <- tryCatch({
+    shinyTZ::get_browser_tz()
+  }, error = function(e) {
+    # Fallback to TASKER_DISPLAY_TIMEZONE if session not available
+    TASKER_DISPLAY_TIMEZONE
+  })
+  
   process_details <- sprintf(
     "<div class='process-details compact'>
       <span class='detail-item'><strong>PID:</strong> %s</span>
@@ -408,7 +416,10 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     htmltools::htmlEscape(if (!is.null(task_data$process_id)) as.character(task_data$process_id) else "N/A"),
     htmltools::htmlEscape(if (!is.null(task_data$hostname)) task_data$hostname else "N/A"),
     htmltools::htmlEscape(status),
-    htmltools::htmlEscape(if (!is.null(task_data$start_time)) format(task_data$start_time, "%Y-%m-%d %H:%M:%S") else "N/A")
+    htmltools::htmlEscape(if (!is.null(task_data$start_time)) {
+      # Use shinyTZ helper to format in browser timezone
+      shinyTZ::format_in_tz(task_data$start_time, tz = browser_tz, format = "%Y-%m-%d %H:%M:%S %Z")
+    } else "N/A")
   )
   html_parts <- c(html_parts, process_details)
   
@@ -455,9 +466,29 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     } else {
       "N/A"
     }
+    
+    # Add average and max CPU if available
+    cpu_avg_max <- ""
+    if (!is.null(task_data$avg_cpu_percent) && !is.na(task_data$avg_cpu_percent) &&
+        !is.null(task_data$max_cpu_percent) && !is.na(task_data$max_cpu_percent)) {
+      cpu_avg_max <- sprintf(" (avg: %.1f%%, max: %.1f%%)", 
+                            task_data$avg_cpu_percent, 
+                            task_data$max_cpu_percent)
+    }
+    cpu_display <- paste0(cpu_display, cpu_avg_max)
+    
     memory_display <- if (!is.null(task_data$memory_mb) && !is.na(task_data$memory_mb)) {
-      sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
+      mem_text <- sprintf("%.1f MB (%.1f%%)", task_data$memory_mb, 
               if (!is.null(task_data$memory_percent) && !is.na(task_data$memory_percent)) task_data$memory_percent else 0)
+      # Add average and max memory if available
+      if (!is.null(task_data$avg_memory_mb) && !is.na(task_data$avg_memory_mb) &&
+          !is.null(task_data$max_memory_mb) && !is.na(task_data$max_memory_mb)) {
+        mem_text <- sprintf("%s (avg: %.1f MB, max: %.1f MB)", 
+                           mem_text,
+                           task_data$avg_memory_mb,
+                           task_data$max_memory_mb)
+      }
+      mem_text
     } else {
       "N/A"
     }
@@ -508,21 +539,21 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     
     # Determine process state based on status and metrics age
     if (status == "FAILED") {
-      process_state <- "Process terminated"
+      process_state <- "<span style='color: #d9534f;'>🔴 Terminated</span>"
     } else if (status %in% c("COMPLETED", "SKIPPED")) {
-      process_state <- "Process completed normally"
+      process_state <- "<span style='color: #5cb85c;'>✅ Completed</span>"
     } else if (status %in% c("RUNNING", "STARTED")) {
       if (process_is_dead) {
-        process_state <- "<span style='color: #d9534f;'>Process dead (status updated to FAILED)</span>"
+        process_state <- "<span style='color: #000000;'>❌ Dead</span>"
       } else if (metrics_age > 300) {  # 5 minutes
-        process_state <- "<span style='color: #f0ad4e;'>Process running (metrics collection paused)</span>"
+        process_state <- "<span style='color: #f0ad4e;'>🔴 Running (paused)</span>"
       } else if (metrics_age > 120) {
-        process_state <- "<span style='color: #f0ad4e;'>Process running (metrics slightly stale)</span>"
+        process_state <- "<span style='color: #f0ad4e;'>🟡 Running (stale)</span>"
       } else {
-        process_state <- "<span style='color: #5cb85c;'>Process running (metrics active)</span>"
+        process_state <- "<span style='color: #5cb85c;'>🟢 Running</span>"
       }
     } else {
-      process_state <- sprintf("Process status: %s", status)
+      process_state <- sprintf("<span style='color: #777;'>❓ %s</span>", status)
     }
     
     # Show actual metrics instead of just collection time
@@ -534,17 +565,34 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
       } else {
         cpu_text
       }
+      # Add average and max CPU if available
+      if (!is.null(task_data$avg_cpu_percent) && !is.na(task_data$avg_cpu_percent) &&
+          !is.null(task_data$max_cpu_percent) && !is.na(task_data$max_cpu_percent)) {
+        cpu_text <- sprintf("%s (avg: %.1f%%, max: %.1f%%)", 
+                           cpu_text,
+                           task_data$avg_cpu_percent, 
+                           task_data$max_cpu_percent)
+      }
+      cpu_text
     } else {
       "N/A"
     }
     
     memory_display <- if (!is.null(task_data$metrics_memory_mb) && !is.na(task_data$metrics_memory_mb)) {
-      sprintf("%.1f MB", task_data$metrics_memory_mb)
-      if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) {
+      mem_text <- if (!is.null(task_data$metrics_memory_percent) && !is.na(task_data$metrics_memory_percent)) {
         sprintf("%.1f MB (%.1f%%)", task_data$metrics_memory_mb, task_data$metrics_memory_percent)
       } else {
         sprintf("%.1f MB", task_data$metrics_memory_mb)
       }
+      # Add average and max memory if available
+      if (!is.null(task_data$avg_memory_mb) && !is.na(task_data$avg_memory_mb) &&
+          !is.null(task_data$max_memory_mb) && !is.na(task_data$max_memory_mb)) {
+        mem_text <- sprintf("%s (avg: %.1f MB, max: %.1f MB)", 
+                           mem_text,
+                           task_data$avg_memory_mb,
+                           task_data$max_memory_mb)
+      }
+      mem_text
     } else {
       "N/A"
     }
@@ -569,7 +617,7 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
     
     resource_html <- sprintf(
       "<div class='process-details compact'>
-        <span class='detail-item'><strong>Process State:</strong> %s</span>
+        <span class='detail-item'><strong>State:</strong> %s</span>
         <span class='detail-item'><strong>CPU:</strong> %s</span>
         <span class='detail-item'><strong>Memory:</strong> %s</span>
         <span class='detail-item'><strong>Children:</strong> %s</span>
@@ -586,14 +634,14 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   } else if (status %in% c("RUNNING", "STARTED")) {
     # Task marked as running but no metrics data at all
     process_state <- if (process_is_dead) {
-      "<span style='color: #d9534f;'>Process dead (status updated to FAILED)</span>"
+      "<span style='color: #000000;'>❌ Dead</span>"
     } else {
-      "<span style='color: #f0ad4e;'>Process monitoring not available</span>"
+      "<span style='color: #f0ad4e;'>⚠️ Running (no metrics)</span>"
     }
     
     resource_html <- sprintf(
       "<div class='process-details compact'>
-        <span class='detail-item'><strong>Process State:</strong> %s</span>
+        <span class='detail-item'><strong>State:</strong> %s</span>
         <span class='detail-item'><strong>Metrics:</strong> <span style='color: #777;'>No data collected</span></span>
       </div>",
       process_state
@@ -603,18 +651,18 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
   } else {
     # Task in terminal state (COMPLETED, FAILED, etc.) - show final state
     process_state <- switch(status,
-      "COMPLETED" = "Process completed successfully",
-      "FAILED" = "Process failed",
-      "SKIPPED" = "Process skipped",
-      "CANCELLED" = "Process cancelled",
-      sprintf("Process status: %s", status)
+      "COMPLETED" = "<span style='color: #5cb85c;'>✅ Completed</span>",
+      "FAILED" = "<span style='color: #d9534f;'>❌ Failed</span>",
+      "SKIPPED" = "<span style='color: #777;'>⊘ Skipped</span>",
+      "CANCELLED" = "<span style='color: #777;'>⊗ Cancelled</span>",
+      sprintf("<span style='color: #777;'>❓ %s</span>", status)
     )
     
     resource_html <- sprintf(
       "<div class='process-details compact'>
-        <span class='detail-item'><strong>Final State:</strong> %s</span>
+        <span class='detail-item'><strong>State:</strong> %s</span>
       </div>",
-      htmltools::htmlEscape(process_state)
+      process_state
     )
     html_parts <- c(html_parts, resource_html)
   }
@@ -1598,6 +1646,7 @@ server <- function(input, output, session) {
               tags$button(
                 class = "btn-expand-process",
                 id = paste0("btn_expand_process_", task_id),
+                title = "Toggle process information and metrics",
                 onclick = sprintf("Shiny.setInputValue('toggle_process_pane', '%s', {priority: 'event'})", task_id),
                 "📊"
               ),
@@ -1605,6 +1654,7 @@ server <- function(input, output, session) {
               tags$button(
                 class = "btn-expand-log",
                 id = paste0("btn_expand_log_", task_id),
+                title = "Toggle log viewer",
                 onclick = sprintf("Shiny.setInputValue('toggle_log_pane', '%s', {priority: 'event'})", task_id),
                 "📄"
               )
@@ -1884,13 +1934,14 @@ server <- function(input, output, session) {
       
       (function(task_key_local, task_id_local, stage_name_local, task_name_local) {
         # Process pane content - renderText for htmlOutput
+        # Always generate content, visibility controlled by CSS/shinyjs
         output[[paste0("process_content_", task_id_local)]] <- renderText({
-          # Check if pane is expanded
-          if (!(task_id_local %in% rv$expanded_process_panes)) {
-            return("")
-          }
-          
+          # Check if task_reactives exists for this key (may not exist on first render)
           task_data <- task_reactives[[task_key_local]]
+          if (is.null(task_data)) {
+            # Return placeholder if data not yet available
+            return(HTML("<div class='process-info-header'>Loading process information...</div>"))
+          }
           build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session, input)
         })
         
@@ -2179,15 +2230,13 @@ server <- function(input, output, session) {
   })
   
   # Last update time
-  output$last_update <- renderText({
+  output$last_update <- renderDatetime({
     if (!is.null(rv$last_update)) {
-      # Convert to US Eastern timezone
-      eastern_time <- lubridate::with_tz(rv$last_update, "America/New_York")
-      paste("Last update:", format(eastern_time, "%H:%M:%S %Z"))
+      rv$last_update  # shinyTZ automatically handles timezone conversion
     } else {
-      "No data loaded"
+      NULL  # renderDatetime handles NULL gracefully
     }
-  })
+  }, format = "%H:%M:%S %Z")
   
   # Process monitor status
   monitor_status_reactive <- reactive({
@@ -2210,8 +2259,8 @@ server <- function(input, output, session) {
       # No monitors running
       '<div style="color: #d9534f; font-weight: bold;">⬤ No monitors running</div><div style="color: #777; font-size: 11px;">Process metrics unavailable</div>'
     } else {
-      # Build status for each monitor using dplyr pipeline
-      status_items <- monitor_data %>%
+      # Build table rows for each monitor using dplyr pipeline
+      table_rows <- monitor_data %>%
         dplyr::mutate(
           color = dplyr::case_when(
             heartbeat_age_seconds <= 30                      ~ "#5cb85c",  # Green: fresh heartbeat
@@ -2234,16 +2283,44 @@ server <- function(input, output, session) {
             heartbeat_age_seconds > 120              ~ "Very stale",
             TRUE                                     ~ "Unknown"
           ),
-          hostname_short = stringr::str_replace(hostname, "\\..*$", ""  ),
+          hostname_short = stringr::str_replace(hostname, "\\..*$", ""),
           process_id_str = ifelse(is.na(process_id), "?", as.character(process_id)),
-          status_html = paste0(
-            "<div style=\"color: ", color, "; margin-bottom: 2px;\">",
-                icon, " <strong>", hostname_short, "</strong> (PID: ", process_id_str, ") - ", text,
-            "</div>"
+          # Format heartbeat age for display
+          heartbeat_display = dplyr::case_when(
+            is.na(heartbeat_age_seconds) ~ "Unknown",
+            heartbeat_age_seconds < 60 ~ sprintf("%.0fs ago", heartbeat_age_seconds),
+            heartbeat_age_seconds < 3600 ~ sprintf("%.0fm ago", heartbeat_age_seconds / 60),
+            TRUE ~ sprintf("%.1fh ago", heartbeat_age_seconds / 3600)
+          ),
+          # Build tooltip text
+          tooltip = sprintf("Status: %s\\nHeartbeat: %s", text, heartbeat_display),
+          # Build table row HTML
+          row_html = paste0(
+            "<tr style=\"color: ", color, ";\" title=\"", htmltools::htmlEscape(tooltip), "\">",
+              "<td style=\"text-align: center; padding: 2px 4px;\">", icon, "</td>",
+              "<td style=\"padding: 2px 4px;\">", htmltools::htmlEscape(hostname_short), "</td>",
+              "<td style=\"text-align: right; padding: 2px 4px;\">", htmltools::htmlEscape(process_id_str), "</td>",
+            "</tr>"
           )
         ) %>%
-        dplyr::pull(status_html)
+        dplyr::pull(row_html)
       
+      # Build complete table
+      paste0(
+        "<table style=\"width: 100%; font-size: 11px; border-collapse: collapse;\">",
+          paste(table_rows, collapse = ""),
+        "</table>"
+      )
+    }
+  })
+  
+  # Separate output for active monitor count (displayed inline with title)
+  output$monitor_active_count <- renderText({
+    monitor_data <- monitor_status_reactive()
+    
+    if (is.null(monitor_data) || nrow(monitor_data) == 0) {
+      "Active: 0/0"
+    } else {
       # Calculate active monitors using dplyr pipeline
       total_monitors <- nrow(monitor_data)
       active_monitors <- monitor_data %>%
@@ -2255,12 +2332,7 @@ server <- function(input, output, session) {
         ) %>%
         nrow()
       
-      summary_line <- sprintf('<div style="color: #777; font-size: 11px; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px;">
-                                %d/%d monitors active
-                              </div>',
-                              as.integer(active_monitors), as.integer(total_monitors))
-      
-      paste(c(status_items, summary_line), collapse = "")
+      sprintf("Active: %d/%d", as.integer(active_monitors), as.integer(total_monitors))
     }
   })
   
@@ -2388,23 +2460,16 @@ server <- function(input, output, session) {
   observeEvent(input$toggle_process_pane, {
     task_id <- input$toggle_process_pane
     
-    # Use a small delay to ensure DOM elements are fully rendered
-    shinyjs::delay(50, {
-      # Toggle expanded state
-      if (task_id %in% rv$expanded_process_panes) {
-        rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
-        # Hide the pane
-        shinyjs::hide(paste0("process_pane_", task_id))
-        # Remove expanded class from button
-        shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
-      } else {
-        rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
-        # Show the pane
-        shinyjs::show(paste0("process_pane_", task_id))
-        # Add expanded class to button
-        shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
-      }
-    })
+    # Toggle expanded state and visibility immediately
+    if (task_id %in% rv$expanded_process_panes) {
+      rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
+      shinyjs::hide(paste0("process_pane_", task_id))
+      shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
+    } else {
+      rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
+      shinyjs::show(paste0("process_pane_", task_id))
+      shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
+    }
   })
   
   # Log pane toggle handler

@@ -23,10 +23,15 @@ Imports:
     this.path,
     ps (>= 1.7.0),
     callr (>= 3.7.0),
-    R.utils
+    R.utils,
+    stringr,
+    shinyTZ
 Suggests:
     RPostgres,
     RSQLite,
     RMariaDB,
     testthat (>= 3.0.0),
-    mockery
+    mockery,
+    crayon
+Remotes:
+    Warnes-Innovations/shinyTZ

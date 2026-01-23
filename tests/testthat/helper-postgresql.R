@@ -1,6 +1,16 @@
 # PostgreSQL-specific test helpers
 # Uses connection info from .Renviron to create temporary test schema
 
+#' Check if PostgreSQL is available for testing
+#' 
+#' @return TRUE if PostgreSQL credentials are available, FALSE otherwise
+postgresql_available <- function() {
+  # Check for required environment variables
+  Sys.getenv("BBC_DB_HOST") != "" && 
+    Sys.getenv("BBC_DB_RW_USER") != "" && 
+    Sys.getenv("BBC_DB_RW_PASSWORD") != ""
+}
+
 #' Setup PostgreSQL test database with temporary schema
 #' 
 #' Creates a temporary schema (tasker_test_RANDOM) on the PostgreSQL database
@@ -56,6 +66,9 @@ setup_postgresql_test <- function() {
   
   # Disable auto-start of reporter
   options(tasker.process_reporter.auto_start = FALSE)
+  
+  # Allow skip_backup=TRUE in tests
+  options(tasker.confirm_skip_backup = TRUE)
   
   # Setup tasker schema in temporary schema
   tasker::setup_tasker_db(force = TRUE, quiet = TRUE, skip_backup = TRUE)

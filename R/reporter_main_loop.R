@@ -131,9 +131,6 @@ update_reporter_heartbeat <- function(con, hostname) {
   tryCatch({
     table_name <- get_table_name("reporter_status", con, char = TRUE)
     current_pid <- Sys.getpid()
-    current_time <- Sys.time()
-      # Use stable string format when storing timestamps to DB to avoid parsing issues
-      current_time_str <- format(current_time, "%Y-%m-%d %H:%M:%S")
     
     # Get current package version
     version <- utils::packageVersion("tasker")
@@ -181,16 +178,16 @@ update_reporter_heartbeat <- function(con, hostname) {
           insert_sql <- sprintf("
             INSERT INTO %s 
             (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
-            VALUES (?, ?, ?, ?, ?, FALSE)
+            VALUES (?, ?, datetime('now'), datetime('now'), ?, FALSE)
           ", table_name)
-            insert_params <- list(hostname, current_pid, current_time_str, current_time_str, as.character(version))
+            insert_params <- list(hostname, current_pid, as.character(version))
         } else {
           insert_sql <- sprintf("
             INSERT INTO %s 
             (hostname, process_id, started_at, last_heartbeat, version, shutdown_requested)
-            VALUES ($1, $2, $3, $4, $5, FALSE)
+            VALUES ($1, $2, NOW(), NOW(), $3, FALSE)
           ", table_name)
-            insert_params <- list(hostname, current_pid, current_time_str, current_time_str, as.character(version))
+            insert_params <- list(hostname, current_pid, as.character(version))
         }
         
         DBI::dbExecute(con, insert_sql, params = insert_params)
@@ -209,17 +206,17 @@ update_reporter_heartbeat <- function(con, hostname) {
       if (!is.null(config) && config$database$driver == "sqlite") {
         update_sql <- sprintf("
           UPDATE %s 
-          SET last_heartbeat = ?, version = ?
+          SET last_heartbeat = datetime('now'), version = ?
           WHERE hostname = ? AND process_id = ?
         ", table_name)
-        update_params <- list(current_time, as.character(version), hostname, current_pid)
+        update_params <- list(as.character(version), hostname, current_pid)
       } else {
         update_sql <- sprintf("
           UPDATE %s 
-          SET last_heartbeat = $1, version = $2
-          WHERE hostname = $3 AND process_id = $4
+          SET last_heartbeat = NOW(), version = $1
+          WHERE hostname = $2 AND process_id = $3
         ", table_name)
-        update_params <- list(current_time, as.character(version), hostname, current_pid)
+        update_params <- list(as.character(version), hostname, current_pid)
       }
       
       DBI::dbExecute(con, update_sql, params = update_params)

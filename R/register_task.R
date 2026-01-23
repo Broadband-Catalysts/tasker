@@ -84,6 +84,12 @@ register_task <- function(stage,
     
     # Handle NULL values for task fields
     script_path_sql      <- if (is.null(script_path)      || is.na(script_path))      DBI::SQL("NULL") else script_path
+    
+    # Auto-extract script_filename from script_path if not provided
+    if ((is.null(script_filename) || is.na(script_filename)) && !is.null(script_path) && !is.na(script_path)) {
+      script_filename <- basename(script_path)
+    }
+    
     script_filename_sql  <- if (is.null(script_filename)  || is.na(script_filename))  DBI::SQL("NULL") else script_filename
     log_path_sql         <- if (is.null(log_path)         || is.na(log_path))         DBI::SQL("NULL") else log_path
     log_filename_sql     <- if (is.null(log_filename)     || is.na(log_filename))     DBI::SQL("NULL") else log_filename

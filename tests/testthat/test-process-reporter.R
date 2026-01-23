@@ -455,11 +455,8 @@ test_that("update_reporter_heartbeat updates timestamp", {
 test_that("update_reporter_heartbeat deletes row for different PID on same hostname", {
   skip_if_not_installed("RSQLite")
   skip_on_cran()  # Skip on CRAN since this test starts actual processes
-  skip("Complex callr integration test - requires process lifecycle management")
   
   # This test validates DELETE+INSERT transaction behavior when PID changes
-  # It's been manually verified to work but is too complex for automated unit testing
-  # The core functionality is tested in 'update_reporter_heartbeat updates timestamp'
   
   db_path <- setup_test_db()
   con <- get_test_db_connection()

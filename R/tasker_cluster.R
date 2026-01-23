@@ -5,9 +5,15 @@
 #' on all workers. It encapsulates the common pattern of cluster setup, reducing
 #' boilerplate from 8-10 lines to 1-2 lines.
 #'
+#' All packages currently attached in the main session (except base packages) are
+#' automatically loaded on workers, eliminating the need to manually specify common
+#' dependencies.
+#'
 #' @param ncores Number of cores (default: auto-detect as detectCores() - 2, max 32)
 #' @param packages Character vector of package names to load on workers (optional).
-#'   The tasker package is always loaded automatically.
+#'   The tasker package is always loaded automatically. Additionally, all packages
+#'   currently attached in the main session (excluding base packages) are
+#'   automatically detected and loaded on workers.
 #' @param export Character vector of object names to export to workers (optional).
 #'   The active run_id is always exported automatically if one exists.
 #' @param setup_expr Expression to evaluate on each worker after packages are loaded
@@ -26,11 +32,15 @@
 #' @examples
 #' \dontrun{
 #' # Simple setup with auto-detection
+#' # All currently attached packages will be loaded on workers
+#' library(dplyr)
+#' library(sf)
 #' cl <- tasker_cluster()
 #' results <- parLapply(cl, items, worker_function)
 #' stop_tasker_cluster(cl)
 #'
 #' # With custom packages and objects
+#' # Both specified packages and attached packages will be loaded
 #' cl <- tasker_cluster(
 #'   ncores = 16,
 #'   packages = c("dplyr", "sf"),
@@ -99,6 +109,13 @@ tasker_cluster <- function(ncores   = NULL,
     ncores <- max(1, min(ncores, 32))  # At least 1, max 32 by default
   }
   
+  # Merge with user-specified packages (user-specified takes precedence)
+  if (!is.null(packages)) {
+    all_packages <- unique(c(packages, loadedNamespaces()))
+  } else {
+    all_packages <- loadedNamespaces()
+  }
+  
   # Create cluster
   cl <- parallel::makeCluster(ncores)
   
@@ -126,8 +143,8 @@ tasker_cluster <- function(ncores   = NULL,
   }
   
   # Load additional packages if specified
-  if (!is.null(packages)) {
-    for (pkg in packages) {
+  if (!is.null(all_packages) && length(all_packages) > 0) {
+    for (pkg in all_packages) {
       parallel::clusterCall(cl, function(p) {
         library(p, character.only = TRUE)
         NULL

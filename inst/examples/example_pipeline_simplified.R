@@ -35,7 +35,13 @@ register_task(stage = "LOAD", name = "Load to Database", type = "R",
 cat("\n=== Starting Data Cleaning Task (Simplified API) ===\n")
 
 # Start task - it becomes the active context automatically
-task_start("TRANSFORM", "Clean Data")  # No run_id needed anymore!
+run_id <- task_start("TRANSFORM", "Clean Data")  # Store run_id for .Last check
+
+.Last <- function() {
+  if (exists("run_id") && !is.null(run_id)) {
+    task_fail(error_message = "Script terminated unexpectedly")
+  }
+}
 
 # ---- Subtask 1: Validate data (auto-numbered!) ----
 cat("\nSubtask 1: Validating data...\n")
@@ -104,6 +110,8 @@ task_update(status = "RUNNING", overall_percent = 100,
 
 # Complete the task
 Sys.sleep(0.5)
+
+rm(.Last)
 task_complete("Data cleaning completed successfully")
 
 cat("\n=== Task Completed ===\n")

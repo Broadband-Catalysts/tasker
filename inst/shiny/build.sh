@@ -39,6 +39,7 @@ echo "Building image..."
 docker build \
     --build-arg TASKER_DIR="$TASKER_DIR_NAME" \
     --build-arg GIT_BRANCH="$GIT_BRANCH" \
+    --secret id=github_pat,env=GITHUB_PAT \
     -t "$FULL_IMAGE" \
     -f "$TASKER_DIR_NAME/inst/shiny/Dockerfile" \
     .
