@@ -58,5 +58,6 @@ task_update(status = "COMPLETE", overall_percent = 100)  # Matches "COMPLETED"
 \seealso{
 \code{\link[=task_start]{task_start()}} to start tracking a task, \code{\link[=task_mark_complete]{task_mark_complete()}} to
 mark task complete, \code{\link[=subtask_update]{subtask_update()}} to update subtask progress,
-\code{\link[=get_task_status]{get_task_status()}} to query current status
+\code{\link[=get_task_status]{get_task_status()}} to query current status, \code{\link[=find_and_update_task]{find_and_update_task()}} to
+update task by searching for it
 }

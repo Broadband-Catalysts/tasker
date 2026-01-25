@@ -14,7 +14,8 @@
 #'
 #' @seealso [task_start()] to start tracking a task, [task_mark_complete()] to
 #'   mark task complete, [subtask_update()] to update subtask progress,
-#'   [get_task_status()] to query current status
+#'   [get_task_status()] to query current status, [find_and_update_task()] to
+#'   update task by searching for it
 #'
 #' @export
 #'

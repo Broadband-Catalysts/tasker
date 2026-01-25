@@ -1,8 +1,8 @@
-#' Update task status by name or filename
+#' Find and update task status by name or filename
 #'
-#' Updates the status of the most recent task run. Supports multiple ways to
-#' specify the task: by filename alone, by stage and task number, or by stage
-#' and task name.
+#' Updates the status of the most recent task run by searching for the task.
+#' Supports multiple ways to specify the task: by filename alone, by stage and
+#' task number, or by stage and task name.
 #'
 #' @param stage Stage name or number (e.g., "DAILY_FCC_SUMMARY", 8). Optional
 #'   if `filename` is provided.
@@ -31,23 +31,23 @@
 #' If multiple tasks match by filename, an error is raised.
 #'
 #' @seealso [task_update()] to update task with explicit run_id,
-#'   [update_subtask()] for subtask updates
+#'   [find_and_update_subtask()] for subtask updates
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' # By filename alone (filename is unique)
-#' update_task(
+#' find_and_update_task(
 #'   filename = "06_DAILY_FCC_SUMMARY_03_Provider_Tables_Block20.R",
 #'   status = "COMPLETED"
 #' )
 #'
 #' # By stage number and task number
-#' update_task(8, 3, "COMPLETED")
+#' find_and_update_task(8, 3, "COMPLETED")
 #'
 #' # By stage name and task name
-#' update_task(
+#' find_and_update_task(
 #'   stage = "DAILY_FCC_SUMMARY",
 #'   task = "Provider Tables Block20",
 #'   status = "COMPLETED",
@@ -55,14 +55,14 @@
 #' )
 #'
 #' # Mark a task as failed
-#' update_task(
+#' find_and_update_task(
 #'   stage = "STATIC",
 #'   task = "TIGER_State_Boundaries",
 #'   status = "FAILED",
 #'   error_message = "Data validation failed"
 #' )
 #' }
-update_task <- function(stage,
+find_and_update_task <- function(stage,
                        task,
                        status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED"),
                        message = NULL,

@@ -15,7 +15,8 @@
 #' @seealso [subtask_increment()] for atomic counter updates safe for parallel
 #'   workers, [subtask_start()] to start tracking a subtask,
 #'   [get_subtask_progress()] to query subtask progress,
-#'   [subtask_complete()] for convenient completion marking
+#'   [subtask_complete()] for convenient completion marking,
+#'   [find_and_update_subtask()] to update subtask by searching for it
 #'
 #' @export
 #'

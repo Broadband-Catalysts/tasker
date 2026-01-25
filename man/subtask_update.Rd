@@ -64,5 +64,6 @@ subtask_update(status = "COMPLETED", percent = 100)  # Canonical completion stat
 \code{\link[=subtask_increment]{subtask_increment()}} for atomic counter updates safe for parallel
 workers, \code{\link[=subtask_start]{subtask_start()}} to start tracking a subtask,
 \code{\link[=get_subtask_progress]{get_subtask_progress()}} to query subtask progress,
-\code{\link[=subtask_complete]{subtask_complete()}} for convenient completion marking
+\code{\link[=subtask_complete]{subtask_complete()}} for convenient completion marking,
+\code{\link[=find_and_update_subtask]{find_and_update_subtask()}} to update subtask by searching for it
 }

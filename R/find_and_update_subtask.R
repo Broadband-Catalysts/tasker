@@ -1,8 +1,8 @@
-#' Update subtask progress by name or filename
+#' Find and update subtask progress by name or filename
 #'
-#' Updates the progress of a subtask in the most recent task run. Supports
-#' multiple ways to specify the task: by filename alone, by stage and task
-#' number, or by stage and task name.
+#' Updates the progress of a subtask in the most recent task run by searching
+#' for the task. Supports multiple ways to specify the task: by filename alone,
+#' by stage and task number, or by stage and task name.
 #'
 #' @param stage Stage name or number (e.g., "DAILY_FCC_SUMMARY", 8). Optional
 #'   if `filename` is provided.
@@ -35,14 +35,14 @@
 #' If multiple tasks match by filename, an error is raised.
 #'
 #' @seealso [subtask_update()] to update subtask with explicit run_id,
-#'   [update_task()] for task updates
+#'   [find_and_update_task()] for task updates
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' # By filename alone (no stage needed)
-#' update_subtask(
+#' find_and_update_subtask(
 #'   filename = "06_DAILY_FCC_SUMMARY_03_Provider_Tables_Block20.R",
 #'   subtask = 2,
 #'   status = "COMPLETED",
@@ -50,10 +50,10 @@
 #' )
 #'
 #' # By stage number and task number
-#' update_subtask(8, 3, subtask = 1, status = "COMPLETED")
+#' find_and_update_subtask(8, 3, subtask = 1, status = "COMPLETED")
 #'
 #' # By stage name and task name
-#' update_subtask(
+#' find_and_update_subtask(
 #'   stage = "STATIC",
 #'   task = "TIGER_Census_Blocks",
 #'   subtask = 1,
@@ -61,7 +61,7 @@
 #'   percent = 50
 #' )
 #' }
-update_subtask <- function(stage,
+find_and_update_subtask <- function(stage,
                            task,
                            subtask,
                            status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED"),
