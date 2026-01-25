@@ -3,13 +3,13 @@ test_that("update_task requires stage/filename and task parameters", {
   
   # Missing stage when no filename
   expect_error(
-    update_task(task = "Test", status = "COMPLETED"),
+    find_and_update_task(task = "Test", status = "COMPLETED"),
     "Either provide.*filename.*or both.*stage.*and.*task"
   )
   
   # Missing task when no filename
   expect_error(
-    update_task(stage = "STATIC", status = "COMPLETED"),
+    find_and_update_task(stage = "STATIC", status = "COMPLETED"),
     "Either provide.*filename.*or both.*stage.*and.*task"
   )
 })
@@ -19,7 +19,7 @@ test_that("update_task validates status parameter", {
   skip_if_not_installed("RSQLite")
   
   expect_error(
-    update_task(stage = "STATIC", task = "Test", status = "INVALID"),
+    find_and_update_task(stage = "STATIC", task = "Test", status = "INVALID"),
     "'arg' should be one of"
   )
 })
@@ -44,7 +44,7 @@ test_that("update_task by filename alone", {
   task_complete(run_id)
   
   # Now update by filename
-  result <- update_task(
+  result <- find_and_update_task(
     filename = "test_update_task.R",
     status = "COMPLETED",
     message = "Updated by filename"
@@ -81,7 +81,7 @@ test_that("update_task by stage and task number", {
   task_complete(run_id)
   
   # Update by stage name and task name (safer than numbers)
-  result <- update_task("NUMBER_TEST_STAGE", "Task Two", "COMPLETED")
+  result <- find_and_update_task("NUMBER_TEST_STAGE", "Task Two", "COMPLETED")
   
   expect_true(result)
 })
@@ -102,7 +102,7 @@ test_that("update_task by stage name and task name", {
   run_id <- task_start("TEST_STAGE", "Specific Task")
   task_complete(run_id)
   
-  result <- update_task(
+  result <- find_and_update_task(
     stage = "TEST_STAGE",
     task = "Specific Task",
     status = "COMPLETED",
@@ -130,7 +130,7 @@ test_that("update_task handles partial filename matching", {
   task_complete(run_id)
   
   # Partial filename match should work
-  result <- update_task(
+  result <- find_and_update_task(
     filename = "PREREQ_01",
     status = "COMPLETED"
   )
@@ -164,7 +164,7 @@ test_that("update_task rejects ambiguous filename matches", {
   
   # Ambiguous partial match should error
   expect_error(
-    update_task(filename = "test_script", status = "COMPLETED"),
+    find_and_update_task(filename = "test_script", status = "COMPLETED"),
     "ambiguous"
   )
 })
@@ -177,7 +177,7 @@ test_that("update_task rejects nonexistent filename", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   expect_error(
-    update_task(filename = "nonexistent_file.R", status = "COMPLETED"),
+    find_and_update_task(filename = "nonexistent_file.R", status = "COMPLETED"),
     "not found"
   )
 })
@@ -198,7 +198,7 @@ test_that("update_task handles all status values", {
   for (status in c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED")) {
     run_id <- task_start("TEST_STAGE", "Status Test")
     
-    result <- update_task(
+    result <- find_and_update_task(
       stage = "TEST_STAGE",
       task = "Status Test",
       status = status
@@ -225,7 +225,7 @@ test_that("update_task with optional message and error_message", {
   
   run_id <- task_start("TEST_STAGE", "Message Test")
   
-  result <- update_task(
+  result <- find_and_update_task(
     stage = "TEST_STAGE",
     task = "Message Test",
     status = "COMPLETED",
@@ -247,25 +247,25 @@ test_that("update_subtask requires stage, task, and subtask parameters", {
   
   # Missing all required parameters
   expect_error(
-    update_subtask(),
+    find_and_update_subtask(),
     "missing"
   )
   
   # Missing subtask
   expect_error(
-    update_subtask(stage = "STATIC", task = "Test"),
+    find_and_update_subtask(stage = "STATIC", task = "Test"),
     "missing"
   )
   
   # Missing task when no filename - gets helpful message
   expect_error(
-    update_subtask(stage = "STATIC", subtask = 1),
+    find_and_update_subtask(stage = "STATIC", subtask = 1),
     "Either provide.*filename.*or both.*stage.*and.*task"
   )
   
   # Missing stage when no filename - gets helpful message
   expect_error(
-    update_subtask(task = "Test", subtask = 1),
+    find_and_update_subtask(task = "Test", subtask = 1),
     "Either provide.*filename.*or both.*stage.*and.*task"
   )
 })
@@ -275,7 +275,7 @@ test_that("update_subtask validates status parameter", {
   skip_if_not_installed("RSQLite")
   
   expect_error(
-    update_subtask(stage = "STATIC", task = "Test", subtask = 1, status = "INVALID"),
+    find_and_update_subtask(stage = "STATIC", task = "Test", subtask = 1, status = "INVALID"),
     "'arg' should be one of"
   )
 })
@@ -297,7 +297,7 @@ test_that("update_subtask by filename with subtask number", {
   run_id <- task_start("TEST_STAGE", "Subtask Test")
   subtask_start("Processing", items_total = 100, quiet = TRUE, run_id = run_id, subtask_number = 1)
   
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     filename = "test_subtask.R",
     subtask = 1,
     status = "RUNNING",
@@ -325,7 +325,7 @@ test_that("update_subtask by stage and task names", {
   run_id <- task_start("TEST_STAGE", "Named Subtask Test")
   subtask_start("Processing Part 2", items_total = 50, quiet = TRUE, run_id = run_id, subtask_number = 2)
   
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     stage = "TEST_STAGE",
     task = "Named Subtask Test",
     subtask = 2,
@@ -355,7 +355,7 @@ test_that("update_subtask handles all status values", {
     run_id <- task_start("TEST_STAGE", "Status Subtask Test")
     subtask_start("Test", quiet = TRUE, run_id = run_id, subtask_number = 1)
     
-    result <- update_subtask(
+    result <- find_and_update_subtask(
       stage = "TEST_STAGE",
       task = "Status Subtask Test",
       subtask = 1,
@@ -384,7 +384,7 @@ test_that("update_subtask with percent and items tracking", {
   run_id <- task_start("TEST_STAGE", "Progress Test")
   subtask_start("Processing", items_total = 1000, quiet = TRUE, run_id = run_id, subtask_number = 1)
   
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     stage = "TEST_STAGE",
     task = "Progress Test",
     subtask = 1,
@@ -415,7 +415,7 @@ test_that("update_subtask with message and error_message", {
   run_id <- task_start("TEST_STAGE", "Message Subtask Test")
   subtask_start("Test", quiet = TRUE, run_id = run_id, subtask_number = 1)
   
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     stage = "TEST_STAGE",
     task = "Message Subtask Test",
     subtask = 1,
@@ -447,7 +447,7 @@ test_that("update_subtask rejects missing subtask", {
   
   # Trying to update subtask 99 which doesn't exist should error
   expect_error(
-    update_subtask(
+    find_and_update_subtask(
       stage = "TEST_STAGE",
       task = "Missing Subtask Test",
       subtask = 99,
@@ -478,7 +478,7 @@ test_that("update_task and update_subtask work in sequence", {
   subtask_start("Part 2", quiet = TRUE, run_id = run_id, subtask_number = 2)
   
   # Update first subtask
-  result1 <- update_subtask(
+  result1 <- find_and_update_subtask(
     filename = "test_sequence.R",
     subtask = 1,
     status = "COMPLETED"
@@ -486,7 +486,7 @@ test_that("update_task and update_subtask work in sequence", {
   expect_true(result1)
   
   # Update second subtask
-  result2 <- update_subtask(
+  result2 <- find_and_update_subtask(
     filename = "test_sequence.R",
     subtask = 2,
     status = "COMPLETED"
@@ -494,7 +494,7 @@ test_that("update_task and update_subtask work in sequence", {
   expect_true(result2)
   
   # Update overall task
-  result3 <- update_task(
+  result3 <- find_and_update_task(
     filename = "test_sequence.R",
     status = "COMPLETED"
   )
@@ -529,7 +529,7 @@ test_that("update_task works with stage_order + task_order", {
   task_complete(run_id)
   
   # Update using stage_order and task_order
-  result <- update_task(
+  result <- find_and_update_task(
     stage = 5,
     task = 3,
     status = "RUNNING"
@@ -566,7 +566,7 @@ test_that("update_task works with stage_order + task_name", {
   task_complete(run_id)
   
   # Update using stage_order (numeric) and task name (string)
-  result <- update_task(
+  result <- find_and_update_task(
     stage = 7,
     task = "Mixed Task Name",
     status = "FAILED",
@@ -605,7 +605,7 @@ test_that("update_task works with stage_name + task_order", {
   task_complete(run_id)
   
   # Update using stage name (string) and task_order (numeric)
-  result <- update_task(
+  result <- find_and_update_task(
     stage = "NAME_ORDER_STAGE",
     task = 8,
     status = "SKIPPED",
@@ -646,7 +646,7 @@ test_that("update_subtask works with stage_order + task_order + subtask_number",
   subtask_start("Validate Results", items_total = 50, run_id = run_id, subtask_number = 2)
   
   # Update subtask using all numeric parameters
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     stage = 6,
     task = 5,
     subtask = 1,
@@ -693,7 +693,7 @@ test_that("update_subtask works with stage_order + task_name + subtask_name", {
   subtask_start("Transform Data", items_total = 1000, run_id = run_id, subtask_number = 2)
   
   # Update using stage_order + task_name + subtask_name
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     stage = 9,
     task = "Subtask Mixed Task",
     subtask = "Transform Data",
@@ -740,7 +740,7 @@ test_that("update_subtask works with stage_name + task_order + subtask_number", 
   subtask_start("Third Step", items_total = 400, run_id = run_id, subtask_number = 3)
   
   # Update using stage_name + task_order + subtask_number
-  result <- update_subtask(
+  result <- find_and_update_subtask(
     stage = "FINAL_COMBO_STAGE",
     task = 7,
     subtask = 3,
