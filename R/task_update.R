@@ -1,6 +1,7 @@
 #' Update task execution status
 #'
-#' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED
+#' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED. Partial
+#'   matching is supported (e.g., "COMPLETE" will match "COMPLETED").
 #' @param current_subtask Current subtask number (optional)
 #' @param overall_percent Overall percent complete 0-100 (optional)
 #' @param message Progress message (optional)
@@ -25,8 +26,11 @@
 #' # With context (run_id optional)
 #' task_start("STAGE", "Task")
 #' task_update(status = "RUNNING", overall_percent = 50)
+#'
+#' # Partial matching works
+#' task_update(status = "COMPLETE", overall_percent = 100)  # Matches "COMPLETED"
 #' }
-task_update <- function(status,
+task_update <- function(status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED"),
                        current_subtask = NULL,
                        overall_percent = NULL,
                        message         = NULL,
@@ -37,10 +41,8 @@ task_update <- function(status,
                        run_id          = NULL) {
   ensure_configured()
   
-  # Input validation
-  if (missing(status) || !is.character(status) || length(status) != 1) {
-    stop("'status' must be a single character string", call. = FALSE)
-  }
+  # Validate status parameter with partial matching
+  status <- match.arg(status)
   
   if (!is.null(current_subtask)) {
     if (!is.numeric(current_subtask) || length(current_subtask) != 1 || current_subtask < 1) {
@@ -86,12 +88,6 @@ task_update <- function(status,
   task_runs_table <- get_table_name("task_runs", conn)
   db_driver <- config$database$driver
   time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
-  
-  valid_statuses <- c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED")
-  if (!status %in% valid_statuses) {
-    stop("Invalid status: ", status, ". Must be one of: ", 
-         paste(valid_statuses, collapse = ", "))
-  }
   
   # Convert NULL to NA for glue_sql
   current_subtask <- if (is.null(current_subtask)) NA else current_subtask

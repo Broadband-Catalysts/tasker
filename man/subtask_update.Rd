@@ -5,7 +5,7 @@
 \title{Update subtask progress}
 \usage{
 subtask_update(
-  status,
+  status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED"),
   percent = NULL,
   items_complete = NULL,
   message = NULL,
@@ -17,7 +17,8 @@ subtask_update(
 )
 }
 \arguments{
-\item{status}{Status: RUNNING, COMPLETED, FAILED, SKIPPED}
+\item{status}{Status: RUNNING, COMPLETED, FAILED, SKIPPED. Partial matching
+is supported (e.g., "COMPLETE" will match "COMPLETED").}
 
 \item{percent}{Percent complete 0-100 (optional)}
 
@@ -54,6 +55,9 @@ subtask_update(status = "RUNNING", percent = 50, items_complete = 28,
 
 # New style - use context
 subtask_update(status = "RUNNING", percent = 50)
+
+# Partial matching works
+subtask_update(status = "COMPLETED", percent = 100)  # Canonical completion status
 }
 }
 \seealso{

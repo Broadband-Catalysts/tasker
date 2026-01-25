@@ -123,6 +123,12 @@ tasker_cluster <- function(ncores   = NULL,
   attr(cl, "tasker_managed") <- TRUE
   attr(cl, "tasker_created_at") <- Sys.time()
   
+  # Disable renv watchdog on all workers to prevent extra processes
+  parallel::clusterEvalQ(cl, {
+    Sys.setenv(RENV_WATCHDOG_ENABLED = "FALSE")
+    NULL
+  })
+  
   # Load tasker package on all workers
   # Try library() first, fall back to devtools::load_all() for development
   if (load_all) {

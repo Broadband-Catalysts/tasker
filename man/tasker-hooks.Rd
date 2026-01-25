@@ -2,12 +2,15 @@
 % Please edit documentation in R/zzz.R
 \name{tasker-hooks}
 \alias{tasker-hooks}
+\alias{.onLoad}
 \alias{.onAttach}
 \title{Package loading hooks}
 \usage{
+.onLoad(libname, pkgname)
+
 .onAttach(libname, pkgname)
 }
 \description{
-Package loading hooks
+Automatically configures logger with sensible defaults when tasker is loaded.
 }
 \keyword{internal}

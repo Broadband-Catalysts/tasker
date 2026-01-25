@@ -1,0 +1,12 @@
+flowchart TD
+    timer["invalidateLater(5000)"]
+    obs["observe()<br/>[auto-refresh]"]
+    check1["[isolate]<br/>input$auto_refresh"]
+    check2["[isolate]<br/>rv$query_running"]
+    action["refresh_trigger(n+1)<br/>← WRITES"]
+    
+    timer --> obs
+    obs --> check1
+    obs --> check2
+    check1 --> action
+    check2 --> action

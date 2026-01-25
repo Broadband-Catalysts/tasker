@@ -31,6 +31,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-httr \
     r-cran-jsonlite \
     r-cran-lifecycle \
+    r-cran-logger \
     r-cran-lubridate \
     r-cran-pillar \
     r-cran-ps \

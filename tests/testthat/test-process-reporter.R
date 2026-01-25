@@ -89,8 +89,8 @@ test_that("setup_tasker_db creates view", {
   result <- DBI::dbGetQuery(con, "SELECT * FROM current_task_status_with_metrics LIMIT 0")
   
   # Check that view has expected columns
-  expected_cols <- c("run_id", "cpu_percent", "memory_mb", "child_count", 
-                     "is_alive", "metrics_age_seconds", "collection_error")
+  expected_cols <- c("run_id", "metrics_cpu_percent", "metrics_memory_mb", "metrics_child_count", 
+                     "metrics_is_alive", "metrics_age_seconds", "metrics_collection_error")
   for (col in expected_cols) {
     expect_true(col %in% names(result), info = paste("Missing column:", col))
   }

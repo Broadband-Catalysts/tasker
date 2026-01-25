@@ -43,24 +43,24 @@ test_that("get_task_status returns metrics columns", {
   result <- get_task_status(conn = con)
   
   # Verify metrics columns are present
-  expect_true("cpu_percent" %in% names(result))
-  expect_true("memory_mb" %in% names(result))
-  expect_true("child_count" %in% names(result))
-  expect_true("child_total_cpu_percent" %in% names(result))
-  expect_true("child_total_memory_mb" %in% names(result))
-  expect_true("collection_error" %in% names(result))
+  expect_true("metrics_cpu_percent" %in% names(result))
+  expect_true("metrics_memory_mb" %in% names(result))
+  expect_true("metrics_child_count" %in% names(result))
+  expect_true("metrics_child_total_cpu_percent" %in% names(result))
+  expect_true("metrics_child_total_memory_mb" %in% names(result))
+  expect_true("metrics_collection_error" %in% names(result))
   expect_true("metrics_error_message" %in% names(result))
-  expect_true("is_alive" %in% names(result))
+  expect_true("metrics_is_alive" %in% names(result))
   expect_true("metrics_age_seconds" %in% names(result))
   
   # Verify metrics values
-  expect_equal(result$cpu_percent, 25.5)
-  expect_equal(result$memory_mb, 512.0)
-  expect_equal(result$child_count, 4)
-  expect_equal(result$child_total_cpu_percent, 80.0)
-  expect_equal(result$child_total_memory_mb, 1024.0)
-  expect_equal(result$collection_error, 0)
-  expect_equal(result$is_alive, 1)
+  expect_equal(result$metrics_cpu_percent, 25.5)
+  expect_equal(result$metrics_memory_mb, 512.0)
+  expect_equal(result$metrics_child_count, 4)
+  expect_equal(result$metrics_child_total_cpu_percent, 80.0)
+  expect_equal(result$metrics_child_total_memory_mb, 1024.0)
+  expect_equal(result$metrics_collection_error, 0)
+  expect_equal(result$metrics_is_alive, 1)
   expect_true(result$metrics_age_seconds >= 25 && result$metrics_age_seconds <= 35)  # Around 30 seconds
   
   DBI::dbDisconnect(con)
@@ -90,14 +90,14 @@ test_that("get_task_status handles NULL metrics gracefully", {
   expect_equal(result$run_id, run_id)
   
   # Verify metrics columns exist but are NULL/NA
-  expect_true("cpu_percent" %in% names(result))
-  expect_true("memory_mb" %in% names(result))
-  expect_true("is_alive" %in% names(result))
+  expect_true("metrics_cpu_percent" %in% names(result))
+  expect_true("metrics_memory_mb" %in% names(result))
+  expect_true("metrics_is_alive" %in% names(result))
   expect_true("metrics_age_seconds" %in% names(result))
   
-  expect_true(is.na(result$cpu_percent))
-  expect_true(is.na(result$memory_mb))
-  expect_true(is.na(result$is_alive))
+  expect_true(is.na(result$metrics_cpu_percent))
+  expect_true(is.na(result$metrics_memory_mb))
+  expect_true(is.na(result$metrics_is_alive))
   expect_true(is.na(result$metrics_age_seconds))
   
   DBI::dbDisconnect(con)
@@ -172,8 +172,8 @@ test_that("get_task_status returns latest metrics when multiple exist", {
   result <- get_task_status(conn = con)
   
   # Verify it returns LATEST metrics (cpu=30, mem=512)
-  expect_equal(result$cpu_percent, 30.0)
-  expect_equal(result$memory_mb, 512.0)
+  expect_equal(result$metrics_cpu_percent, 30.0)
+  expect_equal(result$metrics_memory_mb, 512.0)
   expect_true(result$metrics_age_seconds >= 25 && result$metrics_age_seconds <= 35)  # Around 30 seconds
   
   DBI::dbDisconnect(con)

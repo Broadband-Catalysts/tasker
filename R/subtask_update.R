@@ -1,6 +1,7 @@
 #' Update subtask progress
 #'
-#' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED
+#' @param status Status: RUNNING, COMPLETED, FAILED, SKIPPED. Partial matching
+#'   is supported (e.g., "COMPLETE" will match "COMPLETED").
 #' @param percent Percent complete 0-100 (optional)
 #' @param items_complete Items completed - sets absolute value (optional)
 #' @param message Progress message (optional)
@@ -30,17 +31,19 @@
 #'
 #' # New style - use context
 #' subtask_update(status = "RUNNING", percent = 50)
+#'
+#' # Partial matching works
+#' subtask_update(status = "COMPLETED", percent = 100)  # Canonical completion status
 #' }
-subtask_update <- function(status, percent = NULL, items_complete = NULL,
+subtask_update <- function(status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED"),
+                          percent = NULL, items_complete = NULL,
                           message = NULL, error_message = NULL,
                           quiet = FALSE, conn = NULL,
                           run_id = NULL, subtask_number = NULL) {
   ensure_configured()
   
-  # Input validation
-  if (missing(status) || !is.character(status) || length(status) != 1) {
-    stop("'status' must be a single character string", call. = FALSE)
-  }
+  # Validate status parameter with partial matching
+  status <- match.arg(status)
   
   if (!is.null(percent)) {
     if (!is.numeric(percent) || length(percent) != 1 || percent < 0 || percent > 100) {
@@ -87,12 +90,6 @@ subtask_update <- function(status, percent = NULL, items_complete = NULL,
   subtask_progress_table <- get_table_name("subtask_progress", conn)
   db_driver <- config$database$driver
   time_func <- if (db_driver == "sqlite") "datetime('now')" else "NOW()"
-  
-  valid_statuses <- c("RUNNING", "COMPLETED", "FAILED", "SKIPPED")
-  if (!status %in% valid_statuses) {
-    stop("Invalid status: ", status, ". Must be one of: ", 
-         paste(valid_statuses, collapse = ", "))
-  }
   
   # Convert NULL to NA for glue_sql
   percent <- if (is.null(percent)) NA else percent

@@ -858,8 +858,16 @@ server <- function(input, output, session) {
     # Database connection for SQL queries monitoring (reused)
     monitor_connection = NULL,
     # Trigger for forcing initial DOM renders
-    initial_render_trigger = 0
+    initial_render_trigger = 0,
+    # Query state tracking to prevent reactive flooding
+    query_running = FALSE,
+    last_query_time = Sys.time() - 60,
+    # Track initial load separately to avoid observer self-dependency
+    initial_load_complete = FALSE
   )
+  
+  # Minimum interval between queries (seconds)
+  min_query_interval <- 5
   
   # Cleanup database connection when session ends
   onSessionEnded(function() {
@@ -869,6 +877,24 @@ server <- function(input, output, session) {
         DBI::dbDisconnect(con)
         message("Disconnected monitor database connection")
       }, silent = TRUE)
+    }
+  })
+  
+  # Busy indicator
+  output$busy_indicator <- renderText({
+    if (rv$query_running) {
+      "⏳ Loading..."
+    } else {
+      ""
+    }
+  })
+  
+  # Disable auto-refresh while query is running
+  observe({
+    if (rv$query_running) {
+      shinyjs::disable("auto_refresh")
+    } else {
+      shinyjs::enable("auto_refresh")
     }
   })
   
@@ -1014,20 +1040,56 @@ server <- function(input, output, session) {
   # POLLING OBSERVER: Update only changed task statuses
   # ============================================================================
   
-  # Auto-refresh timer
-  autoRefresh <- reactive({
-    if (input$auto_refresh) {
-      invalidateLater(input$refresh_interval * 1000)
-    }
-    input$refresh
+  # Auto-refresh trigger (start at 1 to force initial load)
+  refresh_trigger <- reactiveVal(1)
+  message("[INIT] refresh_trigger initialized to 1")
+  
+  # Use reactiveTimer() instead of invalidateLater() to prevent reactive storm
+  # reactiveTimer() creates a clean reactive dependency that ONLY fires on schedule
+  auto_refresh_timer <- reactive({
+    # Allow dynamic interval changes
+    interval_ms <- input$refresh_interval * 1000
+    reactiveTimer(interval_ms)()
   })
   
-  # Task data reactive - fetches current task status
+  observe({
+    auto_refresh_timer()  # Depend ONLY on timer
+    # Use isolate() to prevent reactive dependencies on conditional checks
+    if (isolate(input$auto_refresh) && isolate(!rv$query_running)) {
+      new_val <- isolate(refresh_trigger()) + 1
+      refresh_trigger(new_val)
+      message(sprintf("[AUTO-REFRESH] Incremented refresh_trigger to %d (query_running=%s)", new_val, isolate(rv$query_running)))
+    }
+  })
+  
+  # Manual refresh button
+  observeEvent(input$refresh, {
+    new_val <- refresh_trigger() + 1
+    refresh_trigger(new_val)
+    message(sprintf("[MANUAL-REFRESH] Incremented refresh_trigger to %d", new_val))
+  })
+  
+  # Task data reactive - fetches current task status with cooldown to prevent flooding
   task_data <- reactive({
-    autoRefresh()  # Depend on auto-refresh
+    message(sprintf("[TASK_DATA] Called with refresh_trigger=%d", refresh_trigger()))
+    # Prevent overlapping queries
+    time_since_last <- as.numeric(difftime(Sys.time(), rv$last_query_time, units = "secs"))
+    message(sprintf("[TASK_DATA] time_since_last=%.2f, min_interval=%d, query_running=%s", 
+                   time_since_last, min_query_interval, rv$query_running))
+    req(time_since_last >= min_query_interval)
+    message("[TASK_DATA] Cooldown passed, running query...")
+    
+    rv$query_running <- TRUE
+    on.exit({
+      rv$query_running <- FALSE
+      rv$last_query_time <- Sys.time()
+      message("[TASK_DATA] Query complete, updated last_query_time")
+    }, add = TRUE)
     
     tryCatch({
+      message("[TASK_DATA] Calling tasker::get_task_status()...")
       result <- tasker::get_task_status()
+      message(sprintf("[TASK_DATA] Got %d rows", if(!is.null(result)) nrow(result) else 0))
       # No need to clear error_message since we use notifications now
       return(result)
     }, error = function(e) {
@@ -1095,16 +1157,29 @@ server <- function(input, output, session) {
         NULL
       }
     })
-  })
+  }) %>% bindEvent(refresh_trigger(), ignoreInit = FALSE, ignoreNULL = TRUE)
   
   # Observer: Poll database and update only changed values
   observe({
-    # Only update when Pipeline Status tab is active
-    req(input$main_tabs == "Pipeline Status")
-    
-    # Use the task_data reactive instead of duplicating the call
+    # CRITICAL: Depend ONLY on task_data() and force_refresh, nothing else
+    # Use isolate() for all checks to prevent reactive dependencies
     current_status <- task_data()
     rv$force_refresh  # Also depend on force_refresh
+    
+    message("[OBSERVER] Starting, initial_load_complete=", isolate(rv$initial_load_complete))
+    message("[OBSERVER] main_tabs=", isolate(input$main_tabs))
+    
+    # After initial load, only update when Pipeline Status tab is active
+    # Use separate flag to avoid observer self-dependency on rv$last_update
+    if (isolate(rv$initial_load_complete)) {
+      message("[OBSERVER] Checking tab requirement...")
+      req(isolate(input$main_tabs) == "Pipeline Status")
+      message("[OBSERVER] Tab requirement passed")
+    } else {
+      message("[OBSERVER] Initial load - skipping tab check")
+    }
+    
+    message("[OBSERVER] Got current_status, rows=", if(!is.null(current_status)) nrow(current_status) else "NULL")
     
     # Get list of task keys that exist in current_status
     current_task_keys <- if (!is.null(current_status) && nrow(current_status) > 0) {
@@ -1273,7 +1348,10 @@ server <- function(input, output, session) {
       }
     }
     
-    rv$last_update <- Sys.time()
+    # Update last refresh timestamp
+    isolate(rv$last_update <- Sys.time())
+    # Mark initial load complete after first successful update
+    isolate(rv$initial_load_complete <- TRUE)
   })
   
   # ============================================================================
@@ -2579,14 +2657,20 @@ server <- function(input, output, session) {
     rv$sql_trigger <- Sys.time()
   }, ignoreInit = TRUE)
   
-  # Fetch SQL queries
+  # Fetch SQL queries with cooldown to prevent flooding
   sql_queries_data <- reactive({
     # Only fetch when SQL Queries tab is active
     req(input$main_tabs == "SQL Queries")
     
-    # Depend on main auto-refresh and manual trigger
-    autoRefresh()
-    rv$sql_trigger
+    # Prevent overlapping queries
+    time_since_last <- as.numeric(difftime(Sys.time(), rv$last_query_time, units = "secs"))
+    req(time_since_last >= min_query_interval)
+    
+    rv$query_running <- TRUE
+    on.exit({
+      rv$query_running <- FALSE
+      rv$last_query_time <- Sys.time()
+    }, add = TRUE)
     
     tryCatch({
       config <- getOption("tasker.config")
@@ -2638,7 +2722,7 @@ server <- function(input, output, session) {
         stringsAsFactors = FALSE
       ))
     })
-  })
+  }) %>% bindEvent(refresh_trigger(), rv$sql_trigger, ignoreInit = FALSE, ignoreNULL = TRUE)
   
   # Render SQL queries table - initial render with proper column structure
   output$sql_queries_table <- renderDT({

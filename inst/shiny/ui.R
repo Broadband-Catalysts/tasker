@@ -20,6 +20,27 @@ ui <- page_fluid(
       var reconnectTimer = null;
       var reconnectAttempts = 0;
       
+      console.log('[JS-INIT] Tasker monitor JavaScript loaded');
+      
+      // Log when Shiny is ready
+      $(document).on('shiny:connected', function() {
+        console.log('[JS-CONNECTED] Shiny connected');
+      });
+      
+      // Log input changes
+      $(document).on('shiny:inputchanged', function(event) {
+        if (event.name.match(/auto_refresh|refresh_interval|main_tabs/)) {
+          console.log('[JS-INPUT] ' + event.name + ' = ' + event.value);
+        }
+      });
+      
+      // Log output updates
+      $(document).on('shiny:value', function(event) {
+        if (event.name.match(/last_update|busy_indicator/)) {
+          console.log('[JS-OUTPUT] ' + event.name + ' updated');
+        }
+      });
+      
       $(document).on('click', '.kill-query-btn', function() {
         var pid = $(this).data('pid');
         var username = $(this).data('username');
@@ -29,6 +50,7 @@ ui <- page_fluid(
       
       // Show prominent disconnection alert and start auto-reconnect
       $(document).on('shiny:disconnected', function() {
+        console.log('[JS-DISCONNECTED] Shiny disconnected');
         $('#shiny-disconnection-alert').fadeIn(500);
         reconnectAttempts = 0;
         
@@ -77,13 +99,16 @@ ui <- page_fluid(
 
   div(
     class = "page-header-fixed",
+    style = "display: flex; justify-content: space-between; align-items: center;",
     h2(
       class = "page-title",
-      "FCC Data Pipeline - Tasker Monitor",
-      span(
-        class = "build-info-inline",
-        sprintf("Branch: %s  |  Build: %s", GIT_BRANCH, BUILD_TIME)
-      )
+      style = "margin: 0;",
+      "FCC Data Pipeline - Tasker Monitor"
+    ),
+    span(
+      class = "build-info-inline",
+      style = "text-align: right;",
+      sprintf("Branch: %s  |  Build: %s", GIT_BRANCH, BUILD_TIME)
     )
   ),
   layout_sidebar(
@@ -91,6 +116,7 @@ ui <- page_fluid(
       title = "Filters & Controls",
       open = "desktop",
       width = 320,
+      
       # FILTERS Section
       div(class = "filter-row",
         span(class = "filter-label", "Stage:"),
@@ -113,10 +139,6 @@ ui <- page_fluid(
       ),
       hr(),
       # REFRESH Section
-      div(class = "refresh-info",
-        span(class = "refresh-label", "Last Refresh:"),
-        datetimeOutput("last_update", inline = TRUE)
-      ),
       div(class = "refresh-controls",
         div(class = "button-group",
           actionButton("refresh_structure", 
@@ -129,12 +151,17 @@ ui <- page_fluid(
                        title = "Refresh task status and progress")
         )
       ),
-      div(class = "filter-row-inline",
-        checkboxInput("auto_refresh", "Auto Refresh", value = TRUE),
-        span(class = "inline-label", "Interval:"),
+      div(class = "refresh-controls-inline",
+        checkboxInput("auto_refresh", label = "", value = TRUE),
+        span("Refresh every"),
         numericInput("refresh_interval", NULL, 
                      value = 5, min = 1, max = 60, width = "70px"),
-        span(class = "inline-label", "seconds")
+        span("seconds"),
+        textOutput("busy_indicator", inline = TRUE)
+      ),
+      div(class = "refresh-info", style = "margin-top: 4px;",
+        span(class = "refresh-label", "Last Refresh:"),
+        datetimeOutput("last_update", inline = TRUE)
       ),
       hr(),
       div(style = "margin-bottom: 10px;",
@@ -155,6 +182,7 @@ ui <- page_fluid(
     ),
     tabsetPanel(
       id = "main_tabs",
+      selected = "Pipeline Status",
       tabPanel("Pipeline Status",
                div(class = "pipeline-status-container",
                    # Accordion structure built dynamically with proper Shiny UI elements

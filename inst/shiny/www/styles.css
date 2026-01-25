@@ -1202,6 +1202,40 @@ hr {
   box-sizing: border-box;
 }
 
+/* Refresh every inline controls - override Shiny form-group styling */
+.refresh-controls-inline {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-top: 8px !important;
+}
+
+.refresh-controls-inline .form-group {
+  margin-bottom: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+.refresh-controls-inline .checkbox {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  display: inline-flex !important;
+}
+
+/* Make checkbox label visible but with empty content */
+.refresh-controls-inline input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0 4px 0 0 !important;
+  display: inline-block !important;
+}
+
+.refresh-controls-inline input[type="number"] {
+  display: inline-block !important;
+  margin-bottom: 0 !important;
+  width: 70px !important;
+}
+
 .bslib-sidebar-layout hr
 {
   border: none;

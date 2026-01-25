@@ -1,0 +1,54 @@
+┌───────────────────────────────────────────────┐
+│                                               │
+│             invalidateLater(5000)             │
+│           observe() [auto-refresh]            │
+│         [isolate] input$auto_refresh          │
+│          [isolate] rv$query_running           │
+│        refresh_trigger(n+1) â WRITES        │
+│                                               │
+└───────────────────────┬───────────────────────┘
+                        │                        
+                        │                        
+                        │                        
+                        │                        
+                        ▼                        
+┌───────────────────────────────────────────────┐
+│                                               │
+│       refresh_trigger() â reactiveVal       │
+│ bindEvent(refresh_trigger(), ignoreNULL=TRUE) │
+│                                               │
+└───────────────────────┬───────────────────────┘
+                        │                        
+                        │                        
+                        │                        
+                        │                        
+                        ▼                        
+┌───────────────────────────────────────────────┐
+│                                               │
+│        task_data() â reactive({...})        │
+│         DEPENDS ON: refresh_trigger()         │
+│                   MODIFIES:                   │
+│        rv$query_running â TRUE (start)      │
+│     rv$query_running â FALSE (end) â ï¸   │
+│        rv$last_query_time â Sys.time()      │
+│                                               │
+└───────────────────────┬───────────────────────┘
+                        │                        
+                        │                        
+                        │                        
+                        │                        
+                        ▼                        
+┌───────────────────────────────────────────────┐
+│                                               │
+│    observe() [main observer - UI updates]     │
+│                  DEPENDS ON:                  │
+│              task_data() â READ             │
+│            rv$force_refresh â READ          │
+│              CHECKS [isolated]:               │
+│            [isolate] rv$last_update           │
+│            [isolate] input$main_tabs          │
+│                   MODIFIES:                   │
+│      rv$last_update â Sys.time() â ï¸     │
+│         task_reactives[[key]] â {...}       │
+│                                               │
+└───────────────────────────────────────────────┘

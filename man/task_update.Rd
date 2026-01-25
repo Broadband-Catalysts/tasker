@@ -5,7 +5,7 @@
 \title{Update task execution status}
 \usage{
 task_update(
-  status,
+  status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED"),
   current_subtask = NULL,
   overall_percent = NULL,
   message = NULL,
@@ -17,7 +17,8 @@ task_update(
 )
 }
 \arguments{
-\item{status}{Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED}
+\item{status}{Status: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED. Partial
+matching is supported (e.g., "COMPLETE" will match "COMPLETED").}
 
 \item{current_subtask}{Current subtask number (optional)}
 
@@ -49,6 +50,9 @@ task_update(status = "RUNNING", overall_percent = 50, run_id = run_id)
 # With context (run_id optional)
 task_start("STAGE", "Task")
 task_update(status = "RUNNING", overall_percent = 50)
+
+# Partial matching works
+task_update(status = "COMPLETE", overall_percent = 100)  # Matches "COMPLETED"
 }
 }
 \seealso{
