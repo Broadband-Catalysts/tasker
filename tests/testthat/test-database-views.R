@@ -55,18 +55,18 @@ test_that("current_task_status_with_metrics view handles tasks without metrics",
   # Task without metrics: metrics columns should be NULL
   task_no_metrics <- result[result$run_id == run_id_no_metrics, ]
   expect_equal(task_no_metrics$task_name, "Task Without Metrics")
-  expect_true(is.na(task_no_metrics$cpu_percent))
-  expect_true(is.na(task_no_metrics$memory_mb))
-  expect_true(is.na(task_no_metrics$is_alive))
+  expect_true(is.na(task_no_metrics$metrics_cpu_percent))
+  expect_true(is.na(task_no_metrics$metrics_memory_mb))
+  expect_true(is.na(task_no_metrics$metrics_is_alive))
   expect_true(is.na(task_no_metrics$metrics_age_seconds))
   
   # Task with metrics: metrics columns should have values
   task_with_metrics <- result[result$run_id == run_id_with_metrics, ]
   expect_equal(task_with_metrics$task_name, "Task With Metrics")
-  expect_equal(task_with_metrics$cpu_percent, 25.5)
-  expect_equal(task_with_metrics$memory_mb, 512.0)
-  expect_equal(task_with_metrics$is_alive, 1)
-  expect_equal(task_with_metrics$child_count, 4)
+  expect_equal(task_with_metrics$metrics_cpu_percent, 25.5)
+  expect_equal(task_with_metrics$metrics_memory_mb, 512.0)
+  expect_equal(task_with_metrics$metrics_is_alive, 1)
+  expect_equal(task_with_metrics$metrics_child_count, 4)
   expect_false(is.na(task_with_metrics$metrics_age_seconds))
   
   DBI::dbDisconnect(con)
@@ -109,9 +109,9 @@ test_that("current_task_status_with_metrics view returns latest metrics only", {
   expect_equal(result$run_id, run_id)
   
   # Verify it's the LATEST metrics (cpu=30, mem=512, child_count=4)
-  expect_equal(result$cpu_percent, 30.0)
-  expect_equal(result$memory_mb, 512.0)
-  expect_equal(result$child_count, 4)
+  expect_equal(result$metrics_cpu_percent, 30.0)
+  expect_equal(result$metrics_memory_mb, 512.0)
+  expect_equal(result$metrics_child_count, 4)
   
   # Age should be around 30 seconds
   expect_true(result$metrics_age_seconds >= 25 && result$metrics_age_seconds <= 35)
@@ -203,10 +203,10 @@ test_that("current_task_status_with_metrics view includes all expected columns",
   expected_columns <- c(
     # From current_task_status (task_runs + tasks + stages)
     "run_id", "task_name", "stage_name", "status", "start_time", "process_id", "hostname",
-    # From process_metrics
-    "cpu_percent", "memory_mb", "child_count", 
-    "child_total_cpu_percent", "child_total_memory_mb",
-    "collection_error", "metrics_error_message", "is_alive",
+    # From process_metrics (prefixed with metrics_)
+    "metrics_cpu_percent", "metrics_memory_mb", "metrics_child_count", 
+    "metrics_child_total_cpu_percent", "metrics_child_total_memory_mb",
+    "metrics_collection_error", "metrics_error_message", "metrics_is_alive",
     # Calculated
     "metrics_age_seconds"
   )

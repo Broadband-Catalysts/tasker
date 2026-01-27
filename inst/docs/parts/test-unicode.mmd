@@ -1,0 +1,9 @@
+flowchart TD
+    tree["
+    TIMER CYCLE<br/>
+    ├─> invalidateLater(5000)<br/>
+    ├─> observe() [auto-refresh]<br/>
+    └─> refresh_trigger(n+1)
+    "]
+    
+    tree --> next["Next Step"]

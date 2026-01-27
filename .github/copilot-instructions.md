@@ -68,6 +68,8 @@ Dr. Greg, we need to...
 
 **See #shiny-ui-patterns skill for complete guidance.**
 
+**CRITICAL REFERENCE:** Reactive dependency diagram at `inst/docs/reactive-dependencies.md` - **MUST UPDATE** when modifying reactive code in `inst/shiny/server.R`.
+
 ### CRITICAL Anti-Pattern: Never Use renderUI() for Content Updates
 
 **Causes:** UI flickering, lost scroll position, memory overhead, poor performance.

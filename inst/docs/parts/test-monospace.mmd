@@ -1,0 +1,9 @@
+flowchart TD
+    code["`
+    TIMER CYCLE
+      ├─> invalidateLater(5000)
+      ├─> observe() [auto-refresh]
+      └─> refresh_trigger(n+1)
+    `"]
+    
+    code --> next["Next Step"]

@@ -1,26 +1,22 @@
-#' Update subtask progress by name or filename
+#' Find and update task status by name or filename
 #'
-#' Updates the progress of a subtask in the most recent task run. Supports
-#' multiple ways to specify the task: by filename alone, by stage and task
-#' number, or by stage and task name.
+#' Updates the status of the most recent task run by searching for the task.
+#' Supports multiple ways to specify the task: by filename alone, by stage and
+#' task number, or by stage and task name.
 #'
 #' @param stage Stage name or number (e.g., "DAILY_FCC_SUMMARY", 8). Optional
 #'   if `filename` is provided.
 #' @param task Task name or number (e.g., "Provider Tables Block20", 3). Optional
 #'   if `filename` is provided.
-#' @param subtask Subtask number (1, 2, 3...) or subtask name. Required.
-#' @param status Optional: Status to set (RUNNING, COMPLETED, FAILED, SKIPPED)
-#' @param percent Optional: Percent complete 0-100
-#' @param items_total Optional: Total items for this subtask
-#' @param items_completed Optional: Items completed so far
-#' @param message Optional: Progress message
-#' @param error_message Optional: Error message if failed
+#' @param status Status to set: RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED
+#' @param message Optional status message
+#' @param error_message Optional error message (typically used with FAILED status)
 #' @param quiet Suppress console messages (default: FALSE)
 #' @param conn Database connection (optional)
 #' @param filename Optional: Script filename to identify task. If provided,
 #'   `stage` and `task` are ignored. Supports partial matching.
 #'
-#' @return TRUE on success, FALSE if task/subtask not found
+#' @return TRUE on success, FALSE if task not found
 #'
 #' @details
 #' Multiple ways to specify the task:
@@ -34,59 +30,50 @@
 #' Filename matching is case-insensitive and supports partial matching.
 #' If multiple tasks match by filename, an error is raised.
 #'
-#' @seealso [subtask_update()] to update subtask with explicit run_id,
-#'   [update_task()] for task updates
+#' @seealso [task_update()] to update task with explicit run_id,
+#'   [find_and_update_subtask()] for subtask updates
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
-#' # By filename alone (no stage needed)
-#' update_subtask(
+#' # By filename alone (filename is unique)
+#' find_and_update_task(
 #'   filename = "06_DAILY_FCC_SUMMARY_03_Provider_Tables_Block20.R",
-#'   subtask = 2,
-#'   status = "COMPLETED",
-#'   items_completed = 100
+#'   status = "COMPLETED"
 #' )
 #'
 #' # By stage number and task number
-#' update_subtask(8, 3, subtask = 1, status = "COMPLETED")
+#' find_and_update_task(8, 3, "COMPLETED")
 #'
 #' # By stage name and task name
-#' update_subtask(
+#' find_and_update_task(
+#'   stage = "DAILY_FCC_SUMMARY",
+#'   task = "Provider Tables Block20",
+#'   status = "COMPLETED",
+#'   message = "Manually corrected"
+#' )
+#'
+#' # Mark a task as failed
+#' find_and_update_task(
 #'   stage = "STATIC",
-#'   task = "TIGER_Census_Blocks",
-#'   subtask = 1,
-#'   items_total = 3235,
-#'   percent = 50
+#'   task = "TIGER_State_Boundaries",
+#'   status = "FAILED",
+#'   error_message = "Data validation failed"
 #' )
 #' }
-update_subtask <- function(stage,
-                           task,
-                           subtask,
-                           status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED"),
-                           percent = NULL,
-                           items_total = NULL,
-                           items_completed = NULL,
-                           message = NULL,
-                           error_message = NULL,
-                           quiet = FALSE,
-                           conn = NULL,
-                           filename) {
+find_and_update_task <- function(stage,
+                       task,
+                       status = c("RUNNING", "COMPLETED", "FAILED", "SKIPPED", "CANCELLED"),
+                       message = NULL,
+                       error_message = NULL,
+                       quiet = FALSE,
+                       conn = NULL,
+                       filename) {
   ensure_configured()
   
   # Validate status parameter
   status <- match.arg(status)
-
-  # If subtask is a character, we need to look it up by name
-  subtask_number <- NULL
-  if (is.character(subtask)) {
-    # Will look up by name later
-    subtask_name <- subtask
-  } else {
-    subtask_number <- as.integer(subtask)
-    subtask_name <- NULL
-  }
 
   # Get connection from context if available, otherwise create one
   close_on_exit <- FALSE
@@ -110,7 +97,6 @@ update_subtask <- function(stage,
   stages_table <- get_table_name("stages", conn)
   tasks_table <- get_table_name("tasks", conn)
   task_runs_table <- get_table_name("task_runs", conn)
-  subtask_progress_table <- get_table_name("subtask_progress", conn)
 
   # Priority 1: If filename is provided, use it to find the task (no stage needed)
   task_id <- NULL
@@ -271,7 +257,7 @@ update_subtask <- function(stage,
     result <- DBI::dbGetQuery(
       conn,
       glue::glue_sql(
-        "SELECT tr.run_id
+        "SELECT tr.run_id, t.task_order
          FROM {task_runs_table} tr
          JOIN {tasks_table} t ON tr.task_id = t.task_id
          JOIN {stages_table} s ON t.stage_id = s.stage_id
@@ -289,115 +275,19 @@ update_subtask <- function(stage,
 
     run_id <- result$run_id[1]
 
-    # If subtask name provided, look it up
-    if (!is.null(subtask_name)) {
-      subtask_result <- DBI::dbGetQuery(
-        conn,
-        glue::glue_sql(
-          "SELECT subtask_number
-           FROM {subtask_progress_table}
-           WHERE run_id = {run_id}
-           AND subtask_name = {subtask_name}",
-          .con = conn
-        )
-      )
-
-      if (nrow(subtask_result) == 0) {
-        # Subtask name not found - show available subtasks
-        available_subtasks <- DBI::dbGetQuery(
-          conn,
-          glue::glue_sql(
-            "SELECT subtask_number, subtask_name
-             FROM {subtask_progress_table}
-             WHERE run_id = {run_id}
-             ORDER BY subtask_number",
-            .con = conn
-          )
-        )
-        
-        if (nrow(available_subtasks) == 0) {
-          stop("No subtasks found for task '", task, "'", call. = FALSE)
-        }
-        
-        subtask_list <- paste(sprintf("%d: %s", available_subtasks$subtask_number,
-                                     available_subtasks$subtask_name),
-                             collapse = "\n  ")
-        stop("Subtask '", subtask_name, "' not found.\n",
-             "Available subtasks:\n  ",
-             subtask_list,
-             call. = FALSE)
-      }
-      subtask_number <- subtask_result$subtask_number[1]
-    } else {
-      # Validate subtask number exists
-      check_subtask <- DBI::dbGetQuery(
-        conn,
-        glue::glue_sql(
-          "SELECT subtask_number, subtask_name
-           FROM {subtask_progress_table}
-           WHERE run_id = {run_id}
-           AND subtask_number = {subtask_number}",
-          .con = conn
-        )
-      )
-      
-      if (nrow(check_subtask) == 0) {
-        # Subtask number not found - show available subtasks
-        available_subtasks <- DBI::dbGetQuery(
-          conn,
-          glue::glue_sql(
-            "SELECT subtask_number, subtask_name
-             FROM {subtask_progress_table}
-             WHERE run_id = {run_id}
-             ORDER BY subtask_number",
-            .con = conn
-          )
-        )
-        
-        if (nrow(available_subtasks) == 0) {
-          stop("No subtasks found for task '", task, "'", call. = FALSE)
-        }
-        
-        subtask_list <- paste(sprintf("%d: %s", available_subtasks$subtask_number,
-                                     available_subtasks$subtask_name),
-                             collapse = "\n  ")
-        stop("Subtask ", subtask_number, " not found.\n",
-             "Available subtasks:\n  ",
-             subtask_list,
-             call. = FALSE)
-      }
-    }
-
-    # Update items_total if provided (this requires direct SQL update)
-    if (!is.null(items_total)) {
-      DBI::dbExecute(
-        conn,
-        glue::glue_sql(
-          "UPDATE {subtask_progress_table}
-           SET items_total = {as.integer(items_total)}
-           WHERE run_id = {run_id}
-           AND subtask_number = {subtask_number}",
-          .con = conn
-        )
-      )
-    }
-
-    # Update the subtask progress using subtask_update
-    subtask_update(
-      status = if (is.null(status)) "RUNNING" else status,
-      percent = percent,
-      items_complete = items_completed,
+    # Update the task status
+    task_update(
+      run_id = run_id,
+      status = status,
       message = message,
       error_message = error_message,
       quiet = quiet,
-      conn = conn,
-      run_id = run_id,
-      subtask_number = subtask_number
+      conn = conn
     )
 
     TRUE
 
   }, error = function(e) {
-    stop("Failed to update subtask progress: ", conditionMessage(e), call. = FALSE)
+    stop("Failed to update task status: ", conditionMessage(e), call. = FALSE)
   })
 }

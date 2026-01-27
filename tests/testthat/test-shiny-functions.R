@@ -217,6 +217,8 @@ test_that("task functions handle errors gracefully", {
       stop(e)
     }
   })
+})
+
 test_that("lookup_task_by_script finds tasks by filename", {
   skip_on_cran()
   setup_test_db()
