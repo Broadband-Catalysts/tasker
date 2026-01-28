@@ -19,6 +19,8 @@
 #' @param conn Database connection (optional)
 #' @param filename Optional: Script filename to identify task. If provided,
 #'   `stage` and `task` are ignored. Supports partial matching.
+#' @param force Logical: If TRUE (default), create a new task run if none exists.
+#'   If FALSE, fail with an error when no run is found.
 #'
 #' @return TRUE on success, FALSE if task/subtask not found
 #'
@@ -72,7 +74,8 @@ find_and_update_subtask <- function(stage,
                            error_message = NULL,
                            quiet = FALSE,
                            conn = NULL,
-                           filename) {
+                           filename,
+                           force = FALSE) {
   ensure_configured()
   
   # Validate status parameter
@@ -117,11 +120,14 @@ find_and_update_subtask <- function(stage,
   stage_id <- NULL
   
   if (!missing(filename)) {
+    # Strip path from filename if present
+    filename <- basename(as.character(filename))
+    
     filename_matches <- DBI::dbGetQuery(
       conn,
       glue::glue_sql(
         "SELECT t.task_id, t.stage_id, t.task_name, t.script_filename FROM {tasks_table} t
-         WHERE UPPER(t.script_filename) LIKE UPPER({paste0('%', as.character(filename), '%')})
+         WHERE UPPER(t.script_filename) LIKE UPPER({paste0('%', filename, '%')})
          ORDER BY t.task_id",
         .con = conn
       )
@@ -284,10 +290,48 @@ find_and_update_subtask <- function(stage,
     )
 
     if (nrow(result) == 0) {
-      stop("No task runs found for this stage/task combination", call. = FALSE)
+      if (!force) {
+        stop("No task runs found for this stage/task combination and force=FALSE. Set force=TRUE to create a new run.", call. = FALSE)
+      }
+      
+      # Get stage and task names for task_start
+      task_info <- DBI::dbGetQuery(
+        conn,
+        glue::glue_sql(
+          "SELECT s.stage_name, t.task_name
+           FROM {tasks_table} t
+           JOIN {stages_table} s ON t.stage_id = s.stage_id
+           WHERE t.task_id = {task_id}",
+          .con = conn
+        )
+      )
+      
+      if (!quiet) {
+        warning(sprintf("No existing run found for %s / %s. Creating new run with subtask.",
+                       task_info$stage_name, task_info$task_name), call. = FALSE)
+      }
+      
+      # Create a new run with a subtask
+      run_id <- task_start(
+        stage = task_info$stage_name,
+        task = task_info$task_name,
+        quiet = quiet,
+        conn = conn,
+        .active = FALSE
+      )
+      
+      # Start the subtask
+      subtask_start(
+        run_id = run_id,
+        subtask_number = if (!is.null(subtask_number)) subtask_number else 1,
+        subtask_name = if (!is.null(subtask_name)) subtask_name else paste("Subtask", subtask_number %||% 1),
+        items_total = items_total,
+        quiet = quiet,
+        conn = conn
+      )
+    } else {
+      run_id <- result$run_id[1]
     }
-
-    run_id <- result$run_id[1]
 
     # If subtask name provided, look it up
     if (!is.null(subtask_name)) {

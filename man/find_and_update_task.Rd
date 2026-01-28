@@ -12,7 +12,8 @@ find_and_update_task(
   error_message = NULL,
   quiet = FALSE,
   conn = NULL,
-  filename
+  filename,
+  force = TRUE
 )
 }
 \arguments{
@@ -34,6 +35,9 @@ if \code{filename} is provided.}
 
 \item{filename}{Optional: Script filename to identify task. If provided,
 \code{stage} and \code{task} are ignored. Supports partial matching.}
+
+\item{force}{Logical: If TRUE (default), create a new task run if none exists.
+If FALSE, fail with an error when no run is found.}
 }
 \value{
 TRUE on success, FALSE if task not found
