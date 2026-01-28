@@ -716,6 +716,216 @@ test_that("update_subtask works with stage_order + task_name + subtask_name", {
   task_complete(run_id)
 })
 
+# ============================================================================
+# force parameter tests
+# ============================================================================
+
+test_that("update_task with force=FALSE fails when no run exists", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  register_task(
+    stage = "TEST_STAGE",
+    name = "No Run Task",
+    type = "R",
+    script_filename = "no_run.R"
+  )
+  
+  # Don't start a task - no run exists
+  # force=FALSE should error
+  expect_error(
+    find_and_update_task(
+      filename = "no_run.R",
+      status = "COMPLETED",
+      force = FALSE
+    ),
+    "No task runs found.*force=FALSE"
+  )
+})
+
+test_that("update_task with force=TRUE creates new run when none exists", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  register_task(
+    stage = "TEST_STAGE",
+    name = "Force Create Task",
+    type = "R",
+    script_filename = "force_create.R"
+  )
+  
+  # Don't start a task - no run exists
+  # force=TRUE should create a new run
+  expect_warning(
+    result <- find_and_update_task(
+      filename = "force_create.R",
+      status = "COMPLETED",
+      force = TRUE
+    ),
+    "No existing run found.*Creating new run"
+  )
+  
+  expect_true(result)
+  
+  # Verify a run was created
+  runs <- DBI::dbGetQuery(
+    con,
+    "SELECT COUNT(*) as count FROM task_runs tr
+     JOIN tasks t ON tr.task_id = t.task_id
+     WHERE t.task_name = 'Force Create Task'"
+  )
+  expect_equal(as.integer(runs$count), 1)
+})
+
+test_that("update_subtask with force=FALSE fails when no run exists", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  register_task(
+    stage = "TEST_STAGE",
+    name = "No Run Subtask Task",
+    type = "R",
+    script_filename = "no_run_subtask.R"
+  )
+  
+  # Don't start a task - no run exists
+  # force=FALSE should error
+  expect_error(
+    find_and_update_subtask(
+      filename = "no_run_subtask.R",
+      subtask = 1,
+      status = "COMPLETED",
+      force = FALSE
+    ),
+    "No task runs found.*force=FALSE"
+  )
+})
+
+test_that("update_subtask with force=TRUE creates new run and subtask when none exists", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  register_task(
+    stage = "TEST_STAGE",
+    name = "Force Create Subtask Task",
+    type = "R",
+    script_filename = "force_create_subtask.R"
+  )
+  
+  # Don't start a task - no run exists
+  # force=TRUE should create a new run and subtask
+  expect_warning(
+    result <- find_and_update_subtask(
+      filename = "force_create_subtask.R",
+      subtask = 1,
+      status = "COMPLETED",
+      items_total = 100,
+      items_completed = 100,
+      force = TRUE
+    ),
+    "No existing run found.*Creating new run"
+  )
+  
+  expect_true(result)
+  
+  # Verify a run and subtask were created
+  runs <- DBI::dbGetQuery(
+    con,
+    "SELECT COUNT(*) as count FROM task_runs tr
+     JOIN tasks t ON tr.task_id = t.task_id
+     WHERE t.task_name = 'Force Create Subtask Task'"
+  )
+  expect_equal(as.integer(runs$count), 1)
+  
+  # Check subtask was created
+  run_id <- DBI::dbGetQuery(
+    con,
+    "SELECT tr.run_id FROM task_runs tr
+     JOIN tasks t ON tr.task_id = t.task_id
+     WHERE t.task_name = 'Force Create Subtask Task'"
+  )$run_id[1]
+  
+  subtasks <- DBI::dbGetQuery(
+    con,
+    "SELECT COUNT(*) as count FROM subtask_progress
+     WHERE run_id = ?",
+    params = list(run_id)
+  )
+  expect_equal(as.integer(subtasks$count), 1)
+})
+
+# ============================================================================
+# filename path stripping tests
+# ============================================================================
+
+test_that("update_task strips path from filename parameter", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  register_task(
+    stage = "TEST_STAGE",
+    name = "Path Strip Test",
+    type = "R",
+    script_filename = "test_script.R"
+  )
+  
+  run_id <- task_start("TEST_STAGE", "Path Strip Test")
+  task_complete(run_id)
+  
+  # Pass full path - should strip to basename and match
+  result <- find_and_update_task(
+    filename = "/home/user/scripts/test_script.R",
+    status = "COMPLETED"
+  )
+  
+  expect_true(result)
+})
+
+test_that("update_subtask strips path from filename parameter", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  register_task(
+    stage = "TEST_STAGE",
+    name = "Subtask Path Strip Test",
+    type = "R",
+    script_filename = "subtask_script.R"
+  )
+  
+  run_id <- task_start("TEST_STAGE", "Subtask Path Strip Test")
+  subtask_start("Processing", items_total = 50, run_id = run_id, subtask_number = 1)
+  
+  # Pass full path - should strip to basename and match
+  result <- find_and_update_subtask(
+    filename = "/path/to/scripts/subtask_script.R",
+    subtask = 1,
+    status = "COMPLETED",
+    items_completed = 50
+  )
+  
+  expect_true(result)
+  
+  task_complete(run_id)
+})
+
 test_that("update_subtask works with stage_name + task_order + subtask_number", {
   skip_on_cran()
   skip_if_not_installed("RSQLite")
