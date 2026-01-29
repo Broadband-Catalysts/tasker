@@ -285,3 +285,82 @@ test_that("register_task updates existing tasks preserving defaults", {
   expect_equal(task_data$script_filename, "original.R")
   expect_equal(task_data$log_filename, "original.Rout")
 })
+
+test_that("register_task auto-detects type from script filename extension", {
+
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  # Test .R extension
+  expect_warning(
+    task_id_r <- register_task(
+      stage = "TEST",
+      name = "R Type Detect",
+      stage_order = 1,
+      script_filename = "script.R",
+      conn = con
+    ),
+    "type.*not specified.*detected from script extension.*R"
+  )
+  
+  tasks_table <- tasker:::get_table_name("tasks", con)
+  task_r <- DBI::dbGetQuery(
+    con,
+    glue::glue_sql("SELECT task_type FROM {tasks_table} WHERE task_id = {task_id_r}", .con = con)
+  )
+  expect_equal(task_r$task_type, "R")
+  
+  # Test .py extension
+  expect_warning(
+    task_id_py <- register_task(
+      stage = "TEST",
+      name = "Python Type Detect",
+      stage_order = 1,
+      script_filename = "script.py",
+      conn = con
+    ),
+    "type.*not specified.*detected from script extension.*python"
+  )
+  
+  task_py <- DBI::dbGetQuery(
+    con,
+    glue::glue_sql("SELECT task_type FROM {tasks_table} WHERE task_id = {task_id_py}", .con = con)
+  )
+  expect_equal(task_py$task_type, "python")
+  
+  # Test .sh extension
+  expect_warning(
+    task_id_sh <- register_task(
+      stage = "TEST",
+      name = "Shell Type Detect",
+      stage_order = 1,
+      script_filename = "install.sh",
+      conn = con
+    ),
+    "type.*not specified.*detected from script extension.*sh"
+  )
+  
+  task_sh <- DBI::dbGetQuery(
+    con,
+    glue::glue_sql("SELECT task_type FROM {tasks_table} WHERE task_id = {task_id_sh}", .con = con)
+  )
+  expect_equal(task_sh$task_type, "sh")
+})
+
+test_that("register_task requires explicit type for unknown extensions", {
+
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  # Should error when type cannot be detected
+  expect_error(
+    register_task(
+      stage = "TEST",
+      name = "Unknown Type",
+      stage_order = 1,
+      script_filename = "script.xyz",
+      conn = con
+    ),
+    "type.*must be.*Could not auto-detect"
+  )
+})

@@ -7,7 +7,7 @@
 register_task(
   stage,
   name,
-  type,
+  type = NULL,
   description = NULL,
   script_path = NULL,
   script_filename = NULL,
@@ -23,7 +23,9 @@ register_task(
 
 \item{name}{Task name}
 
-\item{type}{Task type (e.g., "R", "python", "sh")}
+\item{type}{Task type (e.g., "R", "python", "sh"). If NULL and script_filename
+is available, auto-detects from file extension (.R → "R", .py → "python",
+.sh → "sh") with warning}
 
 \item{description}{Task description (optional)}
 

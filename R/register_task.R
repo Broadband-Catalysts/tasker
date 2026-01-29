@@ -5,7 +5,9 @@
 #'
 #' @param stage Stage name (e.g., "PREREQ", "STATIC", "DAILY")
 #' @param name Task name
-#' @param type Task type (e.g., "R", "python", "sh")
+#' @param type Task type (e.g., "R", "python", "sh"). If NULL and script_filename
+#'   is available, auto-detects from file extension (.R → "R", .py → "python", 
+#'   .sh → "sh") with warning
 #' @param description Task description (optional)
 #' @param script_path Path to script directory. If NULL and executing from a
 #'   script, defaults to the directory of the currently executing script (with warning)
@@ -39,7 +41,7 @@
 #' }
 register_task <- function(stage,
                          name,
-                         type,
+                         type            = NULL,
                          description     = NULL,
                          script_path     = NULL,
                          script_filename = NULL,
@@ -59,9 +61,7 @@ register_task <- function(stage,
     stop("'name' must be a non-empty character string", call. = FALSE)
   }
   
-  if (missing(type) || !is.character(type) || length(type) != 1 || nchar(trimws(type)) == 0) {
-    stop("'type' must be a non-empty character string (e.g., 'R', 'python', 'sh')", call. = FALSE)
-  }
+  # Type validation will happen after potential auto-detection below
   
   # Validate stage_order is required
   if (missing(stage_order) || is.null(stage_order) || is.na(stage_order)) {
@@ -126,6 +126,31 @@ register_task <- function(stage,
     script_filename <- basename(script_path)
     warning("'script_filename' not specified, extracting from script_path: ", script_filename, call. = FALSE)
     defaults_applied <- TRUE
+  }
+  
+  # Auto-detect type from script_filename extension if not provided
+  if ((missing(type) || is.null(type)) && !is.null(script_filename)) {
+    if (grepl("\\.R$", script_filename, ignore.case = TRUE)) {
+      type <- "R"
+    } else if (grepl("\\.py$", script_filename, ignore.case = TRUE)) {
+      type <- "python"
+    } else if (grepl("\\.sh$", script_filename, ignore.case = TRUE)) {
+      type <- "sh"
+    } else {
+      # Unknown extension - require explicit type
+      type <- NULL
+    }
+    
+    if (!is.null(type)) {
+      warning("'type' not specified, detected from script extension: ", type, call. = FALSE)
+      defaults_applied <- TRUE
+    }
+  }
+  
+  # Validate type (now that it may have been auto-detected)
+  if (is.null(type) || !is.character(type) || length(type) != 1 || nchar(trimws(type)) == 0) {
+    stop("'type' must be a non-empty character string (e.g., 'R', 'python', 'sh'). ",
+         "Could not auto-detect from script filename.", call. = FALSE)
   }
   
   # Apply defaults for log_path (same as script_path)
