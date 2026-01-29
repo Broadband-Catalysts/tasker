@@ -1,6 +1,6 @@
 #' Register multiple tasks at once
 #'
-#' @param tasks_df Data frame with columns: stage, name, type, and optional columns
+#' @param tasks_df Data frame with columns: stage, name, type, stage_order, and optional columns
 #' @param conn Database connection (optional)
 #' @return Vector of task_ids (invisibly)
 #' @export
@@ -10,7 +10,8 @@
 #' tasks <- data.frame(
 #'   stage = c("PREREQ", "PREREQ"),
 #'   name = c("Install System Dependencies", "Install R"),
-#'   type = c("sh", "sh")
+#'   type = c("sh", "sh"),
+#'   stage_order = c(1, 1)
 #' )
 #' register_tasks(tasks)
 #' }
@@ -23,7 +24,7 @@ register_tasks <- function(tasks_df, conn = NULL) {
     close_on_exit <- TRUE
   }
   
-  required <- c("stage", "name", "type")
+  required <- c("stage", "name", "type", "stage_order")
   missing <- setdiff(required, names(tasks_df))
   if (length(missing) > 0) {
     stop("Missing required columns: ", paste(missing, collapse = ", "))
@@ -44,7 +45,7 @@ register_tasks <- function(tasks_df, conn = NULL) {
         script_filename = if ("script_filename" %in% names(row)) row$script_filename else NULL,
         log_path = if ("log_path" %in% names(row)) row$log_path else NULL,
         log_filename = if ("log_filename" %in% names(row)) row$log_filename else NULL,
-        stage_order = if ("stage_order" %in% names(row)) row$stage_order else NULL,
+        stage_order = row$stage_order,
         task_order = if ("task_order" %in% names(row)) row$task_order else NULL,
         conn = conn
       )

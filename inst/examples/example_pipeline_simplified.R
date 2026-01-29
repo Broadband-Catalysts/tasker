@@ -21,11 +21,11 @@ if (!DBI::dbExistsTable(get_db_connection(), DBI::SQL("tasker.stages"))) {
 # Register pipeline tasks
 cat("Registering tasks...\n")
 register_task(stage = "EXTRACT", name = "Download Data", type = "R",
-             description = "Download data from API")
+             stage_order = 1, description = "Download data from API")
 register_task(stage = "TRANSFORM", name = "Clean Data", type = "R",
-             description = "Clean and validate data")
+             stage_order = 2, description = "Clean and validate data")
 register_task(stage = "LOAD", name = "Load to Database", type = "R",
-             description = "Load processed data to database")
+             stage_order = 3, description = "Load processed data to database")
 
 
 # ============================================================================

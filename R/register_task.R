@@ -8,7 +8,7 @@
 #' @param script_filename Script filename (optional)
 #' @param log_path Path to log directory (optional)
 #' @param log_filename Log filename (optional)
-#' @param stage_order Stage ordering (optional)
+#' @param stage_order Stage ordering (required)
 #' @param task_order Task ordering within stage (optional)
 #' @param conn Database connection (optional)
 #' @return task_id (invisibly)
@@ -16,8 +16,10 @@
 #'
 #' @examples
 #' \dontrun{
-#' register_task(stage = "PREREQ", name = "Install System Dependencies", type = "sh")
-#' register_task(stage = "PREREQ", name = "Install R", type = "sh")
+#' register_task(stage = "PREREQ", name = "Install System Dependencies", 
+#'               type = "sh", stage_order = 1)
+#' register_task(stage = "PREREQ", name = "Install R", 
+#'               type = "sh", stage_order = 1)
 #' }
 register_task <- function(stage,
                          name,
@@ -27,7 +29,7 @@ register_task <- function(stage,
                          script_filename = NULL,
                          log_path        = NULL,
                          log_filename    = NULL,
-                         stage_order     = NULL,
+                         stage_order,
                          task_order      = NULL,
                          conn            = NULL) {
   ensure_configured()
@@ -45,12 +47,15 @@ register_task <- function(stage,
     stop("'type' must be a non-empty character string (e.g., 'R', 'python', 'sh')", call. = FALSE)
   }
   
-  if (!is.null(stage_order)) {
-    if (!is.numeric(stage_order) || length(stage_order) != 1) {
-      stop("'stage_order' must be a single number if provided", call. = FALSE)
-    }
-    stage_order <- as.integer(stage_order)
+  # Validate stage_order is required
+  if (missing(stage_order) || is.null(stage_order) || is.na(stage_order)) {
+    stop("'stage_order' is required and must be a non-NA number", call. = FALSE)
   }
+  
+  if (!is.numeric(stage_order) || length(stage_order) != 1) {
+    stop("'stage_order' must be a single number", call. = FALSE)
+  }
+  stage_order <- as.integer(stage_order)
   
   if (!is.null(task_order)) {
     if (!is.numeric(task_order) || length(task_order) != 1) {
@@ -70,15 +75,15 @@ register_task <- function(stage,
   
   tryCatch({
     # Handle NULL values in SQL - use SQL NULL literal for NULL/NA values
-    stage_order_sql <- if (is.null(stage_order) || is.na(stage_order)) DBI::SQL("NULL") else stage_order
     description_sql <- if (is.null(description) || is.na(description)) DBI::SQL("NULL") else description
     
     stage_id <- DBI::dbGetQuery(
       conn,
       glue::glue_sql("INSERT INTO {stages_table} (stage_name, stage_order, description) 
-               VALUES ({stage}, {stage_order_sql}, {description_sql}) 
+               VALUES ({stage}, {stage_order}, {description_sql}) 
                ON CONFLICT (stage_name) 
-               DO UPDATE SET stage_order = COALESCE(EXCLUDED.stage_order, {stages_table}.stage_order)
+               DO UPDATE SET stage_order = {stage_order},
+                             description = COALESCE(EXCLUDED.description, {stages_table}.description)
                RETURNING stage_id", .con = conn)
     )$stage_id
     

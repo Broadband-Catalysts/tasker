@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS tasker.stages (
     stage_id SERIAL PRIMARY KEY,
     stage_name VARCHAR(100) NOT NULL UNIQUE,
-    stage_order INTEGER,
+    stage_order INTEGER NOT NULL,
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -924,10 +924,12 @@ server <- function(input, output, session) {
   # Initialize structure
   observe({
     structure <- tryCatch({
-      stages <- tasker::get_stages()
-      if (!is.null(stages) && nrow(stages) > 0) {
-        stages <- stages[stages$stage_name != "TEST" & stages$stage_order != 999, ]
-      }
+      stages <- tasker::get_stages() |>
+      filter(
+        stage_name != "TEST",
+        !is.na(stage_order), 
+        stage_order != 999
+      )
       
       registered_tasks <- tasker::get_registered_tasks()
       
@@ -950,7 +952,7 @@ server <- function(input, output, session) {
     structure <- tryCatch({
       stages <- tasker::get_stages()
       if (!is.null(stages) && nrow(stages) > 0) {
-        stages <- stages[stages$stage_name != "TEST" & stages$stage_order != 999, ]
+        stages <- stages[stages$stage_name != "TEST" & !is.na(stages$stage_order) & stages$stage_order != 999, ]
       }
       
       registered_tasks <- tasker::get_registered_tasks()
@@ -1024,6 +1026,12 @@ server <- function(input, output, session) {
     if (!is.null(stages) && nrow(stages) > 0) {
       for (i in seq_len(nrow(stages))) {
         stage_name <- stages[i, ]$stage_name
+        
+        # Skip stages with invalid stage_name
+        if (!isTruthy(stage_name)) {
+          next
+        }
+        
         if (is.null(stage_reactives[[stage_name]])) {
           stage_reactives[[stage_name]] <- list(
             completed = 0,
@@ -1239,6 +1247,12 @@ server <- function(input, output, session) {
     # Update each task's reactive ONLY if it changed
     for (i in seq_len(nrow(current_status))) {
       task_status <- current_status[i, ]
+      
+      # Skip if stage_name or task_name is invalid
+      if (!isTruthy(task_status$stage_name) || !isTruthy(task_status$task_name)) {
+        next
+      }
+      
       task_key <- paste(task_status$stage_name, task_status$task_name, sep = "||")
       
       current_val <- task_reactives[[task_key]]
@@ -1377,6 +1391,12 @@ server <- function(input, output, session) {
     lapply(seq_len(nrow(stages)), function(i) {
       stage <- stages[i, ]
       stage_name <- stage$stage_name
+      
+      # Skip stages with invalid stage_name
+      if (!isTruthy(stage_name)) {
+        return(NULL)
+      }
+      
       stage_id <- gsub("[^a-zA-Z0-9]", "_", stage_name)
       
       stage_data <- stage_reactives[[stage_name]]
@@ -1472,12 +1492,23 @@ server <- function(input, output, session) {
     # Update each stage's aggregate stats
     for (i in seq_len(nrow(stages))) {
       stage_name <- stages[i, ]$stage_name
+      
+      # Skip stages with invalid stage_name
+      if (!isTruthy(stage_name)) {
+        next
+      }
+      
       stage_tasks <- tasks[tasks$stage_name == stage_name, ]
       
       if (nrow(stage_tasks) == 0) next
       
+      # Filter out tasks with invalid task_name before creating keys
+      valid_tasks <- stage_tasks[!is.na(stage_tasks$task_name) & nchar(as.character(stage_tasks$task_name)) > 0, ]
+      
+      if (nrow(valid_tasks) == 0) next
+      
       # Get all task data for this stage
-      task_keys <- paste(stage_tasks$stage_name, stage_tasks$task_name, sep = "||")
+      task_keys <- paste(valid_tasks$stage_name, valid_tasks$task_name, sep = "||")
       task_data_list <- lapply(task_keys, function(key) task_reactives[[key]])
       
       total_tasks <- length(task_data_list)
@@ -1525,7 +1556,7 @@ server <- function(input, output, session) {
       stages_data_raw <- tasker::get_stages()
       # Exclude TEST stage
       if (!is.null(stages_data_raw) && nrow(stages_data_raw) > 0) {
-        stages_data_raw[stages_data_raw$stage_name != "TEST" & stages_data_raw$stage_order != 999, ]
+        stages_data_raw[stages_data_raw$stage_name != "TEST" & !is.na(stages_data_raw$stage_order) & stages_data_raw$stage_order != 999, ]
       } else {
         stages_data_raw
       }
@@ -1542,7 +1573,13 @@ server <- function(input, output, session) {
     
     if (!is.null(stages_data) && nrow(stages_data) > 0) {
       stage_values <- stages_data$stage_name
-      names(stage_values) <- paste(stages_data$stage_order, ': ', stages_data$stage_name, sep = '')
+      # Handle NA in stage_order for display
+      stage_labels <- ifelse(
+        is.na(stages_data$stage_order),
+        stages_data$stage_name,
+        paste(stages_data$stage_order, ': ', stages_data$stage_name, sep = '')
+      )
+      names(stage_values) <- stage_labels
 
       # Keep current selection if still valid
       current_selection <- input$stage_filter
@@ -1693,8 +1730,8 @@ server <- function(input, output, session) {
       return(div(class = "alert alert-info", "No tasks registered"))
     }
     
-    # Order stages
-    stages <- stages[order(stages$stage_order), ]
+    # Order stages - put NA stage_order last
+    stages <- stages[order(is.na(stages$stage_order), stages$stage_order, na.last = TRUE), ]
     
     # Build accordion panels
     accordion_panels <- lapply(seq_len(nrow(stages)), function(i) {
@@ -1711,7 +1748,14 @@ server <- function(input, output, session) {
       # Build task rows using proper UI elements
       task_rows <- lapply(seq_len(nrow(stage_tasks)), function(j) {
         task <- stage_tasks[j, ]
-        task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
+        task_name <- task$task_name
+        
+        # Skip tasks with invalid task_name
+        if (!isTruthy(task_name)) {
+          return(NULL)
+        }
+        
+        task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task_name, sep="_"))
         
         tagList(
           div(
@@ -1748,8 +1792,8 @@ server <- function(input, output, session) {
                   title = "Reset this task to NOT_STARTED",
                   onclick = sprintf(
                     "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
-                    htmltools::htmlEscape(task$stage_name),
-                    htmltools::htmlEscape(task$task_name)
+                    htmltools::htmlEscape(stage_name),
+                    htmltools::htmlEscape(task_name)
                   ),
                   "Reset"
                 )
@@ -1857,7 +1901,8 @@ server <- function(input, output, session) {
     stages <- struct$stages
     if (is.null(stages) || nrow(stages) == 0) return()
     
-    stages <- stages[order(stages$stage_order), ]
+    # Order stages - put NA stage_order last
+    stages <- stages[order(is.na(stages$stage_order), stages$stage_order, na.last = TRUE), ]
     
     lapply(seq_len(nrow(stages)), function(i) {
       stage <- stages[i, ]
@@ -1917,8 +1962,15 @@ server <- function(input, output, session) {
     lapply(seq_len(nrow(tasks)), function(i) {
       task <- tasks[i, ]
       stage_name <- task$stage_name
-      task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task$task_name, sep="_"))
-      task_key <- paste(stage_name, task$task_name, sep = "||")
+      task_name <- task$task_name
+      
+      # Skip tasks with invalid stage_name or task_name
+      if (!isTruthy(stage_name) || !isTruthy(task_name)) {
+        return(NULL)
+      }
+      
+      task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task_name, sep="_"))
+      task_key <- paste(stage_name, task_name, sep = "||")
       
       # Create renderUI blocks for task components
       (function(task_key_local, task_id_local, stage_name_local, task_name_local) {
@@ -1987,7 +2039,7 @@ server <- function(input, output, session) {
         })
         
         # Reset button is now static in UI - no reactive updates needed
-      })(task_key, task_id, stage_name, task$task_name)
+      })(task_key, task_id, stage_name, task_name)
     })
   })
   
@@ -2007,6 +2059,12 @@ server <- function(input, output, session) {
       task <- tasks[i, ]
       stage_name <- task$stage_name
       task_name <- task$task_name
+      
+      # Skip tasks with invalid stage_name or task_name
+      if (!isTruthy(stage_name) || !isTruthy(task_name)) {
+        return(NULL)
+      }
+      
       task_id <- gsub("[^A-Za-z0-9]", "_", paste(stage_name, task_name, sep="_"))
       task_key <- paste(stage_name, task_name, sep = "||")
       
