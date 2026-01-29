@@ -41,15 +41,19 @@ test_that("register_task extracts script_filename from script_path when only pat
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
-  task_id <- register_task(
-    stage = "TEST",
-    name = "Extract Filename Task",
-    type = "R",
-    stage_order = 1,
-    script_path = "/path/to/my_script.R",
-    log_path = "/path/to/logs",
-    log_filename = "my_script.Rout",
-    conn = con
+  # Should warn about extracting script_filename
+  expect_warning(
+    task_id <- register_task(
+      stage = "TEST",
+      name = "Extract Filename Task",
+      type = "R",
+      stage_order = 1,
+      script_path = "/path/to/my_script.R",
+      log_path = "/path/to/logs",
+      log_filename = "my_script.Rout",
+      conn = con
+    ),
+    "script_filename.*not specified.*extracting from script_path.*my_script.R"
   )
   
   # Verify script_filename was extracted
