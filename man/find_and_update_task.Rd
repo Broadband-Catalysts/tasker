@@ -13,7 +13,7 @@ find_and_update_task(
   quiet = FALSE,
   conn = NULL,
   filename,
-  force = TRUE
+  force = FALSE
 )
 }
 \arguments{

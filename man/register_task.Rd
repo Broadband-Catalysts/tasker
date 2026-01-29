@@ -7,13 +7,13 @@
 register_task(
   stage,
   name,
-  type,
+  type = NULL,
   description = NULL,
   script_path = NULL,
   script_filename = NULL,
   log_path = NULL,
   log_filename = NULL,
-  stage_order = NULL,
+  stage_order,
   task_order = NULL,
   conn = NULL
 )
@@ -23,19 +23,27 @@ register_task(
 
 \item{name}{Task name}
 
-\item{type}{Task type (e.g., "R", "python", "sh")}
+\item{type}{Task type (e.g., "R", "python", "sh"). If NULL and script_filename
+is available, auto-detects from file extension (.R → "R", .py → "python",
+.sh → "sh") with warning}
 
 \item{description}{Task description (optional)}
 
-\item{script_path}{Path to script directory (optional)}
+\item{script_path}{Path to script directory. If NULL and executing from a
+script, defaults to the directory of the currently executing script (with warning)}
 
-\item{script_filename}{Script filename (optional)}
+\item{script_filename}{Script filename. If NULL and script_path is provided,
+extracts filename from script_path. If both are NULL and executing from a
+script, defaults to the currently executing script filename (with warning)}
 
-\item{log_path}{Path to log directory (optional)}
+\item{log_path}{Path to log directory. If NULL and script_path is detected,
+defaults to same as script_path (with warning)}
 
-\item{log_filename}{Log filename (optional)}
+\item{log_filename}{Log filename. If NULL and script_filename is available,
+defaults to script_filename with extension changed (.R → .Rout, .sh/.py → .log)
+(with warning)}
 
-\item{stage_order}{Stage ordering (optional)}
+\item{stage_order}{Stage ordering (required)}
 
 \item{task_order}{Task ordering within stage (optional)}
 
@@ -45,11 +53,21 @@ register_task(
 task_id (invisibly)
 }
 \description{
-Register a task in the tasker system
+When called from within a script, this function can automatically detect and
+use sensible defaults for script paths and log filenames (with warnings).
 }
 \examples{
 \dontrun{
-register_task(stage = "PREREQ", name = "Install System Dependencies", type = "sh")
-register_task(stage = "PREREQ", name = "Install R", type = "sh")
+# Explicit specification (no warnings)
+register_task(stage = "PREREQ", name = "Install System Dependencies", 
+              type = "sh", stage_order = 1,
+              script_path = "/path/to/scripts",
+              script_filename = "01_install.sh",
+              log_path = "/path/to/logs",
+              log_filename = "01_install.log")
+
+# Auto-detection from script context (issues warnings)
+register_task(stage = "PREREQ", name = "Install R", 
+              type = "sh", stage_order = 1)
 }
 }
