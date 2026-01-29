@@ -17,7 +17,7 @@ find_and_update_subtask(
   quiet = FALSE,
   conn = NULL,
   filename,
-  force = TRUE
+  force = FALSE
 )
 }
 \arguments{

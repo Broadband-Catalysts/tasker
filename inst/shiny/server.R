@@ -2138,7 +2138,14 @@ server <- function(input, output, session) {
           if (!is.null(task_data$log_filename) && !is.na(task_data$log_filename)) {
             log_file <- file.path(log_path, task_data$log_filename)
           } else {
-            potential_log <- file.path(log_path, paste0(task_name_local, ".Rout"))
+            # Try script_filename first, then fall back to task_name
+            fallback_name <- if (!is.null(task_data$script_filename) && !is.na(task_data$script_filename)) {
+              # Remove script extension (.R, .py, .sh)
+              sub("\\.R$|\\.py$|\\.sh$", "", task_data$script_filename)
+            } else {
+              task_name_local
+            }
+            potential_log <- file.path(log_path, paste0(fallback_name, ".Rout"))
             if (file.exists(potential_log)) {
               log_file <- potential_log
             }

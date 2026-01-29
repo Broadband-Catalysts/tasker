@@ -48,6 +48,27 @@ Dr. Greg, we need to...
 - **#unit-testing** - For creating and maintaining test coverage
 - **#manage_todo_list** - For multi-step task tracking and planning
 
+## 🔀 Development Workflow
+
+**CRITICAL: tasker-dev vs tasker repositories**
+
+- **tasker-dev** (`/home/warnes/src/tasker-dev`, devel branch): Development repository
+  - **ALL code changes go here first**
+  - Test and iterate in this repository
+  - Both Shiny app and package code
+
+- **tasker** (`/home/warnes/src/tasker`, main branch): Production repository  
+  - **NEVER make direct code changes here**
+  - Only receives changes via pull requests from devel → main
+  - Used for ShinyProxy deployment only
+
+**Workflow:**
+1. Make and test changes in `tasker-dev` (devel branch)
+2. When ready for production, create PR from devel → main
+3. After merge, deploy from `tasker` (main branch) to ShinyProxy
+
+**Why:** Prevents accidental production changes, enables proper review process, maintains clean deployment history.
+
 ## ⚠️ CRITICAL WORKFLOW CHECKLIST
 
 **Before implementing ANY code changes, verify you will:**

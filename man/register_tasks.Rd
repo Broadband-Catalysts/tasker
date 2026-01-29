@@ -7,7 +7,7 @@
 register_tasks(tasks_df, conn = NULL)
 }
 \arguments{
-\item{tasks_df}{Data frame with columns: stage, name, type, and optional columns}
+\item{tasks_df}{Data frame with columns: stage, name, type, stage_order, and optional columns}
 
 \item{conn}{Database connection (optional)}
 }
@@ -22,7 +22,8 @@ Register multiple tasks at once
 tasks <- data.frame(
   stage = c("PREREQ", "PREREQ"),
   name = c("Install System Dependencies", "Install R"),
-  type = c("sh", "sh")
+  type = c("sh", "sh"),
+  stage_order = c(1, 1)
 )
 register_tasks(tasks)
 }
