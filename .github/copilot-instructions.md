@@ -272,52 +272,17 @@ Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
 
 ## Code Review Practices
 
-### Critical Pre-Review Steps
+For systematic code review before finalizing changes, use the **#code-review** skill. It provides comprehensive guidance for:
+- **R syntax validation** - Parse files to catch syntax errors before review
+- **Indentation enforcement** - Verify standard block structure with commented braces
+- Identifying errors, omissions, and anti-patterns
+- Checking design issues and performance problems
+- Following a systematic file-by-file review process
+- Reporting findings to users with specific issue details
 
-**BEFORE reviewing code, perform these validation steps:**
+**Critical requirement:** Always review all modified files before finalizing changes and inform the user that you have done so, including any issues found or confirmation that no issues were detected.
 
-1. **R Syntax Parsing** - Verify all R files parse without errors:
-```bash
-Rscript -e 'parse("R/modified_file.R")'
-```
-If parsing fails, fix syntax errors before proceeding with review.
-
-2. **Indentation Verification** - Ensure standard block structure:
-   - **2 spaces per indentation level** (not tabs, not 4 spaces)
-   - **Closing braces commented** with block type for multi-line blocks (>5 lines)
-   ```r
-   # ✅ CORRECT
-   if (condition) {
-     # Many lines of code...
-     # ...
-     # ...
-   } # End if
-   
-   for (item in items) {
-     # Process each item...
-     # ...
-   } # End for loop
-   
-   function_name <- function(args) {
-     # Function body...
-     # ...
-   } # End function_name
-   
-   # ❌ INCORRECT - Missing comments on closing braces
-   if (condition) {
-     # ...
-   }
-   
-   # ❌ INCORRECT - Wrong indentation (4 spaces)
-   if (condition) {
-       code()
-   }
-   ```
-
-**Why:**
-- **Parsing** catches syntax errors immediately (typos, missing commas, unmatched braces)
-- **2-space indentation** is R community standard (RStudio default, tidyverse style)
-- **Commented braces** prevent errors when editing large nested blocks
+**See #code-review skill for complete validation steps including R syntax parsing and indentation standards.**
 
 ### Review Modified Files
 
