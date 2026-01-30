@@ -2720,8 +2720,9 @@ server <- function(input, output, session) {
   # SQL QUERIES TAB
   # ============================================================================
   
-  # Initialize trigger
+  # Initialize trigger and separate query timestamp for SQL tab
   rv$sql_trigger <- Sys.time()
+  rv$sql_last_query_time <- Sys.time() - 60  # Initialize to allow immediate first query
   
   # Auto-refresh for SQL Queries tab (uses same interval as Pipeline Status)
   observe({
@@ -2756,14 +2757,16 @@ server <- function(input, output, session) {
     # Only fetch when SQL Queries tab is active
     req(input$main_tabs == "SQL Queries")
     
-    # Prevent overlapping queries
-    time_since_last <- as.numeric(difftime(Sys.time(), rv$last_query_time, units = "secs"))
+    # Prevent overlapping queries (use separate timestamp for SQL tab)
+    time_since_last <- as.numeric(difftime(Sys.time(), rv$sql_last_query_time, units = "secs"))
     req(time_since_last >= min_query_interval)
+    message(sprintf("[SQL-QUERY] Cooldown passed (%.2fs), fetching queries...", time_since_last))
     
     rv$query_running <- TRUE
     on.exit({
       rv$query_running <- FALSE
-      rv$last_query_time <- Sys.time()
+      rv$sql_last_query_time <- Sys.time()
+      message(sprintf("[SQL-QUERY] Complete, updated sql_last_query_time to %s", rv$sql_last_query_time))
     }, add = TRUE)
     
     tryCatch({
