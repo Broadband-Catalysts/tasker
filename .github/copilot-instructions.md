@@ -272,9 +272,56 @@ Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
 
 ## Code Review Practices
 
+### Critical Pre-Review Steps
+
+**BEFORE reviewing code, perform these validation steps:**
+
+1. **R Syntax Parsing** - Verify all R files parse without errors:
+```bash
+Rscript -e 'parse("R/modified_file.R")'
+```
+If parsing fails, fix syntax errors before proceeding with review.
+
+2. **Indentation Verification** - Ensure standard block structure:
+   - **2 spaces per indentation level** (not tabs, not 4 spaces)
+   - **Closing braces commented** with block type for multi-line blocks (>5 lines)
+   ```r
+   # ✅ CORRECT
+   if (condition) {
+     # Many lines of code...
+     # ...
+     # ...
+   } # End if
+   
+   for (item in items) {
+     # Process each item...
+     # ...
+   } # End for loop
+   
+   function_name <- function(args) {
+     # Function body...
+     # ...
+   } # End function_name
+   
+   # ❌ INCORRECT - Missing comments on closing braces
+   if (condition) {
+     # ...
+   }
+   
+   # ❌ INCORRECT - Wrong indentation (4 spaces)
+   if (condition) {
+       code()
+   }
+   ```
+
+**Why:**
+- **Parsing** catches syntax errors immediately (typos, missing commas, unmatched braces)
+- **2-space indentation** is R community standard (RStudio default, tidyverse style)
+- **Commented braces** prevent errors when editing large nested blocks
+
 ### Review Modified Files
 
-**Always review all modified files for errors, omissions, anti-patterns, or other issues before finalizing changes:**
+**After validation, review all modified files for errors, omissions, anti-patterns, or other issues:**
 
 - **Errors**: Syntax errors, logic bugs, incorrect function calls, type mismatches
 - **Omissions**: Missing error handling, incomplete implementations, forgotten edge cases
@@ -287,12 +334,14 @@ Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
 - **Performance Issues**: Unbounded queries, N+1 queries, unnecessary data copies, inefficient loops
 
 Use systematic review process:
-1. Check each modified file for completeness
-2. Verify error handling is present
-3. Look for potential race conditions or concurrency issues
-4. Ensure database constraints are appropriate
-5. Validate function signatures match their usage
-6. Confirm documentation matches implementation
+1. **Parse all R files** for syntax errors
+2. **Check indentation** (2 spaces) and block comments
+3. Check each modified file for completeness
+4. Verify error handling is present
+5. Look for potential race conditions or concurrency issues
+6. Ensure database constraints are appropriate
+7. Validate function signatures match their usage
+8. Confirm documentation matches implementation
 
 ## Documentation Standards
 
