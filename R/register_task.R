@@ -95,11 +95,15 @@ register_task <- function(stage,
       file_arg <- grep("^--file=", args, value = TRUE)
       if (length(file_arg) > 0) {
         full_path <- sub("^--file=", "", file_arg[1])
+        # Normalize to absolute path
+        full_path <- normalizePath(full_path, winslash = "/", mustWork = FALSE)
         detected_script_path <- dirname(full_path)
       } else {
         tryCatch({
           full_path <- this.path::this.path()
           if (!is.null(full_path) && nchar(full_path) > 0) {
+            # Normalize to absolute path
+            full_path <- normalizePath(full_path, winslash = "/", mustWork = FALSE)
             detected_script_path <- dirname(full_path)
           }
         }, error = function(e) {})
