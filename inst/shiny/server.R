@@ -2723,6 +2723,24 @@ server <- function(input, output, session) {
   # Initialize trigger
   rv$sql_trigger <- Sys.time()
   
+  # Auto-refresh for SQL Queries tab (uses same interval as Pipeline Status)
+  observe({
+    # Only update if auto-refresh is enabled AND SQL Queries tab is active
+    if (!is.null(input$auto_refresh) && input$auto_refresh && 
+        !is.null(input$main_tabs) && input$main_tabs == "SQL Queries" &&
+        !is.null(input$refresh_interval) && input$refresh_interval > 0) {
+      
+      # Use refresh_trigger as the timer source
+      refresh_trigger()
+      
+      # Update SQL trigger after a small delay to avoid collision with main refresh
+      isolate({
+        rv$sql_trigger <- Sys.time()
+        message(sprintf("[SQL-AUTO-REFRESH] Triggered at %s", rv$sql_trigger))
+      })
+    }
+  })
+  
   # Manual refresh button for SQL queries
   observeEvent(input$sql_refresh_now, {
     rv$sql_trigger <- Sys.time()
