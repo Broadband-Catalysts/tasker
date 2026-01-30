@@ -1,3 +1,30 @@
+# tasker 0.9.0 (2026-01-30)
+
+## New Features
+
+* **Task Registry Removal Functions**: Added three new functions for managing task registry entries:
+  - `remove_task()`: Remove individual tasks by script filename
+  - `remove_subtask()`: Remove subtask progress records by run_id, task_id, or script_filename
+  - All removal functions preserve execution history (task_runs, subtask_progress)
+  - Consistent confirmation patterns with both interactive and non-interactive modes
+
+## Breaking Changes
+
+* **Function Rename**: `delete_stage()` → `remove_stage()` for consistency with new removal functions
+  - All parameters and behavior remain identical
+  - Update any scripts using `delete_stage()` to use `remove_stage()`
+
+## Documentation
+
+* Added R syntax parsing validation to code review standards
+* Added 2-space indentation standard (R community convention)
+* Added requirement for commented closing braces on multi-line blocks (>5 lines)
+
+## Testing
+
+* Renamed test file: `test-delete_stage.R` → `test-remove_stage.R`
+* All existing tests updated to use `remove_stage()`
+
 # tasker 0.8.0 (2026-01-29)
 
 ## New Features
