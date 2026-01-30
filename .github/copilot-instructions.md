@@ -166,6 +166,42 @@ process_item <- function(item) {
 }
 ```
 
+## Task Registration Patterns
+
+### CRITICAL: Auto-Detected Paths Are Normalized to Absolute
+
+**Problem:** When scripts self-register using `register_task()` without explicit paths, the function auto-detects the script location. Previously, these paths could be stored as relative paths (e.g., `"inst/oneoff"`), causing the Shiny app to fail finding log files because it runs in a different working directory.
+
+**Solution:** As of tasker v0.9.0, `register_task()` applies `normalizePath()` to all auto-detected paths, ensuring they are stored as absolute paths in the database.
+
+```r
+# ✅ CORRECT - Auto-detection now normalizes to absolute
+register_task(
+  stage = "ONEOFF",
+  name = "My Migration Task",
+  stage_order = 1
+  # script_path and log_path auto-detected and normalized to:
+  # "/home/warnes/src/fccData/inst/oneoff" (absolute)
+)
+
+# ✅ ALSO CORRECT - Explicit relative paths still work (backward compatibility)
+register_task(
+  stage = "DAILY",
+  name = "Daily Task",
+  stage_order = 1,
+  script_path = "inst/scripts",  # Relative path preserved if explicitly provided
+  script_filename = "task.R"
+)
+```
+
+**Why:** The Shiny monitoring app runs in the tasker-dev project context, not the project where scripts execute. Relative paths like `"inst/oneoff"` cannot be resolved because the Shiny app doesn't know which project root they're relative to. Absolute paths work universally.
+
+**Implementation Details:**
+- `normalizePath()` is applied in lines 99 and 108 of `R/register_task.R`
+- Only affects **auto-detected** paths (from `--file=` or `this.path::this.path()`)
+- **Explicit** paths provided by user are preserved as-is for backward compatibility
+- Tested in `tests/testthat/test-register_task_absolute_paths.R`
+
 ## Database Patterns
 
 **See #database-patterns skill for complete guidance.**
