@@ -62,12 +62,23 @@ Dr. Greg, we need to...
   - Only receives changes via pull requests from devel → main
   - Used for ShinyProxy deployment only
 
-**Workflow:**
-1. Make and test changes in `tasker-dev` (devel branch)
-2. When ready for production, create PR from devel → main
-3. After merge, deploy from `tasker` (main branch) to ShinyProxy
+**Complete Workflow:**
+1. **Develop** in `tasker-dev` (devel branch):
+   - Make all code changes here
+   - Create/update unit tests
+   - Ensure all tests pass
+   - Commit changes to devel branch
+2. **Test thoroughly** before merging:
+   - All unit tests must pass
+   - Integration tests with dependent projects (fccData, etc.)
+   - Verify Shiny app functionality
+3. **Create PR** from devel → main when ready for production
+4. **Review and merge** the pull request
+5. **Deploy to production**:
+   - `cd ~/src/tasker && git pull` to update production repository
+   - Restart ShinyProxy or dependent services as needed
 
-**Why:** Prevents accidental production changes, enables proper review process, maintains clean deployment history.
+**Why:** Prevents accidental production changes, enables proper review process, maintains clean deployment history, ensures all changes are tested before production deployment.
 
 ## ⚠️ CRITICAL WORKFLOW CHECKLIST
 
