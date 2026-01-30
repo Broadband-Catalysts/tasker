@@ -1,42 +1,42 @@
-#' Delete a Specific Stage and Its Tasks
+#' Remove a Specific Stage and Its Tasks
 #'
-#' Deletes a stage and all its associated tasks from the task registry.
+#' Removes a stage and all its associated tasks from the task registry.
 #' Task execution history (task_runs and subtask_progress) is preserved.
 #' This is useful for removing obsolete stages that have no replacement.
 #' 
-#' **WARNING**: This will permanently delete the stage definition and all
+#' **WARNING**: This will permanently remove the stage definition and all
 #' its task definitions. Use with caution.
 #'
-#' @param stage_name Name of the stage to delete
+#' @param stage_name Name of the stage to remove
 #' @param conn Optional database connection. If NULL, uses connection from config.
 #' @param confirmation_string The confirmation string the user must type to proceed.
-#'   Default is "DELETE STAGE". Set to NULL to skip confirmation prompt
+#'   Default is "REMOVE STAGE". Set to NULL to skip confirmation prompt
 #'   (useful for programmatic use).
 #' @param interactive If TRUE (default), prompts user for confirmation. 
 #'   Set to FALSE for non-interactive scripts (requires confirmation_string = NULL).
 #' @param quiet If TRUE, suppress informational messages (default: FALSE)
 #'
-#' @return Invisibly returns a list with deletion details:
-#'   \item{stage_deleted}{TRUE if stage was deleted}
-#'   \item{tasks_deleted}{Number of tasks deleted}
-#'   \item{stage_name}{Name of deleted stage}
+#' @return Invisibly returns a list with removal details:
+#'   \item{stage_removed}{TRUE if stage was removed}
+#'   \item{tasks_removed}{Number of tasks removed}
+#'   \item{stage_name}{Name of removed stage}
 #'
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' # Interactive mode (will prompt for confirmation)
-#' delete_stage("DAILY_FCC_UPDATE")
+#' remove_stage("DAILY_FCC_UPDATE")
 #'
 #' # Programmatic mode (skips confirmation - USE WITH CAUTION!)
-#' delete_stage("OBSOLETE_STAGE", confirmation_string = NULL, interactive = FALSE)
+#' remove_stage("OBSOLETE_STAGE", confirmation_string = NULL, interactive = FALSE)
 #'
 #' # Quiet mode for scripts
-#' delete_stage("OLD_STAGE", confirmation_string = NULL, interactive = FALSE, quiet = TRUE)
+#' remove_stage("OLD_STAGE", confirmation_string = NULL, interactive = FALSE, quiet = TRUE)
 #' }
-delete_stage <- function(stage_name,
+remove_stage <- function(stage_name,
                         conn = NULL, 
-                        confirmation_string = "DELETE STAGE",
+                        confirmation_string = "REMOVE STAGE",
                         interactive = TRUE,
                         quiet = FALSE) {
   ensure_configured()
@@ -76,11 +76,11 @@ delete_stage <- function(stage_name,
   
   if (nrow(stage_exists) == 0) {
     if (!quiet) {
-      message("Stage '", stage_name, "' not found - nothing to delete")
+      message("Stage '", stage_name, "' not found - nothing to remove")
     }
     return(invisible(list(
-      stage_deleted = FALSE,
-      tasks_deleted = 0,
+      stage_removed = FALSE,
+      tasks_removed = 0,
       stage_name = stage_name
     )))
   }
@@ -108,9 +108,9 @@ delete_stage <- function(stage_name,
   # Display warning
   if (!quiet) {
     message("\n")
-    message(crayon::bold(crayon::yellow("WARNING: STAGE DELETION")))
-    message(crayon::yellow("========================================"))
-    message("This will delete the following:")
+    message(crayon::bold(crayon::yellow("WARNING: STAGE REMOVAL")))
+    message(crayon::yellow("======================================="))
+    message("This will remove the following:")
     message("  • Stage: ", crayon::bold(stage_name))
     message("  • Number of tasks: ", task_count)
     if (task_count > 0) {
@@ -132,36 +132,36 @@ delete_stage <- function(stage_name,
     
     if (user_input != confirmation_string) {
       if (!quiet) {
-        message(crayon::green("\u2713 Operation cancelled. Nothing was deleted."))
+        message(crayon::green("\u2713 Operation cancelled. Nothing was removed."))
       }
       return(invisible(list(
-        stage_deleted = FALSE,
-        tasks_deleted = 0,
+        stage_removed = FALSE,
+        tasks_removed = 0,
         stage_name = stage_name
       )))
     }
   } else if (!interactive && !is.null(confirmation_string)) {
-    stop("Non-interactive mode requires confirmation_string = NULL to proceed with deletion.", call. = FALSE)
+    stop("Non-interactive mode requires confirmation_string = NULL to proceed with removal.", call. = FALSE)
   }
   
   if (!quiet) {
     message("\n")
-    message("Deleting stage '", stage_name, "'...")
+    message("Removing stage '", stage_name, "'...")
   }
   
   tryCatch({
-    # Delete tasks first (foreign key constraint)
-    tasks_deleted <- DBI::dbExecute(
+    # Remove tasks first (foreign key constraint)
+    tasks_removed <- DBI::dbExecute(
       conn,
       glue::glue_sql("DELETE FROM {tasks_table} WHERE stage_id = {stage_id}",
                      .con = conn)
     )
     
-    if (!quiet && tasks_deleted > 0) {
-      message("  \u2713 Deleted ", tasks_deleted, " task(s)")
+    if (!quiet && tasks_removed > 0) {
+      message("  \u2713 Removed ", tasks_removed, " task(s)")
     }
     
-    # Delete stage
+    # Remove stage
     DBI::dbExecute(
       conn,
       glue::glue_sql("DELETE FROM {stages_table} WHERE stage_id = {stage_id}",
@@ -169,24 +169,24 @@ delete_stage <- function(stage_name,
     )
     
     if (!quiet) {
-      message("  \u2713 Deleted stage '", stage_name, "'")
+      message("  \u2713 Removed stage '", stage_name, "'")
       message("\n")
-      message(crayon::bold(crayon::green("\u2713 Stage deletion completed successfully")))
+      message(crayon::bold(crayon::green("\u2713 Stage removal completed successfully")))
       message("\n")
     }
     
     invisible(list(
-      stage_deleted = TRUE,
-      tasks_deleted = tasks_deleted,
+      stage_removed = TRUE,
+      tasks_removed = tasks_removed,
       stage_name = stage_name
     ))
     
   }, error = function(e) {
     if (!quiet) {
       message("\n")
-      message(crayon::bold(crayon::red("\u2717 Error deleting stage:")))
+      message(crayon::bold(crayon::red("\u2717 Error removing stage:")))
       message(e$message)
     }
-    stop("Failed to delete stage: ", e$message, call. = FALSE)
+    stop("Failed to remove stage: ", e$message, call. = FALSE)
   })
 }
