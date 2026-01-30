@@ -857,6 +857,10 @@ server <- function(input, output, session) {
     task_previous_statuses = list(),
     # Database connection for SQL queries monitoring (reused)
     monitor_connection = NULL,
+    # Trigger for SQL queries refresh
+    sql_trigger = NULL,
+    # SQL queries last refresh timestamp
+    sql_last_refresh_time = Sys.time(),
     # Trigger for forcing initial DOM renders
     initial_render_trigger = 0,
     # Query state tracking to prevent reactive flooding
@@ -1264,27 +1268,31 @@ server <- function(input, output, session) {
       completed_subtasks <- 0
       total_subtasks <- 0
       if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
-        subtask_info <- tryCatch({
-          subs <- tasker::get_subtask_progress(task_status$run_id)
-          # Count completed subtasks and total subtasks
-          if (!is.null(subs) && nrow(subs) > 0) {
-            completed_subtasks <- sum(subs$status == "COMPLETED", na.rm = TRUE)
-            total_subtasks <- nrow(subs)
-          }
-          if (!is.null(subs) && nrow(subs) > 0) {
-            # Get most recently updated active subtask (RUNNING or STARTED)
-            active <- subs[subs$status %in% c("RUNNING", "STARTED"), ]
-            if (nrow(active) > 0) {
-              # Use last_update to get the most recently updated active subtask
-              active[order(active$last_update, decreasing = TRUE), ][1, ]
-            } else {
-              # Fallback to most recent subtask overall
-              subs[order(subs$last_update, decreasing = TRUE), ][1, ]
-            }
-          } else {
-            NULL
-          }
+        # Get all subtasks for this run
+        subs <- tryCatch({
+          tasker::get_subtask_progress(task_status$run_id)
         }, error = function(e) NULL)
+        
+        # Count completed subtasks and total subtasks OUTSIDE tryCatch
+        if (!is.null(subs) && nrow(subs) > 0) {
+          completed_subtasks <- sum(subs$status == "COMPLETED", na.rm = TRUE)
+          total_subtasks <- nrow(subs)
+        }
+        
+        # Extract most recent active subtask info
+        subtask_info <- if (!is.null(subs) && nrow(subs) > 0) {
+          # Get most recently updated active subtask (RUNNING or STARTED)
+          active <- subs[subs$status %in% c("RUNNING", "STARTED"), ]
+          if (nrow(active) > 0) {
+            # Use last_update to get the most recently updated active subtask
+            active[order(active$last_update, decreasing = TRUE), ][1, ]
+          } else {
+            # Fallback to most recent subtask overall
+            subs[order(subs$last_update, decreasing = TRUE), ][1, ]
+          }
+        } else {
+          NULL
+        }
         
         if (!is.null(subtask_info) && !is.na(subtask_info$items_total) && subtask_info$items_total > 0) {
           items_total <- subtask_info$items_total
@@ -1799,11 +1807,10 @@ server <- function(input, output, session) {
                 )
             )
           ),
-          # Process status sub-pane (hidden by default)
+          # Process status sub-pane (hidden by default with shinyjs, not CSS)
           div(
             id = paste0("process_pane_", task_id),
             class = "task-subpane process-pane",
-            style = "display: none;",
             htmlOutput(paste0("process_content_", task_id))
           ),
           # Log viewer sub-pane (hidden by default)
@@ -2080,6 +2087,9 @@ server <- function(input, output, session) {
           }
           build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session, input)
         })
+        
+        # Hide pane initially with shinyjs (allows pre-rendering unlike display:none)
+        shinyjs::hide(paste0("process_pane_", task_id_local))
         
         # Log pane content - observer to initialize controls once when expanded
         observe({
@@ -2610,6 +2620,7 @@ server <- function(input, output, session) {
       shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
     } else {
       rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
+      # Show immediately (content already pre-rendered)
       shinyjs::show(paste0("process_pane_", task_id))
       shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
     }
@@ -2765,6 +2776,9 @@ server <- function(input, output, session) {
         queries <- queries[!grepl("tasker\\.", queries$query, ignore.case = TRUE), ]
       }
       
+      # Update last refresh timestamp
+      rv$sql_last_refresh_time <- Sys.time()
+      
       # Show notification if no queries
       if (is.null(queries) || nrow(queries) == 0) {
         showNotification("No active queries", type = "message", duration = 3)
@@ -2844,6 +2858,11 @@ server <- function(input, output, session) {
     
     # Always pass queries (which has proper column structure)
     replaceData(proxy, queries, resetPaging = FALSE, rownames = FALSE)
+  })
+  
+  # Render SQL queries last refresh timestamp
+  output$sql_last_refresh <- renderDatetime({
+    rv$sql_last_refresh_time
   })
   
   # Handle kill button clicks
