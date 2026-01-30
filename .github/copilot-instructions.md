@@ -272,9 +272,21 @@ Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
 
 ## Code Review Practices
 
+For systematic code review before finalizing changes, use the **#code-review** skill. It provides comprehensive guidance for:
+- **R syntax validation** - Parse files to catch syntax errors before review
+- **Indentation enforcement** - Verify standard block structure with commented braces
+- Identifying errors, omissions, and anti-patterns
+- Checking design issues and performance problems
+- Following a systematic file-by-file review process
+- Reporting findings to users with specific issue details
+
+**Critical requirement:** Always review all modified files before finalizing changes and inform the user that you have done so, including any issues found or confirmation that no issues were detected.
+
+**See #code-review skill for complete validation steps including R syntax parsing and indentation standards.**
+
 ### Review Modified Files
 
-**Always review all modified files for errors, omissions, anti-patterns, or other issues before finalizing changes:**
+**After validation, review all modified files for errors, omissions, anti-patterns, or other issues:**
 
 - **Errors**: Syntax errors, logic bugs, incorrect function calls, type mismatches
 - **Omissions**: Missing error handling, incomplete implementations, forgotten edge cases
@@ -287,12 +299,14 @@ Rscript -e 'test_file("tests/testthat/test-file.R")' 2>&1 | grep "FAIL"
 - **Performance Issues**: Unbounded queries, N+1 queries, unnecessary data copies, inefficient loops
 
 Use systematic review process:
-1. Check each modified file for completeness
-2. Verify error handling is present
-3. Look for potential race conditions or concurrency issues
-4. Ensure database constraints are appropriate
-5. Validate function signatures match their usage
-6. Confirm documentation matches implementation
+1. **Parse all R files** for syntax errors
+2. **Check indentation** (2 spaces) and block comments
+3. Check each modified file for completeness
+4. Verify error handling is present
+5. Look for potential race conditions or concurrency issues
+6. Ensure database constraints are appropriate
+7. Validate function signatures match their usage
+8. Confirm documentation matches implementation
 
 ## Documentation Standards
 
