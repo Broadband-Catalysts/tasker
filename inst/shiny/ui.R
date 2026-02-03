@@ -192,15 +192,21 @@ ui <- page_fluid(
       tabPanel("SQL Queries",
                div(class = "sql-queries-container", style = "padding: 8px;",
                    fluidRow(
-                     column(6,
+                     column(4,
                             actionButton("sql_refresh_now", "Refresh Now", 
                                        class = "btn-primary")
                      ),
-                     column(6,
+                     column(4,
                             div(style = "margin-top: 5px;",
                                 checkboxInput("exclude_tasker_queries", 
                                             "Exclude tasker queries", 
                                             value = TRUE)
+                            )
+                     ),
+                     column(4,
+                            div(class = "refresh-info", style = "margin-top: 5px; text-align: right;",
+                                span(class = "refresh-label", "Last Refresh:"),
+                                datetimeOutput("sql_last_refresh", inline = TRUE)
                             )
                      )
                    ),
