@@ -23,6 +23,8 @@ Dr. Greg, we need to...
 
 ---
 
+**Last Updated:** 2026-02-04 15:30 EST
+
 # 📖 REQUIRED READING
 
 **ALWAYS read the user-level copilot-instructions.md file first:**
@@ -132,33 +134,11 @@ server <- function(input, output, session) {
 
 ### Critical: clusterEvalQ Connection Serialization
 
-When creating database connections (or other non-serializable objects) in parallel workers using `clusterEvalQ()`, ensure the expression does **not** return the non-serializable object:
+**See #r-anti-patterns skill for complete guidance** on avoiding connection serialization errors in parallel processing.
 
-```r
-# ✅ CORRECT - Returns NULL to avoid serialization
-tmp <- clusterEvalQ(
-  cl,
-  { 
-    con <- dbConnectBBC(mode="rw")
-    NULL  # Prevents "Error in unserialize(socklist[[n]]) : error reading from connection"
-  }
-)
+**Quick reference:** When using `clusterEvalQ()` with database connections, ensure the expression returns `NULL` or another serializable value, not the connection object itself.
 
-# ✅ ALSO CORRECT - Has other code after connection that returns serializable value
-tmp <- clusterEvalQ(
-  cl,
-  {
-    con <- dbConnectBBC(mode="rw")
-    # ... other setup code ...
-    "ready"  # Returns a serializable string instead of connection
-  }
-)
-
-# ❌ INCORRECT - Last expression returns the connection object
-tmp <- clusterEvalQ(cl, con <- dbConnectBBC(mode="rw"))
-```
-
-**Why:** Database connection objects (and other objects containing file descriptors, external pointers, or system resources) cannot be serialized across R processes. The `clusterEvalQ()` function returns the result of the **last expression** in the block.
+**Preferred Pattern:** Use `tasker_cluster()` with `setup_expr` parameter for automatic handling.
 
 ### Atomic Operations for Parallel Workers
 
