@@ -23,7 +23,7 @@ test_that("task_start creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Connection Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Connection Test", type = "R")
   
   # Start task without passing connection - should create its own
   run_id <- tasker::task_start("TEST", "Connection Test", .active = FALSE)
@@ -55,7 +55,7 @@ test_that("task_update creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Update Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Update Test", type = "R")
   
   # Start task with context
   run_id <- tasker::task_start("TEST", "Update Test", .active = FALSE)
@@ -95,7 +95,7 @@ test_that("task_complete creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Complete Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Complete Test", type = "R")
   
   # Start task
   run_id <- tasker::task_start("TEST", "Complete Test", .active = FALSE)
@@ -130,7 +130,7 @@ test_that("task_fail creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Fail Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Fail Test", type = "R")
   
   # Start task
   run_id <- tasker::task_start("TEST", "Fail Test", .active = FALSE)
@@ -171,7 +171,7 @@ test_that("subtask_start creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Subtask Start Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Subtask Start Test", type = "R")
   
   # Start task
   run_id <- tasker::task_start("TEST", "Subtask Start Test", .active = FALSE)
@@ -212,7 +212,7 @@ test_that("subtask_update creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Subtask Update Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Subtask Update Test", type = "R")
   
   # Start task and subtask
   run_id <- tasker::task_start("TEST", "Subtask Update Test", .active = FALSE)
@@ -255,7 +255,7 @@ test_that("subtask_complete creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Subtask Complete Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Subtask Complete Test", type = "R")
   
   # Start task and subtask
   run_id <- tasker::task_start("TEST", "Subtask Complete Test", .active = FALSE)
@@ -297,7 +297,7 @@ test_that("subtask_increment creates connection when needed", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Subtask Increment Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Subtask Increment Test", type = "R")
   
   # Start task and subtask
   run_id <- tasker::task_start("TEST", "Subtask Increment Test", .active = FALSE)
@@ -334,7 +334,7 @@ test_that("task_fail handles already-failed subtasks gracefully", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Subtask Fail Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Subtask Fail Test", type = "R")
   
   # Start task with subtasks
   run_id <- tasker::task_start("TEST", "Subtask Fail Test", .active = FALSE)
@@ -383,7 +383,7 @@ test_that("connection creation works in cleanup/error scenarios", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Cleanup Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Cleanup Test", type = "R")
   
   # Simulate a script that encounters an error during cleanup
   run_id <- NULL

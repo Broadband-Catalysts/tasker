@@ -42,6 +42,7 @@ Dr. Greg, we need to...
 
 - **#code-review** - REQUIRED before finalizing any code changes
 - **#git-commit-message** - For commit message generation  
+- **#user-markdown-formatting** - For markdown documentation formatting standards
 - **#shiny-ui-patterns** - For Shiny UI updates without flickering
 - **#database-patterns** - For database connection and query patterns
 - **#r-script-execution** - For running scripts and managing packages

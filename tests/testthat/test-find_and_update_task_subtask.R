@@ -33,6 +33,7 @@ test_that("update_task by filename alone", {
   
   # Register a test task
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Update Task Test",
     type = "R",
@@ -62,6 +63,7 @@ test_that("update_task by stage and task number", {
   
   # Register test stage and tasks with explicit task_order
   register_task(
+    stage_order = 1,
     stage = "NUMBER_TEST_STAGE",
     name = "Task One",
     stage_order = 999,
@@ -69,6 +71,7 @@ test_that("update_task by stage and task number", {
     type = "R"
   )
   register_task(
+    stage_order = 1,
     stage = "NUMBER_TEST_STAGE",
     name = "Task Two",
     stage_order = 999,
@@ -94,6 +97,7 @@ test_that("update_task by stage name and task name", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Specific Task",
     type = "R"
@@ -120,6 +124,7 @@ test_that("update_task handles partial filename matching", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Partial Match Test",
     type = "R",
@@ -147,12 +152,14 @@ test_that("update_task rejects ambiguous filename matches", {
   
   # Register two tasks with similar filenames
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Task A",
     type = "R",
     script_filename = "test_script_01.R"
   )
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Task B",
     type = "R",
@@ -190,6 +197,7 @@ test_that("update_task handles all status values", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Status Test",
     type = "R"
@@ -218,6 +226,7 @@ test_that("update_task with optional message and error_message", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Message Test",
     type = "R"
@@ -288,6 +297,7 @@ test_that("update_subtask by filename with subtask number", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Subtask Test",
     type = "R",
@@ -317,6 +327,7 @@ test_that("update_subtask by stage and task names", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Named Subtask Test",
     type = "R"
@@ -346,6 +357,7 @@ test_that("update_subtask handles all status values", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Status Subtask Test",
     type = "R"
@@ -376,6 +388,7 @@ test_that("update_subtask with percent and items tracking", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Progress Test",
     type = "R"
@@ -407,6 +420,7 @@ test_that("update_subtask with message and error_message", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Message Subtask Test",
     type = "R"
@@ -437,6 +451,7 @@ test_that("update_subtask rejects missing subtask", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Missing Subtask Test",
     type = "R"
@@ -467,6 +482,7 @@ test_that("update_task and update_subtask work in sequence", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Sequence Test",
     type = "R",
@@ -516,6 +532,7 @@ test_that("update_task works with stage_order + task_order", {
   
   # Register task with stage_order and task_order
   register_task(
+    stage_order = 1,
     stage = "NUMERIC_TEST_STAGE",
     name = "Numeric Task 1",
     type = "R",
@@ -554,6 +571,7 @@ test_that("update_task works with stage_order + task_name", {
   
   # Register task with stage_order and task_order
   register_task(
+    stage_order = 1,
     stage = "MIXED_LOOKUP_STAGE",
     name = "Mixed Task Name",
     type = "R",
@@ -593,6 +611,7 @@ test_that("update_task works with stage_name + task_order", {
   
   # Register task with stage_order and task_order
   register_task(
+    stage_order = 1,
     stage = "NAME_ORDER_STAGE",
     name = "Order Task",
     type = "R",
@@ -632,6 +651,7 @@ test_that("update_subtask works with stage_order + task_order + subtask_number",
   
   # Register task with stage_order and task_order
   register_task(
+    stage_order = 1,
     stage = "SUBTASK_NUMERIC_STAGE",
     name = "Subtask Numeric Task",
     type = "R",
@@ -679,6 +699,7 @@ test_that("update_subtask works with stage_order + task_name + subtask_name", {
   
   # Register task with stage_order and task_order
   register_task(
+    stage_order = 1,
     stage = "SUBTASK_MIXED_STAGE",
     name = "Subtask Mixed Task",
     type = "R",
@@ -728,6 +749,7 @@ test_that("update_task with force=FALSE fails when no run exists", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "No Run Task",
     type = "R",
@@ -754,6 +776,7 @@ test_that("update_task with force=TRUE creates new run when none exists", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Force Create Task",
     type = "R",
@@ -791,6 +814,7 @@ test_that("update_subtask with force=FALSE fails when no run exists", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "No Run Subtask Task",
     type = "R",
@@ -818,6 +842,7 @@ test_that("update_subtask with force=TRUE creates new run and subtask when none 
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Force Create Subtask Task",
     type = "R",
@@ -878,6 +903,7 @@ test_that("update_task strips path from filename parameter", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Path Strip Test",
     type = "R",
@@ -904,6 +930,7 @@ test_that("update_subtask strips path from filename parameter", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Subtask Path Strip Test",
     type = "R",
@@ -935,6 +962,7 @@ test_that("update_subtask works with stage_name + task_order + subtask_number", 
   
   # Register task with stage_order and task_order
   register_task(
+    stage_order = 1,
     stage = "FINAL_COMBO_STAGE",
     name = "Final Combo Task",
     type = "R",

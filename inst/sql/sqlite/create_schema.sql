@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS task_runs (
             substr(hex(randomblob(16)), 21, 12)
         )
     ),
-    task_id INTEGER NOT NULL REFERENCES tasks(task_id),
+    -- Nullable to preserve execution history when task definitions are removed
+    task_id INTEGER REFERENCES tasks(task_id),
     
     -- Execution identification
     hostname VARCHAR(255) NOT NULL,

@@ -44,7 +44,7 @@ test_that("export_tasker_context exports subtask counter state (single worker)",
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Context Export Single Worker Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Context Export Single Worker Test", type = "R")
   
   # Start task and first subtask
   tasker::task_start("TEST", "Context Export Single Worker Test")
@@ -127,7 +127,7 @@ test_that("export_tasker_context exports subtask counter state (multi-worker wit
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Context Export Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Context Export Test", type = "R")
   
   # Start task and first subtask
   tasker::task_start("TEST", "Context Export Test")
@@ -221,7 +221,7 @@ test_that("tasker_cluster captures subtask counter at creation time (single work
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Cluster Timing Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Cluster Timing Test", type = "R")
   
   # Start task and first subtask
   tasker::task_start("TEST", "Cluster Timing Test")
@@ -274,7 +274,7 @@ test_that("export_tasker_context after subtask_start updates workers (single wor
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Context Update Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Context Update Test", type = "R")
   
   # Start task and first subtask
   tasker::task_start("TEST", "Context Update Test")
@@ -334,7 +334,7 @@ test_that("workers fail gracefully without proper context export", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "No Context Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "No Context Test", type = "R")
   
   # Start task and subtask
   tasker::task_start("TEST", "No Context Test")
@@ -398,7 +398,7 @@ test_that("multiple subtask transitions with context updates (single worker)", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Multi Subtask Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Multi Subtask Test", type = "R")
   
   # Start task
   tasker::task_start("TEST", "Multi Subtask Test")
@@ -459,7 +459,7 @@ test_that("context export works with tasker_cluster load_all parameter (single w
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Load All Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Load All Test", type = "R")
   
   # Start task and subtask
   tasker::task_start("TEST", "Load All Test")

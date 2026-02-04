@@ -11,7 +11,7 @@ test_that("cleanup_old_metrics dry_run mode works", {
   # Setup reporter schema
   
   # Register and start old task
-  register_task(stage = "TEST", name = "Old Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Old Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Old Task", conn = con)
   
   # Complete the task 45 days ago (manually update timestamp)
@@ -76,7 +76,7 @@ test_that("cleanup_old_metrics deletes old metrics", {
   # Setup reporter schema
   
   # Register and start old task
-  register_task(stage = "TEST", name = "Old Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Old Task", type = "R")
   old_run_id <- task_start(stage = "TEST", task = "Old Task", conn = con)
   
   # Complete old task 45 days ago
@@ -100,7 +100,7 @@ test_that("cleanup_old_metrics deletes old metrics", {
   ", params = list(old_run_id))
   
   # Register and start recent task (10 days ago) - should NOT be deleted
-  register_task(stage = "TEST", name = "Recent Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Recent Task", type = "R")
   recent_run_id <- task_start(stage = "TEST", task = "Recent Task", conn = con)
   
   # Complete recent task 10 days ago
@@ -159,7 +159,7 @@ test_that("cleanup_old_metrics records retention info", {
   # Setup reporter schema
   
   # Register and start old task
-  register_task(stage = "TEST", name = "Old Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Old Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Old Task", conn = con)
   
   # Complete task 45 days ago
@@ -274,7 +274,7 @@ test_that("cleanup_old_metrics respects retention_days parameter", {
   # Setup reporter schema
   
   # Register and start task completed 15 days ago
-  register_task(stage = "TEST", name = "Medium Old Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Medium Old Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Medium Old Task", conn = con)
   
   # Complete task 15 days ago

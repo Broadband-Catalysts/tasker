@@ -7,9 +7,9 @@ test_that("get_registered_tasks returns data frame with expected columns", {
   on.exit(cleanup_test_db())
   
   # Register some test tasks
-  register_task(stage = "STAGE1", name = "task1", type = "R")
-  register_task(stage = "STAGE1", name = "task2", type = "R")
-  register_task(stage = "STAGE2", name = "task3", type = "R")
+  register_task(stage_order = 1, stage = "STAGE1", name = "task1", type = "R")
+  register_task(stage_order = 1, stage = "STAGE1", name = "task2", type = "R")
+  register_task(stage_order = 1, stage = "STAGE2", name = "task3", type = "R")
   
   # Get registered tasks
   result <- get_registered_tasks()
@@ -35,9 +35,9 @@ test_that("get_stages returns stage hierarchy", {
   on.exit(cleanup_test_db())
   
   # Register tasks in multiple stages
-  register_task(stage = "PREREQ", name = "setup", type = "R")
-  register_task(stage = "STATIC", name = "load_data", type = "R")
-  register_task(stage = "ANNUAL_SEPT", name = "process", type = "R")
+  register_task(stage_order = 1, stage = "PREREQ", name = "setup", type = "R")
+  register_task(stage_order = 1, stage = "STATIC", name = "load_data", type = "R")
+  register_task(stage_order = 1, stage = "ANNUAL_SEPT", name = "process", type = "R")
   
   # Get stages
   result <- get_stages()
@@ -62,7 +62,7 @@ test_that("get_task_status returns current task status", {
   on.exit(cleanup_test_db())
   
   # Register and start a task
-  register_task(stage = "TEST", name = "status_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "status_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "status_test", total_subtasks = 2)
   
   # Get task status
@@ -89,7 +89,7 @@ test_that("get_subtask_progress returns subtask details", {
   on.exit(cleanup_test_db())
   
   # Register and start task with subtasks
-  register_task(stage = "TEST", name = "subtask_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "subtask_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "subtask_test", total_subtasks = 3)
   
   subtask_start("Subtask 1", items_total = 100, run_id = run_id, subtask_number = 1)
@@ -127,7 +127,7 @@ test_that("task_reset clears task run status", {
   on.exit(cleanup_test_db())
   
   # Register and complete a task
-  register_task(stage = "TEST", name = "reset_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "reset_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "reset_test", total_subtasks = 1)
   subtask_start("Work", items_total = 10, run_id = run_id, subtask_number = 1)
   subtask_complete(run_id = run_id, subtask_number = 1)
@@ -190,7 +190,7 @@ test_that("task functions handle errors gracefully", {
   on.exit(cleanup_test_db())
   
   # Register a task
-  register_task(stage = "TEST", name = "error_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "error_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "error_test", total_subtasks = 1)
   
   # Start subtask then fail it
@@ -230,6 +230,7 @@ test_that("lookup_task_by_script finds tasks by filename", {
   
   # Register task with script filename using script_path (full path)
   register_task(
+    stage_order = 1,
     stage = "TEST", 
     name = "script_task", 
     type = "R",
@@ -259,6 +260,7 @@ test_that("register_task explicit script_filename overrides auto-extraction", {
   
   # Register task with both script_path and explicit script_filename
   register_task(
+    stage_order = 1,
     stage = "TEST", 
     name = "override_task", 
     type = "R",
@@ -282,7 +284,7 @@ test_that("get_task_history returns historical runs", {
   on.exit(cleanup_test_db())
   
   # Register and run a task multiple times
-  register_task(stage = "TEST", name = "history_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "history_test", type = "R")
   
   # First run - complete immediately
   run_id1 <- task_start(stage = "TEST", task = "history_test")
@@ -325,9 +327,9 @@ test_that("active task monitoring functions are available", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Register and start some tasks
-  register_task(stage = "TEST", name = "active1", type = "R")
-  register_task(stage = "TEST", name = "active2", type = "R")
-  register_task(stage = "TEST", name = "completed", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "active1", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "active2", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "completed", type = "R")
   
   # Start tasks
   run_id1 <- task_start(stage = "TEST", task = "active1")

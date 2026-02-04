@@ -9,6 +9,7 @@ test_that("register_task creates stage and task with all required columns", {
   
   # Register a task
   register_task(
+    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Test Task",
     stage_order = 10,
@@ -54,6 +55,7 @@ test_that("register_task updates existing task and triggers updated_at", {
   
   # Register initial task
   register_task(
+    stage_order = 1,
     stage = "UPDATE_TEST",
     name = "Update Task",
     type = "R",
@@ -69,6 +71,7 @@ test_that("register_task updates existing task and triggers updated_at", {
   
   # Update the task
   register_task(
+    stage_order = 1,
     stage = "UPDATE_TEST",
     name = "Update Task",
     type = "R",
@@ -93,9 +96,9 @@ test_that("clear_registered_tasks removes all tasks and stages", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register multiple tasks
-  register_task(stage = "CLEAR_TEST_1", name = "Task 1", type = "R")
-  register_task(stage = "CLEAR_TEST_1", name = "Task 2", type = "R")
-  register_task(stage = "CLEAR_TEST_2", name = "Task 3", type = "R")
+  register_task(stage_order = 1, stage = "CLEAR_TEST_1", name = "Task 1", type = "R")
+  register_task(stage_order = 1, stage = "CLEAR_TEST_1", name = "Task 2", type = "R")
+  register_task(stage_order = 1, stage = "CLEAR_TEST_2", name = "Task 3", type = "R")
   
   # Verify tasks exist
   expect_equal(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM tasks")$n, 3)
@@ -118,6 +121,7 @@ test_that("get_registered_tasks returns all tasks with proper joins", {
   
   # Register tasks in different stages
   register_task(
+    stage_order = 1,
     stage = "STAGE_A",
     name = "Task A1",
     type = "R",
@@ -126,6 +130,7 @@ test_that("get_registered_tasks returns all tasks with proper joins", {
     script_filename = "task_a1.R"
   )
   register_task(
+    stage_order = 1,
     stage = "STAGE_A",
     name = "Task A2",
     type = "R",
@@ -134,6 +139,7 @@ test_that("get_registered_tasks returns all tasks with proper joins", {
     script_filename = "task_a2.R"
   )
   register_task(
+    stage_order = 1,
     stage = "STAGE_B",
     name = "Task B1",
     type = "python",
@@ -168,6 +174,7 @@ test_that("register_task handles all optional parameters", {
   
   # Register with all parameters
   register_task(
+    stage_order = 1,
     stage = "FULL_PARAM_TEST",
     name = "Full Task",
     stage_order = 100,
@@ -207,6 +214,7 @@ test_that("register_task with missing optional parameters uses defaults", {
   
   # Register with minimal parameters (type is required)
   register_task(
+    stage_order = 1,
     stage = "MINIMAL_TEST",
     name = "Minimal Task",
     type = "R"
@@ -256,6 +264,7 @@ test_that("task registration workflow matches register_pipeline_tasks.R pattern"
   for (i in seq_len(nrow(tasks))) {
     task <- tasks[i, ]
     register_task(
+      stage_order = 1,
       stage = task$stage,
       name = task$task_name,
       stage_order = task$stage_order,
@@ -317,7 +326,7 @@ test_that("task columns support trigger operations", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a task
-  register_task(stage = "TRIGGER_TEST", name = "Trigger Task", type = "R")
+  register_task(stage_order = 1, stage = "TRIGGER_TEST", name = "Trigger Task", type = "R")
   
   # Get task_id
   task_id <- DBI::dbGetQuery(con, 

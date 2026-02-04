@@ -61,7 +61,7 @@ test_that("PostgreSQL triggers automatically update timestamps", {
   con <- test_info$con
   
   # Register a task
-  register_task(stage = "TEST", name = "trigger_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "trigger_test", type = "R")
   
   # Get initial updated_at timestamp
   initial <- DBI::dbGetQuery(con, "
@@ -108,7 +108,7 @@ test_that("PostgreSQL task_runs last_update trigger works", {
   con <- test_info$con
   
   # Register and start task
-  register_task(stage = "TEST", name = "last_update_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "last_update_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "last_update_test", total_subtasks = 1)
   
   # Get initial last_update
@@ -183,7 +183,7 @@ test_that("PostgreSQL COUNT() queries work correctly", {
   
   # Register multiple tasks
   for (i in 1:5) {
-    register_task(stage = "TEST", name = paste0("count_test_", i), type = "R")
+    register_task(stage_order = 1, stage = "TEST", name = paste0("count_test_", i), type = "R")
   }
   
   # Count tasks with explicit INTEGER cast and JOIN to stages table
@@ -210,7 +210,7 @@ test_that("PostgreSQL parallel subtask_increment is atomic", {
   on.exit(cleanup_postgresql_test(test_info))
   
   # Register and start task
-  register_task(stage = "TEST", name = "atomic_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "atomic_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "atomic_test", total_subtasks = 1)
   subtask_start("Atomic test", items_total = 100, run_id = run_id, subtask_number = 1)
   
@@ -272,7 +272,7 @@ test_that("PostgreSQL handles concurrent task operations", {
   
   # Register multiple tasks
   for (i in 1:3) {
-    register_task(stage = "CONCURRENT", name = paste0("task", i), type = "R")
+    register_task(stage_order = 1, stage = "CONCURRENT", name = paste0("task", i), type = "R")
   }
   
   # Start all tasks concurrently with fewer workers to avoid spawn limits

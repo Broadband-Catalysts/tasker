@@ -31,12 +31,12 @@ test_that("current_task_status_with_metrics view handles tasks without metrics",
   # Setup both schemas
   
   # Register and start task WITHOUT metrics
-  register_task(stage = "TEST", name = "Task Without Metrics", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Task Without Metrics", type = "R")
   run_id_no_metrics <- task_start(stage = "TEST", task = "Task Without Metrics", conn = con)
   task_update(run_id = run_id_no_metrics, status = "RUNNING", conn = con)
   
   # Register and start task WITH metrics
-  register_task(stage = "TEST", name = "Task With Metrics", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Task With Metrics", type = "R")
   run_id_with_metrics <- task_start(stage = "TEST", task = "Task With Metrics", conn = con)
   task_update(run_id = run_id_with_metrics, status = "RUNNING", conn = con)
   
@@ -82,7 +82,7 @@ test_that("current_task_status_with_metrics view returns latest metrics only", {
   # Setup schemas
   
   # Register and start running task
-  register_task(stage = "TEST", name = "Test Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Test Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Test Task", conn = con)
   task_update(run_id = run_id, status = "RUNNING", conn = con)
   
@@ -129,10 +129,10 @@ test_that("current_task_status_with_metrics view filters by status", {
   # Setup schemas
   
   # Register tasks
-  register_task(stage = "TEST", name = "Running Task", type = "R")
-  register_task(stage = "TEST", name = "Pending Task", type = "R")
-  register_task(stage = "TEST", name = "Completed Task", type = "R")
-  register_task(stage = "TEST", name = "Failed Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Running Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Pending Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Completed Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Failed Task", type = "R")
   
   # Start tasks with different statuses
   run_id_running <- task_start(stage = "TEST", task = "Running Task", conn = con)
@@ -181,7 +181,7 @@ test_that("current_task_status_with_metrics view includes all expected columns",
   # Setup schemas
   
   # Register and start a task
-  register_task(stage = "TEST", name = "Test Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Test Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Test Task", conn = con)
   task_update(run_id = run_id, status = "RUNNING", conn = con)
   

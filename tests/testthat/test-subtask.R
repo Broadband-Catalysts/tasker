@@ -23,7 +23,7 @@ test_that("subtask_increment atomically updates counter", {
   on.exit(cleanup_test_db())
   
   # Register and start task
-  register_task(stage = "TEST", name = "atomic_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "atomic_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "atomic_test", total_subtasks = 1)
   subtask_start("Atomic increment test", items_total = 100, run_id = run_id, subtask_number = 1)
   
@@ -54,7 +54,7 @@ test_that("subtask_increment works from parallel workers", {
   on.exit(cleanup_test_db())
   
   # Register and start task
-  register_task(stage = "TEST", name = "parallel_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "parallel_test", type = "R")
   run_id <- task_start(stage = "TEST", task = "parallel_test", total_subtasks = 1)
   subtask_start("Parallel increment test", items_total = 10, run_id = run_id, subtask_number = 1)
   
