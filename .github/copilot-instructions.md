@@ -1,21 +1,12 @@
 # GitHub Copilot Instructions for tasker-dev
 
-# 🛑🛑🛑 STOP - MANDATORY PRE-FLIGHT - READ THIS BEFORE RESPONDING 🛑🛑🛑
+# 🚡🚡🚡 MANDATORY PRE-FLIGHT 🚡🚡🚡
 
-☐ State which user and project copilot-instructions.md sections apply to this request
-☐ Check if any Agent Skills apply (list them explicitly)
-☐ If multi-step work: Create todo list with #manage_todo_list
-☐ Mark tasks in-progress and completed as you work
-☐ Use #code-review before finalizing ANY code changes
-☐ Use "we" collaborative language and refer to user as "Dr. Greg"
-☐ Monitor and report token usage at checkpoints (700K/850K/950K)
+**BEFORE RESPONDING:** Execute `/preflight` slash command to ensure compliance.
 
-**If you cannot check ALL boxes above, STOP and ask for clarification.**
+See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 
-**Example Response Format:**
-```
-**Following copilot-instructions.md sections: Shiny Patterns, Database Patterns**
-**Applicable Agent Skills: #code-review, #git-commit-message**
+---
 **Will use #manage_todo_list for multi-step tracking**
 
 Dr. Greg, we need to...
