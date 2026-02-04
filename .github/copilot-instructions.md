@@ -42,6 +42,8 @@ Dr. Greg, we need to...
 
 ## Quick Skill Reference
 
+**📋 Complete Skills Index:** See [SKILLS_INDEX.md](../../../vscode-config/copilot-skills/SKILLS_INDEX.md) for comprehensive guide to all available procedural patterns.
+
 - **#code-review** - REQUIRED before finalizing any code changes
 - **#git-commit-message** - For commit message generation  
 - **#user-markdown-formatting** - For markdown documentation formatting standards
