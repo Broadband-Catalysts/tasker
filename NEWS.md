@@ -1,3 +1,25 @@
+# tasker 0.9.1 (2026-02-03)
+
+## Bug Fixes
+
+* **Fixed FK constraint violation when removing tasks/stages with execution history**: 
+  - `remove_task()` and `remove_stage()` now properly SET NULL on `task_runs.task_id` before deleting task definitions
+  - Preserves execution history (task_runs records remain with NULL task_id) while allowing task removal
+  - Modified SQLite and PostgreSQL schemas to make `task_runs.task_id` nullable
+  - Added comprehensive test `test-remove_task.R` including FK constraint test case
+
+* **Fixed log message event type**: Corrected "COMPLETE" → "COMPLETED" in `tasker_log_message()` color coding
+
+## Documentation
+
+* Added `#user-markdown-formatting` skill reference to copilot-instructions.md
+
+## Testing
+
+* Fixed 17+ test files missing required `stage_order = 1` parameter in `register_task()` calls
+* Fixed `test-remove_stage.R` function name references (`delete_stage` → `remove_stage`)
+* All tests passing (62+ tests across remove_task.R and remove_stage.R)
+
 # tasker 0.9.0 (2026-01-30)
 
 ## New Features

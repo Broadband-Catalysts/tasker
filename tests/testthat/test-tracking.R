@@ -3,7 +3,7 @@ test_that("task_start creates execution record", {
   setup_test_db()
   
   # Register a task
-  register_task(stage = "TEST", name = "test_task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "test_task", type = "R")
   
   # Start the task
   run_id <- task_start(
@@ -30,7 +30,7 @@ test_that("task_update modifies execution state", {
   skip_on_cran()
   setup_test_db()
   
-  register_task(stage = "TEST", name = "test_update", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "test_update", type = "R")
   run_id <- task_start(stage = "TEST", task = "test_update", total_subtasks = 10)
   
   # Update to running
@@ -58,7 +58,7 @@ test_that("task_complete finalizes execution", {
   skip_on_cran()
   setup_test_db()
   
-  register_task(stage = "TEST", name = "test_end", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "test_end", type = "R")
   run_id <- task_start(stage = "TEST", task = "test_end")
   
   # Complete the task
@@ -80,7 +80,7 @@ test_that("task_fail handles failures", {
   skip_on_cran()
   setup_test_db()
   
-  register_task(stage = "TEST", name = "test_fail", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "test_fail", type = "R")
   run_id <- task_start(stage = "TEST", task = "test_fail")
   
   # Fail the task

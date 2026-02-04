@@ -136,8 +136,23 @@ remove_task <- function(script_filename,
     message("\nRemoving task...")
   }
   
+  # Get task_runs table name
+  task_runs_table <- get_table_name("task_runs", conn)
+  
   tryCatch({
-    # Remove the task
+    # First, preserve history by setting task_id to NULL in task_runs
+    # This breaks the FK constraint while keeping the run records
+    runs_updated <- DBI::dbExecute(
+      conn,
+      glue::glue_sql("UPDATE {task_runs_table} SET task_id = NULL WHERE task_id = {task_id}",
+                     .con = conn)
+    )
+    
+    if (!quiet && runs_updated > 0) {
+      message(sprintf("  \u2713 Preserved %d task run(s) (task_id set to NULL)", runs_updated))
+    }
+    
+    # Now remove the task
     rows_deleted <- DBI::dbExecute(
       conn,
       glue::glue_sql("DELETE FROM {tasks_table} WHERE task_id = {task_id}",

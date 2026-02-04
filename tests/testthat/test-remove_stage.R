@@ -9,37 +9,37 @@ test_that("remove_stage validates input", {
   expect_error(remove_stage(), "stage_name.*must be")
   
   # NULL stage_name
-  expect_error(delete_stage(NULL), "stage_name.*must be")
+  expect_error(remove_stage(NULL), "stage_name.*must be")
   
   # Empty stage_name
-  expect_error(delete_stage(""), "stage_name.*must be")
+  expect_error(remove_stage(""), "stage_name.*must be")
   
   # Multiple stage names
-  expect_error(delete_stage(c("STAGE1", "STAGE2")), "stage_name.*must be")
+  expect_error(remove_stage(c("STAGE1", "STAGE2")), "stage_name.*must be")
   
   # Numeric stage_name
-  expect_error(delete_stage(123), "stage_name.*must be")
+  expect_error(remove_stage(123), "stage_name.*must be")
 })
 
-test_that("delete_stage handles non-existent stage", {
+test_that("remove_stage handles non-existent stage", {
   skip_on_cran()
   setup_test_db()
   on.exit(cleanup_test_db())
   
   # Try to delete non-existent stage
-  result <- delete_stage(
+  result <- remove_stage(
     "NONEXISTENT_STAGE",
     confirmation_string = NULL,
     interactive = FALSE,
     quiet = TRUE
   )
   
-  expect_false(result$stage_deleted)
-  expect_equal(result$tasks_deleted, 0)
+  expect_false(result$stage_removed)
+  expect_equal(result$tasks_removed, 0)
   expect_equal(result$stage_name, "NONEXISTENT_STAGE")
 })
 
-test_that("delete_stage deletes stage with no tasks", {
+test_that("remove_stage deletes stage with no tasks", {
   skip_on_cran()
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
@@ -61,7 +61,7 @@ test_that("delete_stage deletes stage with no tasks", {
   expect_equal(stage_count_before, 1)
   
   # Delete the stage
-  result <- delete_stage(
+  result <- remove_stage(
     "EMPTY_STAGE",
     conn = con,
     confirmation_string = NULL,
@@ -69,8 +69,8 @@ test_that("delete_stage deletes stage with no tasks", {
     quiet = TRUE
   )
   
-  expect_true(result$stage_deleted)
-  expect_equal(result$tasks_deleted, 0)
+  expect_true(result$stage_removed)
+  expect_equal(result$tasks_removed, 0)
   expect_equal(result$stage_name, "EMPTY_STAGE")
   
   # Verify stage was deleted
@@ -82,15 +82,15 @@ test_that("delete_stage deletes stage with no tasks", {
   expect_equal(stage_count_after, 0)
 })
 
-test_that("delete_stage deletes stage with tasks", {
+test_that("remove_stage deletes stage with tasks", {
   skip_on_cran()
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a stage with tasks
-  register_task(stage = "TEST_STAGE", name = "Task 1", type = "R", conn = con)
-  register_task(stage = "TEST_STAGE", name = "Task 2", type = "R", conn = con)
-  register_task(stage = "TEST_STAGE", name = "Task 3", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "TEST_STAGE", name = "Task 1", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "TEST_STAGE", name = "Task 2", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "TEST_STAGE", name = "Task 3", type = "R", conn = con)
   
   # Verify stage and tasks exist
   stages_table <- tasker:::get_table_name("stages", con)
@@ -113,7 +113,7 @@ test_that("delete_stage deletes stage with tasks", {
   expect_equal(task_count_before, 3)
   
   # Delete the stage
-  result <- delete_stage(
+  result <- remove_stage(
     "TEST_STAGE",
     conn = con,
     confirmation_string = NULL,
@@ -121,8 +121,8 @@ test_that("delete_stage deletes stage with tasks", {
     quiet = TRUE
   )
   
-  expect_true(result$stage_deleted)
-  expect_equal(result$tasks_deleted, 3)
+  expect_true(result$stage_removed)
+  expect_equal(result$tasks_removed, 3)
   expect_equal(result$stage_name, "TEST_STAGE")
   
   # Verify stage was deleted
@@ -144,13 +144,13 @@ test_that("delete_stage deletes stage with tasks", {
   expect_equal(task_count_after, 0)
 })
 
-test_that("delete_stage preserves execution history", {
+test_that("remove_stage preserves execution history", {
   skip_on_cran()
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a stage with tasks
-  register_task(stage = "HISTORY_STAGE", name = "Task A", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "HISTORY_STAGE", name = "Task A", type = "R", conn = con)
   
   # Start and complete a task run
   run_id <- task_start(stage = "HISTORY_STAGE", task = "Task A", conn = con)
@@ -166,7 +166,7 @@ test_that("delete_stage preserves execution history", {
   expect_equal(run_count_before, 1)
   
   # Delete the stage
-  result <- delete_stage(
+  result <- remove_stage(
     "HISTORY_STAGE",
     conn = con,
     confirmation_string = NULL,
@@ -174,8 +174,8 @@ test_that("delete_stage preserves execution history", {
     quiet = TRUE
   )
   
-  expect_true(result$stage_deleted)
-  expect_equal(result$tasks_deleted, 1)
+  expect_true(result$stage_removed)
+  expect_equal(result$tasks_removed, 1)
   
   # Verify task run still exists (execution history preserved)
   run_count_after <- DBI::dbGetQuery(
@@ -186,17 +186,17 @@ test_that("delete_stage preserves execution history", {
   expect_equal(run_count_after, 1)
 })
 
-test_that("delete_stage respects confirmation in interactive mode", {
+test_that("remove_stage respects confirmation in interactive mode", {
   skip_on_cran()
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a test stage
-  register_task(stage = "CONFIRM_STAGE", name = "Task", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "CONFIRM_STAGE", name = "Task", type = "R", conn = con)
   
   # Non-interactive with confirmation string should error
   expect_error(
-    delete_stage(
+    remove_stage(
       "CONFIRM_STAGE",
       conn = con,
       confirmation_string = "DELETE STAGE",
@@ -215,17 +215,17 @@ test_that("delete_stage respects confirmation in interactive mode", {
   expect_equal(stage_count, 1)
 })
 
-test_that("delete_stage works in quiet mode", {
+test_that("remove_stage works in quiet mode", {
   skip_on_cran()
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a test stage
-  register_task(stage = "QUIET_STAGE", name = "Task", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "QUIET_STAGE", name = "Task", type = "R", conn = con)
   
   # Capture output
   output <- capture.output({
-    result <- delete_stage(
+    result <- remove_stage(
       "QUIET_STAGE",
       conn = con,
       confirmation_string = NULL,
@@ -238,19 +238,19 @@ test_that("delete_stage works in quiet mode", {
   expect_length(output, 0)
   
   # But should still delete the stage
-  expect_true(result$stage_deleted)
-  expect_equal(result$tasks_deleted, 1)
+  expect_true(result$stage_removed)
+  expect_equal(result$tasks_removed, 1)
 })
 
-test_that("delete_stage doesn't affect other stages", {
+test_that("remove_stage doesn't affect other stages", {
   skip_on_cran()
   con <- setup_test_db()
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register multiple stages
-  register_task(stage = "KEEP_STAGE_1", name = "Task 1", type = "R", conn = con)
-  register_task(stage = "DELETE_STAGE", name = "Task 2", type = "R", conn = con)
-  register_task(stage = "KEEP_STAGE_2", name = "Task 3", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "KEEP_STAGE_1", name = "Task 1", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "DELETE_STAGE", name = "Task 2", type = "R", conn = con)
+  register_task(stage_order = 1, stage = "KEEP_STAGE_2", name = "Task 3", type = "R", conn = con)
   
   # Count stages before deletion
   stages_table <- tasker:::get_table_name("stages", con)
@@ -261,7 +261,7 @@ test_that("delete_stage doesn't affect other stages", {
   expect_equal(stage_count_before, 3)
   
   # Delete one stage
-  result <- delete_stage(
+  result <- remove_stage(
     "DELETE_STAGE",
     conn = con,
     confirmation_string = NULL,
@@ -269,7 +269,7 @@ test_that("delete_stage doesn't affect other stages", {
     quiet = TRUE
   )
   
-  expect_true(result$stage_deleted)
+  expect_true(result$stage_removed)
   
   # Verify other stages still exist
   stage_count_after <- DBI::dbGetQuery(

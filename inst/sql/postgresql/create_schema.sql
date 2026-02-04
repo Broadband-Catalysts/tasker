@@ -35,7 +35,8 @@ CREATE INDEX idx_tasks_order ON tasker.tasks(task_order);
 
 CREATE TABLE IF NOT EXISTS tasker.task_runs (
     run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id INTEGER NOT NULL REFERENCES tasker.tasks(task_id),
+    -- Nullable to preserve execution history when task definitions are removed
+    task_id INTEGER REFERENCES tasker.tasks(task_id),
     
     -- Execution identification
     hostname VARCHAR(255) NOT NULL,

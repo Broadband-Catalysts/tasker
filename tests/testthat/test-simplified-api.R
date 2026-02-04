@@ -20,7 +20,7 @@ test_that("Context-based API works", {
   tasker::setup_tasker_db()
   
   # Register a test task
-  tasker::register_task("TEST", "Simplified API Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Simplified API Test", type = "R")
   
   # Test context-based workflow
   tasker::task_start("TEST", "Simplified API Test")
@@ -63,7 +63,7 @@ test_that("Backward compatibility maintained", {
   tasker::setup_tasker_db()
   
   # Register a test task
-  tasker::register_task("TEST", "Old API Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Old API Test", type = "R")
   
   # Test old-style API (explicit parameters)
   run_id <- tasker::task_start("TEST", "Old API Test", .active = FALSE)
@@ -96,7 +96,7 @@ test_that("tasker_cluster helper works", {
   )
   
   tasker::setup_tasker_db()
-  tasker::register_task("TEST", "Parallel Test", "R")
+  tasker::register_task(stage_order = 1, stage = "TEST", name = "Parallel Test", type = "R")
   
   # Start task
   tasker::task_start("TEST", "Parallel Test")

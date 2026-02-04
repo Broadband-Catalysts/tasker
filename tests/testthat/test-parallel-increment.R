@@ -3,7 +3,7 @@ test_that("subtask_increment works in parallel workers", {
   setup_test_db()
   
   # Register a task
-  register_task(stage = "TEST", name = "parallel_test", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "parallel_test", type = "R")
   
   # Start the task with subtasks
   run_id <- task_start(

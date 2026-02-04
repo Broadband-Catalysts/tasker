@@ -149,8 +149,24 @@ remove_stage <- function(stage_name,
     message("Removing stage '", stage_name, "'...")
   }
   
+  # Get task_runs table name
+  task_runs_table <- get_table_name("task_runs", conn)
+  
   tryCatch({
-    # Remove tasks first (foreign key constraint)
+    # First, preserve history by setting task_id to NULL in task_runs for all tasks in this stage
+    # This breaks the FK constraint while keeping the run records
+    runs_updated <- DBI::dbExecute(
+      conn,
+      glue::glue_sql("UPDATE {task_runs_table} SET task_id = NULL 
+                      WHERE task_id IN (SELECT task_id FROM {tasks_table} WHERE stage_id = {stage_id})",
+                     .con = conn)
+    )
+    
+    if (!quiet && runs_updated > 0) {
+      message("  \u2713 Preserved ", runs_updated, " task run(s) (task_id set to NULL)")
+    }
+    
+    # Remove tasks (foreign key constraint now satisfied)
     tasks_removed <- DBI::dbExecute(
       conn,
       glue::glue_sql("DELETE FROM {tasks_table} WHERE stage_id = {stage_id}",

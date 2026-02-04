@@ -7,6 +7,7 @@ test_that("register_task applies no defaults when all parameters provided", {
   # Suppress warnings (we're testing explicit specification)
   task_id <- suppressWarnings(
     register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Explicit Task",
       type = "R",
@@ -44,6 +45,7 @@ test_that("register_task extracts script_filename from script_path when only pat
   # Should warn about extracting script_filename
   expect_warning(
     task_id <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Extract Filename Task",
       type = "R",
@@ -74,6 +76,7 @@ test_that("register_task generates log_filename from script_filename for R scrip
   # Should warn about deriving log_filename
   expect_warning(
     task_id <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "R Script Task",
       type = "R",
@@ -100,6 +103,7 @@ test_that("register_task generates log_filename from script_filename for shell s
   
   expect_warning(
     task_id <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Shell Script Task",
       type = "sh",
@@ -126,6 +130,7 @@ test_that("register_task generates log_filename from script_filename for Python 
   
   expect_warning(
     task_id <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Python Script Task",
       type = "python",
@@ -152,6 +157,7 @@ test_that("register_task uses .log for unknown file extensions", {
   
   expect_warning(
     task_id <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Unknown Extension Task",
       type = "other",
@@ -179,6 +185,7 @@ test_that("register_task sets log_path same as script_path when only script_path
   # Provide script_path but not log_path
   expect_warning(
     task_id <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Log Path Default Task",
       type = "R",
@@ -208,6 +215,7 @@ test_that("register_task handles case-insensitive file extensions", {
   # Test uppercase .R
   expect_warning(
     task_id1 <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Uppercase R",
       type = "R",
@@ -220,6 +228,7 @@ test_that("register_task handles case-insensitive file extensions", {
   # Test lowercase .r
   expect_warning(
     task_id2 <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Lowercase r",
       type = "R",
@@ -252,6 +261,7 @@ test_that("register_task updates existing tasks preserving defaults", {
   # Create task with defaults
   expect_warning(
     task_id1 <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Update Test",
       type = "R",
@@ -264,6 +274,7 @@ test_that("register_task updates existing tasks preserving defaults", {
   # Update without providing optional fields (should preserve)
   task_id2 <- suppressWarnings(
     register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Update Test",  # Same name = update
       type = "R",
@@ -294,6 +305,7 @@ test_that("register_task auto-detects type from script filename extension", {
   # Test .R extension
   expect_warning(
     task_id_r <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "R Type Detect",
       stage_order = 1,
@@ -313,6 +325,7 @@ test_that("register_task auto-detects type from script filename extension", {
   # Test .py extension
   expect_warning(
     task_id_py <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Python Type Detect",
       stage_order = 1,
@@ -331,6 +344,7 @@ test_that("register_task auto-detects type from script filename extension", {
   # Test .sh extension
   expect_warning(
     task_id_sh <- register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Shell Type Detect",
       stage_order = 1,
@@ -355,6 +369,7 @@ test_that("register_task requires explicit type for unknown extensions", {
   # Should error when type cannot be detected
   expect_error(
     register_task(
+      stage_order = 1,
       stage = "TEST",
       name = "Unknown Type",
       stage_order = 1,

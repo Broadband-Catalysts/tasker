@@ -9,7 +9,7 @@
 #' - Numeric ID: 7 chars (right-aligned, supports up to 99.99.99)
 #' - Event type: 8 chars (left-aligned, color-coded if crayon available)
 #'
-#' @param event_type Event type (e.g., "START", "COMPLETE", "FAILED", "UPDATE")
+#' @param event_type Event type (e.g., "START", "COMPLETED", "FAILED", "UPDATE")
 #' @param stage_order Stage order number (optional)
 #' @param task_order Task order number (optional)
 #' @param subtask_number Subtask number (optional)
@@ -84,7 +84,7 @@ tasker_log_message <- function(event_type,
     event_display <- switch(
       event_type,
       "START" = crayon::green(event_display),
-      "COMPLETE" = crayon::blue(event_display),
+      "COMPLETED" = crayon::blue(event_display),
       "FAILED" = crayon::red(event_display),
       "UPDATE" = crayon::yellow(event_display),
       "MARKED COMPLETE" = crayon::cyan(event_display),

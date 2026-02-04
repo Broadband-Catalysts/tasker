@@ -1266,7 +1266,8 @@ server <- function(input, output, session) {
       items_complete <- 0
       subtask_info <- NULL
       completed_subtasks <- 0
-      total_subtasks <- 0
+      # Use total_subtasks from database if available, otherwise 0
+      # total_subtasks <- if (!is.na(task_status$total_subtasks)) task_status$total_subtasks else 0
       if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
         # Get all subtasks for this run
         subs <- tryCatch({

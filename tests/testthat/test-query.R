@@ -22,7 +22,7 @@ test_that("get_task_status returns metrics columns", {
   # Setup reporter schema (creates views)
   
   # Register and start a running task
-  register_task(stage = "TEST", name = "Test Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Test Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Test Task", conn = con)
   
   # Update to running status and backdate start time
@@ -76,7 +76,7 @@ test_that("get_task_status handles NULL metrics gracefully", {
   # Setup reporter schema (creates views)
   
   # Register and start task WITHOUT metrics
-  register_task(stage = "TEST", name = "Task Without Metrics", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Task Without Metrics", type = "R")
   run_id <- task_start(stage = "TEST", task = "Task Without Metrics", conn = con)
   
   # Update to running status
@@ -113,7 +113,7 @@ test_that("get_task_status calculates metrics_age_seconds correctly", {
   # Setup reporter schema
   
   # Register and start task
-  register_task(stage = "TEST", name = "Test Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Test Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Test Task", conn = con)
   
   # Update to running status
@@ -144,7 +144,7 @@ test_that("get_task_status returns latest metrics when multiple exist", {
   # Setup reporter schema
   
   # Register and start task
-  register_task(stage = "TEST", name = "Test Task", type = "R")
+  register_task(stage_order = 1, stage = "TEST", name = "Test Task", type = "R")
   run_id <- task_start(stage = "TEST", task = "Test Task", conn = con)
   
   # Update to running status
