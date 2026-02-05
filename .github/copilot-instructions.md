@@ -154,7 +154,7 @@ process_item <- function(item) {
 
 ## Task Registration Patterns
 
-**See #tasker-enhance skill (taskerEnhance.prompt.md) for complete guidance** on task registration and error handling patterns.
+**See `/tasker` command for complete guidance** on task registration and error handling patterns.
 
 ### CRITICAL: Auto-Detected Paths Are Normalized to Absolute
 
@@ -170,7 +170,7 @@ process_item <- function(item) {
 - **Explicit** paths provided by user are preserved as-is for backward compatibility
 - Tested in `tests/testthat/test-register_task_absolute_paths.R`
 
-**For registration patterns and when to use `register_task()`:** See #tasker-enhance skill
+**For registration patterns and when to use `register_task()`:** See `/tasker` command
 
 ## Database Patterns
 
@@ -221,7 +221,7 @@ WHERE column_name ILIKE '%pattern%'
 
 ## Error Handling Patterns
 
-**See #tasker-enhance skill (taskerEnhance.prompt.md) for complete guidance** on the `.Last()` pattern and why `tryCatch()` wrappers are deprecated.
+**See `/tasker` command for complete guidance** on the `.Last()` pattern and error handling patterns.
 
 **Quick reference:**
 - ✅ Use `.Last()` function for automatic error handling on script termination
