@@ -4,13 +4,13 @@
 
 **BEFORE RESPONDING:** Execute `/preflight` slash command to ensure compliance.
 
+**Agent checklist:**
+1. Read preflight.prompt.md requirements
+2. Identify if task requires multi-step tracking (#manage_todo_list)
+3. Execute `/preflight` command if required by prompt
+4. Only proceed with response after compliance verified
+
 See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
-
----
-**Will use #manage_todo_list for multi-step tracking**
-
-Dr. Greg, we need to...
-```
 
 ---
 
