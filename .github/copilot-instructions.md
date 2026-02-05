@@ -39,6 +39,7 @@ See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 - **#git-commit-message** - For commit message generation  
 - **#user-markdown-formatting** - For markdown documentation formatting standards
 - **#shiny-ui-patterns** - For Shiny UI updates without flickering
+- **#diagram-generation** - For generating Mermaid diagrams
 - **#database-patterns** - For database connection and query patterns
 - **#r-script-execution** - For running scripts and managing packages
 - **#unit-testing** - For creating and maintaining test coverage
