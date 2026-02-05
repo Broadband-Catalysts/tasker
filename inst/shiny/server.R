@@ -2541,7 +2541,16 @@ server <- function(input, output, session) {
   # ============================================================================
   # AUTO-EXPAND: Automatically expand task process panes when status transitions
   # ============================================================================
-  
+  # 
+  # Process Info Panel Visibility Logic (see inst/docs/reactive-dependencies.md)
+  #
+  # Auto-Open: Task status transitions TO STARTED, RUNNING, or FAILED
+  # Auto-Close: Task status transitions FROM RUNNING/STARTED TO COMPLETED
+  # User Toggle: Always allowed, overrides automatic behavior
+  #
+  # CRITICAL: Only individual tasks with active statuses should auto-open
+  # Do NOT open all tasks within a stage when the stage becomes active
+  # 
   observe({
     struct <- pipeline_structure()
     if (is.null(struct)) return()
@@ -2573,34 +2582,30 @@ server <- function(input, output, session) {
         # Store current status for next comparison
         rv$task_previous_statuses[[task_key]] <- current_status
         
-        # Only auto-expand if status CHANGED TO RUNNING or STARTED
+        # Only auto-expand if status CHANGED TO active (RUNNING, STARTED, or FAILED)
+        # CRITICAL: Check individual task status, NOT stage status
         status_changed_to_active <- !is.null(previous_status) && 
-                                     !(previous_status %in% c("RUNNING", "STARTED")) &&
-                                     (current_status %in% c("RUNNING", "STARTED"))
+                                     !(previous_status %in% c("RUNNING", "STARTED", "FAILED")) &&
+                                     (current_status %in% c("RUNNING", "STARTED", "FAILED"))
         
         # Auto-collapse if status CHANGED TO COMPLETED
         status_changed_to_completed <- !is.null(previous_status) && 
                                         (previous_status %in% c("RUNNING", "STARTED")) &&
                                         (current_status == "COMPLETED")
         
-        # On initial load (previous_status is NULL), expand active tasks
+        # On initial load (previous_status is NULL), expand active/failed tasks only
+        # CRITICAL: Only tasks with active status, not all tasks in an active stage
         initial_load_active <- is.null(previous_status) && 
-                               (current_status %in% c("RUNNING", "STARTED"))
+                               (current_status %in% c("RUNNING", "STARTED", "FAILED"))
         
         if (status_changed_to_active || initial_load_active) {
-          # Expand process pane
-          if (!(task_id %in% rv$expanded_process_panes)) {
-            rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
-            shinyjs::show(paste0("process_pane_", task_id))
-            shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
-          }
+          # Expand process pane for this specific task (DOM manipulation only)
+          shinyjs::show(paste0("process_pane_", task_id))
+          shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
         } else if (status_changed_to_completed) {
-          # Collapse process pane
-          if (task_id %in% rv$expanded_process_panes) {
-            rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
-            shinyjs::hide(paste0("process_pane_", task_id))
-            shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
-          }
+          # Collapse process pane when task completes (DOM manipulation only)
+          shinyjs::hide(paste0("process_pane_", task_id))
+          shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
         }
       }
     })
@@ -2609,48 +2614,35 @@ server <- function(input, output, session) {
   # ============================================================================
   # EXPANDABLE PANES: Toggle Event Handlers
   # ============================================================================
-  
+  # 
+  # Process Info Panel Toggle Logic (see inst/docs/reactive-dependencies.md)
+  # User toggles override automatic behavior and take immediate effect
+  # 
   # Process pane toggle handler
   observeEvent(input$toggle_process_pane, {
     task_id <- input$toggle_process_pane
+    req(task_id)  # Ensure task_id is valid
     
-    # Toggle expanded state and visibility immediately
-    if (task_id %in% rv$expanded_process_panes) {
-      rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
-      shinyjs::hide(paste0("process_pane_", task_id))
-      shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
-    } else {
-      rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
-      # Show immediately (content already pre-rendered)
-      shinyjs::show(paste0("process_pane_", task_id))
-      shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
-    }
-  })
+    # Toggle visibility and button class directly via DOM manipulation
+    shinyjs::toggle(paste0("process_pane_", task_id))
+    shinyjs::toggleClass(paste0("btn_expand_process_", task_id), "expanded")
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   # Log pane toggle handler
   observeEvent(input$toggle_log_pane, {
     task_id <- input$toggle_log_pane
+    req(task_id)  # Ensure task_id is valid
     
     # Initialize log settings for this task if not exists
     init_log_settings(rv, task_id)
     
-    # Toggle expanded state
-    if (task_id %in% rv$expanded_log_panes) {
-      rv$expanded_log_panes <- setdiff(rv$expanded_log_panes, task_id)
-      # Hide the pane
-      shinyjs::hide(paste0("log_pane_", task_id))
-      # Remove expanded class from button
-      shinyjs::removeClass(paste0("btn_expand_log_", task_id), "expanded")
-    } else {
-      rv$expanded_log_panes <- c(rv$expanded_log_panes, task_id)
-      # Show the pane
-      shinyjs::show(paste0("log_pane_", task_id))
-      # Add expanded class to button
-      shinyjs::addClass(paste0("btn_expand_log_", task_id), "expanded")
-      # Force log refresh for this task
-      rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
-    }
-  })
+    # Toggle visibility and button class directly via DOM manipulation
+    shinyjs::toggle(paste0("log_pane_", task_id))
+    shinyjs::toggleClass(paste0("btn_expand_log_", task_id), "expanded")
+    
+    # Force log refresh when expanding
+    rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   # ============================================================================
   # LOG CONTROLS: Dynamic observers for log viewer settings

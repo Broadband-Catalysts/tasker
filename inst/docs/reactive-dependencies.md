@@ -475,6 +475,63 @@ When verifying reactive dependency fixes:
 
 ---
 
+## Process Info Panel Visibility Logic
+
+**Location:** `server.R` lines ~2532-2602 (AUTO-EXPAND observer)
+
+### Visibility Rules by Task Status
+
+The Process Info panel visibility is controlled automatically based on task status transitions and user interaction. The following table defines when panels should be visible (open) or hidden (closed):
+
+| Task Status   | Auto-Open on Transition | Auto-Close on Transition | User Toggle Allowed |
+|---------------|-------------------------|--------------------------|---------------------|
+| NOT_STARTED   | ❌ No                   | ❌ No                    | ✅ Yes              |
+| STARTED       | ✅ Yes                  | ❌ No                    | ✅ Yes              |
+| RUNNING       | ✅ Yes                  | ❌ No                    | ✅ Yes              |
+| COMPLETED     | ❌ No                   | ✅ Yes (from RUNNING)    | ✅ Yes              |
+| FAILED        | ✅ Yes                  | ❌ No                    | ✅ Yes              |
+| SKIPPED       | ❌ No                   | ❌ No                    | ✅ Yes              |
+
+**Key Principles:**
+
+1. **Auto-Open Conditions:**
+   - Individual task transitions FROM any non-active status TO `STARTED`, `RUNNING`, or `FAILED`
+   - Initial page load where task current status is `STARTED`, `RUNNING`, or `FAILED`
+
+2. **Auto-Close Conditions:**
+   - Individual task transitions FROM `STARTED` or `RUNNING` TO `COMPLETED`
+
+3. **❌ ANTI-PATTERN:** Do NOT open panels for all tasks when a stage becomes active
+   - Only the specific task that changed status should have its panel opened
+   - COMPLETED tasks within an active stage should remain closed
+
+4. **Default State Reapplication:**
+   - When a **task** changes state → Apply visibility rules to that task only
+   - When a **stage** changes state → No automatic visibility changes to tasks
+   - When user clicks **toggle button** → Override automatic state (user preference takes precedence)
+
+### Implementation Notes
+
+**Status Transition Tracking:**
+```r
+# Store previous status for each task
+rv$task_previous_statuses[[task_key]] <- current_status
+
+# Only auto-expand if status CHANGED TO active
+status_changed_to_active <- !is.null(previous_status) && 
+                             !(previous_status %in% c("RUNNING", "STARTED", "FAILED")) &&
+                             (current_status %in% c("RUNNING", "STARTED", "FAILED"))
+```
+
+**User Override Persistence:**
+- User toggle actions update `rv$expanded_process_panes`
+- Automatic transitions respect user preferences (don't toggle if user manually set)
+- Manual toggle always takes precedence over automatic behavior
+
+**See also:** `#shiny-ui-patterns` skill for related anti-patterns
+
+---
+
 ## References
 
 - [Shiny Reactivity Documentation](https://shiny.rstudio.com/articles/reactivity-overview.html)
