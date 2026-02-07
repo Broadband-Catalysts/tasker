@@ -96,3 +96,182 @@ database:
   
   return(config_file)
 }
+#' Cleanup orphaned reporter processes from test execution
+#' 
+#' Finds and terminates any reporter processes that were spawned by this test
+#' process (identified by parent PID). This prevents reporter process leakage
+#' that can exhaust database connections.
+#' 
+#' **Problem:** Tests that start reporter processes using start_reporter() create
+#' background R processes via callr::r_bg(). If tests fail or don't properly clean up,
+#' these reporter processes continue running and maintain database connections.
+#' Over multiple test runs, this exhausts the database connection pool.
+#' 
+#' **Solution:** This function finds all running R processes whose parent PID matches
+#' the current test process, checks if they're reporters (by looking for the
+#' process_reporter_main_loop function in their command line), and terminates them.
+#' 
+#' @param timeout Maximum seconds to wait for graceful shutdown (default: 5)
+#' @param con Database connection (optional, uses configured connection if NULL)
+#' @param quiet Suppress informational messages (default: FALSE)
+#' 
+#' @return List with:
+#'   - found: Number of orphaned reporters found
+#'   - stopped: Number successfully stopped
+#'   - failed: Number that failed to stop
+#'   
+#' @details
+#' This function should be called:
+#' 1. In teardown files (tests/testthat/teardown-*.R) to clean up after all tests
+#' 2. In individual test on.exit() handlers that spawn reporters
+#' 3. Before test runs to ensure clean slate
+#' 
+#' The function performs these steps:
+#' 1. Get current test process PID
+#' 2. Find all R processes that are children of this PID
+#' 3. Check each for reporter-specific patterns (process_reporter_main_loop)
+#' 4. Attempt graceful shutdown via stop_reporter() 
+#' 5. Force-kill any that don't stop gracefully
+#' 
+#' @examples
+#' \dontrun{
+#' # At end of test file
+#' cleanup_test_reporters()
+#' 
+#' # In test with on.exit
+#' on.exit({
+#'   cleanup_test_reporters(quiet = TRUE)
+#'   cleanup_test_db()
+#' }, add = TRUE)
+#' }
+cleanup_test_reporters <- function(timeout = 5, con = NULL, quiet = FALSE) {
+  if (!requireNamespace("ps", quietly = TRUE)) {
+    if (!quiet) message("ps package not available, skipping reporter cleanup")
+    return(list(found = 0, stopped = 0, failed = 0))
+  }
+  
+  # Import stringr functions for clean string matching
+  import::from(stringr, str_detect, regex)
+  
+  current_pid <- Sys.getpid()
+  found <- 0
+  stopped <- 0
+  failed <- 0
+  
+  # Get database connection if not provided
+  close_con <- FALSE
+  if (is.null(con)) {
+    con <- tryCatch(get_test_db_connection(), error = function(e) NULL)
+    if (!is.null(con)) close_con <- TRUE
+  }
+  
+  on.exit({
+    if (close_con && !is.null(con)) {
+      tryCatch(DBI::dbDisconnect(con), error = function(e) NULL)
+    }
+  })
+  
+  # Find all reporter processes spawned by this test process
+  tryCatch({
+    all_procs <- ps::ps()
+    
+    # Find R processes that are children of current test process
+    child_r_procs <- all_procs |>
+      dplyr::filter(
+        ppid == current_pid,
+        str_detect(name, regex("(R|Rscript)", ignore_case = TRUE))
+      )
+    
+    if (nrow(child_r_procs) == 0) {
+      if (!quiet) message("No child R processes found")
+      return(list(found = 0, stopped = 0, failed = 0))
+    }
+    
+    # Check each child process to see if it's a reporter
+    for (i in seq_len(nrow(child_r_procs))) {
+      proc_pid <- child_r_procs$pid[i]
+      
+      # Try to get command line to confirm it's a reporter
+      is_reporter <- FALSE
+      tryCatch({
+        proc_info <- ps::ps_handle(proc_pid)
+        cmdline <- paste(ps::ps_cmdline(proc_info), collapse = " ")
+        
+        # Reporter processes run process_reporter_main_loop or contain reporter config
+        if (grepl("process_reporter_main_loop|reporter.*config|start_reporter", cmdline, ignore.case = TRUE)) {
+          is_reporter <- TRUE
+        }
+      }, error = function(e) {
+        # Process may have already exited or access denied
+      })
+      
+      if (is_reporter) {
+        found <- found + 1
+        
+        if (!quiet) {
+          message(sprintf("Found orphaned reporter process: PID %d", proc_pid))
+        }
+        
+        # Try graceful shutdown first if we have database access
+        graceful_stop <- FALSE
+        if (!is.null(con)) {
+          # Try to find hostname for this reporter in database
+          tryCatch({
+            table_name <- tasker:::get_table_name("reporter_status", con, char = TRUE)
+            query <- sprintf("SELECT hostname FROM %s WHERE process_id = %d", table_name, proc_pid)
+            result <- DBI::dbGetQuery(con, query)
+            
+            if (nrow(result) > 0) {
+              hostname <- result$hostname[1]
+              if (!quiet) message(sprintf("  Attempting graceful shutdown for hostname: %s", hostname))
+              
+              graceful_result <- tryCatch(
+                tasker::stop_reporter(hostname, timeout = timeout, con = con),
+                error = function(e) FALSE
+              )
+              
+              graceful_stop <- isTRUE(graceful_result)
+            }
+          }, error = function(e) {
+            # Database query failed, will try force kill
+          })
+        }
+        
+        # If graceful stop failed or wasn't attempted, force kill
+        if (!graceful_stop) {
+          kill_result <- tryCatch({
+            if (!quiet) message(sprintf("  Force killing PID %d", proc_pid))
+            proc_handle <- ps::ps_handle(proc_pid)
+            ps::ps_kill(proc_handle)
+            
+            # Wait briefly to confirm termination
+            Sys.sleep(0.5)
+            
+            # Check if process is gone
+            !ps::ps_is_running(proc_handle)
+          }, error = function(e) {
+            FALSE
+          })
+          
+          if (kill_result) {
+            stopped <- stopped + 1
+          } else {
+            failed <- failed + 1
+            if (!quiet) warning(sprintf("  Failed to stop reporter PID %d", proc_pid))
+          }
+        } else {
+          stopped <- stopped + 1
+        }
+      }
+    }
+    
+  }, error = function(e) {
+    if (!quiet) warning("Error during reporter cleanup: ", e$message)
+  })
+  
+  if (!quiet && found > 0) {
+    message(sprintf("Reporter cleanup: found=%d, stopped=%d, failed=%d", found, stopped, failed))
+  }
+  
+  return(list(found = found, stopped = stopped, failed = failed))
+}

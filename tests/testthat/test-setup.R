@@ -73,7 +73,7 @@ test_that("database setup with force drops existing schema", {
   setup_tasker_db(conn)
   
   # Add some data using register_task
-  tasker::register_task(stage = "TEST", name = "test_task", type = "R", conn = conn)
+  tasker::register_task(stage = "TEST", name = "test_task", type = "R", stage_order = 1, conn = conn)
   
   # Setup with force
   setup_tasker_db(conn, force = TRUE)

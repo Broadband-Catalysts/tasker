@@ -88,9 +88,9 @@ test_that("delete_stage deletes stage with tasks", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a stage with tasks
-  register_task(stage = "TEST_STAGE", name = "Task 1", type = "R", conn = con)
-  register_task(stage = "TEST_STAGE", name = "Task 2", type = "R", conn = con)
-  register_task(stage = "TEST_STAGE", name = "Task 3", type = "R", conn = con)
+  register_task(stage = "TEST_STAGE", name = "Task 1", type = "R", stage_order = 1, conn = con)
+  register_task(stage = "TEST_STAGE", name = "Task 2", type = "R", stage_order = 1, conn = con)
+  register_task(stage = "TEST_STAGE", name = "Task 3", type = "R", stage_order = 1, conn = con)
   
   # Verify stage and tasks exist
   stages_table <- tasker:::get_table_name("stages", con)
@@ -150,7 +150,7 @@ test_that("delete_stage preserves execution history", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a stage with tasks
-  register_task(stage = "HISTORY_STAGE", name = "Task A", type = "R", conn = con)
+  register_task(stage = "HISTORY_STAGE", name = "Task A", type = "R", stage_order = 1, conn = con)
   
   # Start and complete a task run
   run_id <- task_start(stage = "HISTORY_STAGE", task = "Task A", conn = con)
@@ -192,7 +192,7 @@ test_that("delete_stage respects confirmation in interactive mode", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a test stage
-  register_task(stage = "CONFIRM_STAGE", name = "Task", type = "R", conn = con)
+  register_task(stage = "CONFIRM_STAGE", name = "Task", type = "R", stage_order = 1, conn = con)
   
   # Non-interactive with confirmation string should error
   expect_error(
@@ -221,7 +221,7 @@ test_that("delete_stage works in quiet mode", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register a test stage
-  register_task(stage = "QUIET_STAGE", name = "Task", type = "R", conn = con)
+  register_task(stage = "QUIET_STAGE", name = "Task", type = "R", stage_order = 1, conn = con)
   
   # Capture output
   output <- capture.output({
@@ -248,9 +248,9 @@ test_that("delete_stage doesn't affect other stages", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register multiple stages
-  register_task(stage = "KEEP_STAGE_1", name = "Task 1", type = "R", conn = con)
-  register_task(stage = "DELETE_STAGE", name = "Task 2", type = "R", conn = con)
-  register_task(stage = "KEEP_STAGE_2", name = "Task 3", type = "R", conn = con)
+  register_task(stage = "KEEP_STAGE_1", name = "Task 1", type = "R", stage_order = 1, conn = con)
+  register_task(stage = "DELETE_STAGE", name = "Task 2", type = "R", stage_order = 2, conn = con)
+  register_task(stage = "KEEP_STAGE_2", name = "Task 3", type = "R", stage_order = 3, conn = con)
   
   # Count stages before deletion
   stages_table <- tasker:::get_table_name("stages", con)

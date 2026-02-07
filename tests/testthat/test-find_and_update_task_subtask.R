@@ -63,7 +63,6 @@ test_that("update_task by stage and task number", {
   
   # Register test stage and tasks with explicit task_order
   register_task(
-    stage_order = 1,
     stage = "NUMBER_TEST_STAGE",
     name = "Task One",
     stage_order = 999,
@@ -71,7 +70,6 @@ test_that("update_task by stage and task number", {
     type = "R"
   )
   register_task(
-    stage_order = 1,
     stage = "NUMBER_TEST_STAGE",
     name = "Task Two",
     stage_order = 999,
@@ -532,7 +530,6 @@ test_that("update_task works with stage_order + task_order", {
   
   # Register task with stage_order and task_order
   register_task(
-    stage_order = 1,
     stage = "NUMERIC_TEST_STAGE",
     name = "Numeric Task 1",
     type = "R",
@@ -571,7 +568,6 @@ test_that("update_task works with stage_order + task_name", {
   
   # Register task with stage_order and task_order
   register_task(
-    stage_order = 1,
     stage = "MIXED_LOOKUP_STAGE",
     name = "Mixed Task Name",
     type = "R",
@@ -611,7 +607,6 @@ test_that("update_task works with stage_name + task_order", {
   
   # Register task with stage_order and task_order
   register_task(
-    stage_order = 1,
     stage = "NAME_ORDER_STAGE",
     name = "Order Task",
     type = "R",
@@ -651,7 +646,6 @@ test_that("update_subtask works with stage_order + task_order + subtask_number",
   
   # Register task with stage_order and task_order
   register_task(
-    stage_order = 1,
     stage = "SUBTASK_NUMERIC_STAGE",
     name = "Subtask Numeric Task",
     type = "R",
@@ -699,7 +693,6 @@ test_that("update_subtask works with stage_order + task_name + subtask_name", {
   
   # Register task with stage_order and task_order
   register_task(
-    stage_order = 1,
     stage = "SUBTASK_MIXED_STAGE",
     name = "Subtask Mixed Task",
     type = "R",
@@ -962,7 +955,6 @@ test_that("update_subtask works with stage_name + task_order + subtask_number", 
   
   # Register task with stage_order and task_order
   register_task(
-    stage_order = 1,
     stage = "FINAL_COMBO_STAGE",
     name = "Final Combo Task",
     type = "R",

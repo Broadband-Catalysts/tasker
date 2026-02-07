@@ -6,7 +6,11 @@
 validate_config <- function(config) {
   # For SQLite, only dbname is required
   if (config$database$driver == "sqlite") {
-    if (is.null(config$database$dbname) || config$database$dbname == "") {
+    dbname <- config$database$dbname
+    if (is.null(dbname) || 
+        length(dbname) == 0 ||
+        !is.character(dbname) ||
+        nchar(dbname[1]) == 0) {
       stop("Missing required configuration for SQLite: dbname (file path)")
     }
   } else {
@@ -15,9 +19,17 @@ validate_config <- function(config) {
     missing <- character(0)
     
     for (field in required) {
-      if (is.null(config$database[[field]]) || config$database[[field]] == "") {
+      value <- config$database[[field]]
+      if (is.null(value) || 
+          length(value) == 0) {
         missing <- c(missing, field)
+      } else if (field != "port") {
+        # Other fields should be character and non-empty
+        if (!is.character(value) || nchar(value[1]) == 0) {
+          missing <- c(missing, field)
+        }
       }
+      # Note: Port validation (numeric and range) is done after this loop
     }
     
     if (length(missing) > 0) {

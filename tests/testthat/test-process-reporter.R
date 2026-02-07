@@ -482,73 +482,80 @@ test_that("update_reporter_heartbeat deletes row for different PID on same hostn
     function(hostname, db_path) {
       library(tasker)
       
-      # Set test database path
-      options(tasker.config = list(
-        database = list(
-          driver = "sqlite",
-          db_file = db_path
-        )
-      ))
+      # Configure tasker to use test database
+      tasker::tasker_config(
+        driver = "sqlite",
+        dbname = db_path,
+        schema = "",
+        reload = TRUE
+      )
       
-      con <- tasker:::get_tasker_db_connection()
-      tasker:::update_reporter_heartbeat(con, hostname)
+      con <- tasker:::get_db_connection()
+      result <- tasker:::update_reporter_heartbeat(con, hostname)
       DBI::dbDisconnect(con)
-      Sys.sleep(2)  # Keep it alive briefly
-      "done"
+      
+      return(result)
     },
     args = list(hostname = hostname, db_path = db_path),
     supervise = TRUE
   )
   
-  # Wait for first reporter to register
-  Sys.sleep(1)
+  # Wait for first reporter to complete
+  reporter1_proc$wait(timeout = 5000)  # 5 second timeout
+  result1_proc <- reporter1_proc$get_result()
+  
+  # Verify it succeeded
+  expect_true(result1_proc, info = "First reporter failed to register")
   
   # Verify first reporter exists
   result1 <- DBI::dbGetQuery(con, "
     SELECT process_id, started_at FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
-  expect_equal(nrow(result1), 1)
+  expect_equal(nrow(result1), 1, info = sprintf("Expected 1 row for hostname %s, got %d", hostname, nrow(result1)))
   first_pid <- result1$process_id[1]
   first_started_at <- result1$started_at[1]
   
-  # Kill first reporter
-  reporter1_proc$kill()
-  
   # Wait a moment for timestamps to differ
   Sys.sleep(1)
+  
   
   # Start second reporter process
   reporter2_proc <- callr::r_bg(
     function(hostname, db_path) {
       library(tasker)
       
-      # Set test database path
-      options(tasker.config = list(
-        database = list(
-          driver = "sqlite",
-          db_file = db_path
-        )
-      ))
+      # Configure tasker to use test database
+      tasker::tasker_config(
+        driver = "sqlite",
+        dbname = db_path,
+        schema = "",
+        reload = TRUE
+      )
       
-      con <- tasker:::get_tasker_db_connection()
-      tasker:::update_reporter_heartbeat(con, hostname)
+      con <- tasker:::get_db_connection()
+      result <- tasker:::update_reporter_heartbeat(con, hostname)
       DBI::dbDisconnect(con)
-      "done"
+      
+      return(result)
     },
     args = list(hostname = hostname, db_path = db_path),
     supervise = TRUE
   )
   
-  # Wait for second reporter to register  
-  Sys.sleep(1)
+  # Wait for second reporter to complete
+  reporter2_proc$wait(timeout = 5000)
+  result2_proc <- reporter2_proc$get_result()
+  
+  # Verify it succeeded
+  expect_true(result2_proc, info = "Second reporter failed to register")
   
   # Verify old row was deleted and new row created
   result2 <- DBI::dbGetQuery(con, "
     SELECT process_id, started_at FROM reporter_status WHERE hostname = ?
   ", params = list(hostname))
   
-  expect_equal(nrow(result2), 1)
+  expect_equal(nrow(result2), 1, info = sprintf("Expected 1 row for hostname %s after second registration, got %d", hostname, nrow(result2)))
   second_pid <- result2$process_id[1]
   second_started_at <- result2$started_at[1]
   
@@ -557,9 +564,6 @@ test_that("update_reporter_heartbeat deletes row for different PID on same hostn
               info = sprintf("Expected different PIDs: %d vs %d", first_pid, second_pid))
   expect_true(second_started_at > first_started_at,
               info = "New reporter should have later started_at timestamp")
-  
-  # Clean up second reporter
-  reporter2_proc$kill()
   
   DBI::dbDisconnect(con)
   cleanup_test_db()
@@ -1463,6 +1467,12 @@ test_that("check_reporter returns NULL when no reporters found", {
   expect_null(result)
 })
 
+# ============================================================================
+# Final cleanup: Ensure no reporters are still running from this test file
+# ============================================================================
+
+# This prevents reporter process leakage that exhausts database connections
+cleanup_test_reporters(timeout = 3, quiet = FALSE)
 test_that("check_reporter displays single reporter info", {
   skip_if_not_installed("RSQLite")
   

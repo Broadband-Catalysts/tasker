@@ -9,7 +9,6 @@ test_that("register_task creates stage and task with all required columns", {
   
   # Register a task
   register_task(
-    stage_order = 1,
     stage = "TEST_STAGE",
     name = "Test Task",
     stage_order = 10,
@@ -121,7 +120,6 @@ test_that("get_registered_tasks returns all tasks with proper joins", {
   
   # Register tasks in different stages
   register_task(
-    stage_order = 1,
     stage = "STAGE_A",
     name = "Task A1",
     type = "R",
@@ -130,7 +128,6 @@ test_that("get_registered_tasks returns all tasks with proper joins", {
     script_filename = "task_a1.R"
   )
   register_task(
-    stage_order = 1,
     stage = "STAGE_A",
     name = "Task A2",
     type = "R",
@@ -139,7 +136,6 @@ test_that("get_registered_tasks returns all tasks with proper joins", {
     script_filename = "task_a2.R"
   )
   register_task(
-    stage_order = 1,
     stage = "STAGE_B",
     name = "Task B1",
     type = "python",
@@ -174,7 +170,6 @@ test_that("register_task handles all optional parameters", {
   
   # Register with all parameters
   register_task(
-    stage_order = 1,
     stage = "FULL_PARAM_TEST",
     name = "Full Task",
     stage_order = 100,
@@ -264,7 +259,6 @@ test_that("task registration workflow matches register_pipeline_tasks.R pattern"
   for (i in seq_len(nrow(tasks))) {
     task <- tasks[i, ]
     register_task(
-      stage_order = 1,
       stage = task$stage,
       name = task$task_name,
       stage_order = task$stage_order,
@@ -304,8 +298,8 @@ test_that("register_task handles duplicate registration gracefully", {
   on.exit(cleanup_test_db(con), add = TRUE)
   
   # Register same task twice
-  register_task(stage = "DUP_TEST", name = "Duplicate Task", type = "R", description = "First")
-  register_task(stage = "DUP_TEST", name = "Duplicate Task", type = "R", description = "Second")
+  register_task(stage = "DUP_TEST", name = "Duplicate Task", type = "R", stage_order = 1, description = "First")
+  register_task(stage = "DUP_TEST", name = "Duplicate Task", type = "R", stage_order = 1, description = "Second")
   
   # Should only have one task (updated, not duplicated)
   count <- DBI::dbGetQuery(con, 

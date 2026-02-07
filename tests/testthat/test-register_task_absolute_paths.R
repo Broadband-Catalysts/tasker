@@ -8,7 +8,6 @@ test_that("register_task with explicit relative path preserves it", {
   # When user explicitly provides a relative path, it should be stored as-is
   # (This maintains backward compatibility for users who intentionally use relative paths)
   task_id <- register_task(
-    stage_order = 1,
     stage = "TEST",
     name = "Explicit Relative Path",
     type = "R",
