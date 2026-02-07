@@ -13,3 +13,6 @@
 .Renviron
 *.Rout
 *.log
+
+# OneByOne session tracking (ephemeral metadata)
+.github/obo_sessions/
