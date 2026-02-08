@@ -20,6 +20,7 @@ Imports:
     dbplyr,
     yaml,
     bbcDB,
+    import,
     logger,
     this.path,
     ps (>= 1.7.0),

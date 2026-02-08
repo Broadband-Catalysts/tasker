@@ -29,6 +29,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-ggrepel \
     r-cran-glue \
     r-cran-httr \
+    r-cran-import \
     r-cran-jsonlite \
     r-cran-lifecycle \
     r-cran-logger \
