@@ -150,6 +150,9 @@ cleanup_test_reporters <- function(timeout = 5, con = NULL, quiet = FALSE) {
     return(list(found = 0, stopped = 0, failed = 0))
   }
   
+  # Import stringr functions for clean string matching
+  import::from(stringr, str_detect, regex)
+  
   current_pid <- Sys.getpid()
   found <- 0
   stopped <- 0
@@ -176,7 +179,7 @@ cleanup_test_reporters <- function(timeout = 5, con = NULL, quiet = FALSE) {
     child_r_procs <- all_procs |>
       dplyr::filter(
         ppid == current_pid,
-        grepl("(R|Rscript)", name, ignore.case = TRUE)
+        str_detect(name, regex("(R|Rscript)", ignore_case = TRUE))
       )
     
     if (nrow(child_r_procs) == 0) {
