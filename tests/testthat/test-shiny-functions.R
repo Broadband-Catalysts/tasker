@@ -230,11 +230,12 @@ test_that("lookup_task_by_script finds tasks by filename", {
   
   # Register task with script filename using script_path (full path)
   register_task(
-    stage_order = 1,
     stage = "TEST", 
     name = "script_task", 
     type = "R",
-    script_path = "/path/to/01_TEST_01_My_Script.R"
+    stage_order = 1,
+    script_path = "/path/to/01_TEST_01_My_Script.R",
+    conn = con
   )
   
   # Check what's actually in the database
@@ -247,10 +248,37 @@ test_that("lookup_task_by_script finds tasks by filename", {
   # Lookup by exact filename
   result <- lookup_task_by_script(tasks$script_filename[1], conn = con)
   expect_false(is.null(result))
-  expect_true(is.data.frame(result))
-  expect_equal(nrow(result), 1)
-  expect_equal(result$stage_name, "TEST")
-  expect_equal(result$task_name, "script_task")
+  expect_true(is.list(result))  # lookup_task_by_script returns a list, not a data.frame
+  expect_equal(result$stage, "TEST")
+  expect_equal(result$task, "script_task")
+})
+
+test_that("lookup_task_by_script fails with invalid connection", {
+  skip_on_cran()
+  skip_if_not_installed("RSQLite")
+  
+  con <- setup_test_db()
+  on.exit(cleanup_test_db(con), add = TRUE)
+  
+  # Register a test task
+  register_task(
+    stage = "TEST",
+    name = "connection_test",
+    type = "R",
+    stage_order = 1,
+    script_path = "/path/to/test_script.R",
+    conn = con
+  )
+  
+  # Close the connection to make it invalid
+  DBI::dbDisconnect(con)
+  
+  # Should fail when trying to use closed connection
+  expect_error(
+    lookup_task_by_script("test_script.R", conn = con),
+    "connection|invalid|closed",
+    ignore.case = TRUE
+  )
 })
 
 test_that("register_task explicit script_filename overrides auto-extraction", {

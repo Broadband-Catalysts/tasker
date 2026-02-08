@@ -13,6 +13,7 @@ task_start(
   git_commit = NULL,
   quiet = FALSE,
   conn = NULL,
+  script_filename = NULL,
   .active = TRUE
 )
 }
@@ -49,7 +50,7 @@ database, or accepts explicit stage/task parameters for backward compatibility.
 \examples{
 \dontrun{
 # New style - automatic detection (zero configuration!)
-task_start()  # Auto-detects script, looks up stage/task from database
+task_start() # Auto-detects script, looks up stage/task from database
 subtask_start("Load files")
 subtask_complete()
 task_complete()
