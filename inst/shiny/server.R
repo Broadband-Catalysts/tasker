@@ -1432,42 +1432,31 @@ server <- function(input, output, session) {
                                (current_status %in% c("RUNNING", "STARTED"))
         
         if (status_changed_to_active || initial_load_active) {
-          # Use shinyjs to manipulate Bootstrap accordion with delay for DOM readiness
+          # Expand stage accordion
           shinyjs::delay(100, {
             collapse_id <- paste0("collapse_", stage_id)
             button_id <- paste0("heading_", stage_id)
             
-            # Only expand if not already expanded (check DOM state to respect manual user actions)
+            # Add .show class to collapse element (Bootstrap's active state)
+            shinyjs::addClass(collapse_id, "show")
+            # Remove .collapsed from button using runjs (descendant selector requires JavaScript)
             shinyjs::runjs(sprintf(
-              "
-              var button = document.querySelector('#%s .accordion-button');
-              var collapse = document.getElementById('%s');
-              if (button && collapse && !collapse.classList.contains('show')) {
-                button.classList.remove('collapsed');
-                button.setAttribute('aria-expanded', 'true');
-                collapse.classList.add('show');
-              }
-              ",
-              button_id, collapse_id
+              "document.querySelector('#%s .accordion-button')?.classList.remove('collapsed');",
+              button_id
             ))
           })
         } else if (status_changed_to_completed) {
-          # Collapse when completed
+          # Collapse stage accordion when completed
           shinyjs::delay(100, {
             collapse_id <- paste0("collapse_", stage_id)
             button_id <- paste0("heading_", stage_id)
             
+            # Remove .show class from collapse element
+            shinyjs::removeClass(collapse_id, "show")
+            # Add .collapsed to button using runjs
             shinyjs::runjs(sprintf(
-              "
-              var button = document.querySelector('#%s .accordion-button');
-              var collapse = document.getElementById('%s');
-              if (button && collapse && collapse.classList.contains('show')) {
-                button.classList.add('collapsed');
-                button.setAttribute('aria-expanded', 'false');
-                collapse.classList.remove('show');
-              }
-              ",
-              button_id, collapse_id
+              "document.querySelector('#%s .accordion-button')?.classList.add('collapsed');",
+              button_id
             ))
           })
         }
@@ -1769,60 +1758,63 @@ server <- function(input, output, session) {
         tagList(
           div(
             class = "task-row",
+            id = paste0("task_row_", task_id),
             `data-task-id` = task_id,
-            # Toggle buttons grouped on the left
+            # Task info line (buttons + task details on single line)
             div(
-              class = "task-toggle-buttons",
-              # Process info toggle button (graph icon)
-              tags$button(
-                class = "btn-expand-process",
-                id = paste0("btn_expand_process_", task_id),
-                title = "Toggle process information and metrics",
-                onclick = sprintf("Shiny.setInputValue('toggle_process_pane', '%s', {priority: 'event'})", task_id),
-                "📊"
+              class = "task-info-line",
+              # Toggle buttons grouped on the left
+              div(
+                class = "task-toggle-buttons",
+                # Process info toggle button (graph icon)
+                tags$button(
+                  class = "btn-expand-process",
+                  id = paste0("btn_expand_process_", task_id),
+                  title = "Toggle process information and metrics",
+                  onclick = sprintf("Shiny.setInputValue('toggle_process_pane', '%s', {priority: 'event'})", task_id),
+                  icon("chart-bar")
+                ),
+                # Log viewer toggle button (file icon)
+                tags$button(
+                  class = "btn-expand-log",
+                  id = paste0("btn_expand_log_", task_id),
+                  title = "Toggle log viewer",
+                  onclick = sprintf("Shiny.setInputValue('toggle_log_pane', '%s', {priority: 'event'})", task_id),
+                  icon("file-text")
+                )
               ),
-              # Log viewer toggle button (file icon)
-              tags$button(
-                class = "btn-expand-log",
-                id = paste0("btn_expand_log_", task_id),
-                title = "Toggle log viewer",
-                onclick = sprintf("Shiny.setInputValue('toggle_log_pane', '%s', {priority: 'event'})", task_id),
-                "📄"
+              textOutput(paste0("task_name_", task_id), inline = TRUE, container = function(...) div(class = "task-name", ...)),
+              htmlOutput(paste0("task_status_", task_id), inline = TRUE, container = function(...) span(class = "task-status-badge", ...)),
+              htmlOutput(paste0("task_progress_", task_id), inline = TRUE, container = function(...) div(class = "task-progress-container", ...)),
+              textOutput(paste0("task_message_", task_id), inline = TRUE, container = function(...) div(class = "task-message", ...)),
+              div(id = paste0("task_reset_", task_id), class = "task-reset-button", 
+                  tags$button(
+                    id = paste0("reset_btn_", task_id),
+                    class = "btn btn-sm btn-warning task-reset-btn",
+                    title = "Reset this task to NOT_STARTED",
+                    onclick = sprintf(
+                      "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
+                      htmltools::htmlEscape(stage_name),
+                      htmltools::htmlEscape(task_name)
+                    ),
+                    "Reset"
+                  )
               )
             ),
-            textOutput(paste0("task_name_", task_id), inline = TRUE, container = function(...) div(class = "task-name", ...)),
-            htmlOutput(paste0("task_status_", task_id), inline = TRUE, container = function(...) span(class = "task-status-badge", ...)),
-            htmlOutput(paste0("task_progress_", task_id), inline = TRUE, container = function(...) div(class = "task-progress-container", ...)),
-            textOutput(paste0("task_message_", task_id), inline = TRUE, container = function(...) div(class = "task-message", ...)),
-            div(id = paste0("task_reset_", task_id), class = "task-reset-button", 
-                tags$button(
-                  id = paste0("reset_btn_", task_id),
-                  class = "btn btn-sm btn-warning task-reset-btn",
-                  title = "Reset this task to NOT_STARTED",
-                  onclick = sprintf(
-                    "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
-                    htmltools::htmlEscape(stage_name),
-                    htmltools::htmlEscape(task_name)
-                  ),
-                  "Reset"
-                )
-            )
-          ),
-          # Process status sub-pane (hidden by default with shinyjs, not CSS)
-          div(
-            id = paste0("process_pane_", task_id),
-            class = "task-subpane process-pane",
-            htmlOutput(paste0("process_content_", task_id))
-          ),
-          # Log viewer sub-pane (hidden by default)
-          div(
-            id = paste0("log_pane_", task_id),
-            class = "task-subpane log-pane",
-            style = "display: none;",
+            # Process status sub-pane (hidden by default via CSS)
             div(
-              class = "log-controls-container",
+              id = paste0("process_pane_", task_id),
+              class = "task-subpane process-pane",
+              htmlOutput(paste0("process_content_", task_id))
+            ),
+            # Log viewer sub-pane (hidden by default via CSS)
+            div(
+              id = paste0("log_pane_", task_id),
+              class = "task-subpane log-pane",
               div(
-                class = "log-controls",
+                class = "log-controls-container",
+                div(
+                  class = "log-controls",
                 selectInput(
                   paste0("log_lines_", task_id),
                   NULL,
@@ -1861,6 +1853,7 @@ server <- function(input, output, session) {
             )
           )
         )
+      )
       })
       
       # Build accordion panel
@@ -2089,8 +2082,8 @@ server <- function(input, output, session) {
           build_process_status_html(task_data, stage_name_local, task_name_local, progress_history_env, output, task_reactives, session, input)
         })
         
-        # Hide pane initially with shinyjs (allows pre-rendering unlike display:none)
-        shinyjs::hide(paste0("process_pane_", task_id_local))
+        # Note: Pane visibility is controlled by CSS via .process-expanded class on container,
+        # no need for shinyjs::hide() here as pane starts with display:none inline style
         
         # Log pane content - observer to initialize controls once when expanded
         observe({
@@ -2599,13 +2592,19 @@ server <- function(input, output, session) {
                                (current_status %in% c("RUNNING", "STARTED", "FAILED"))
         
         if (status_changed_to_active || initial_load_active) {
-          # Expand process pane for this specific task (DOM manipulation only)
-          shinyjs::show(paste0("process_pane_", task_id))
-          shinyjs::addClass(paste0("btn_expand_process_", task_id), "expanded")
+          # Expand process pane for this specific task - single class toggle
+          shinyjs::addClass(paste0("task_row_", task_id), "process-expanded")
+          # Track state
+          if (!(task_id %in% rv$expanded_process_panes)) {
+            rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
+          }
         } else if (status_changed_to_completed) {
-          # Collapse process pane when task completes (DOM manipulation only)
-          shinyjs::hide(paste0("process_pane_", task_id))
-          shinyjs::removeClass(paste0("btn_expand_process_", task_id), "expanded")
+          # Collapse process pane when task completes - single class toggle
+          shinyjs::removeClass(paste0("task_row_", task_id), "process-expanded")
+          # Track state
+          if (task_id %in% rv$expanded_process_panes) {
+            rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
+          }
         }
       }
     })
@@ -2623,9 +2622,15 @@ server <- function(input, output, session) {
     task_id <- input$toggle_process_pane
     req(task_id)  # Ensure task_id is valid
     
-    # Toggle visibility and button class directly via DOM manipulation
-    shinyjs::toggle(paste0("process_pane_", task_id))
-    shinyjs::toggleClass(paste0("btn_expand_process_", task_id), "expanded")
+    # Toggle container class - CSS handles visibility and button styling
+    shinyjs::toggleClass(paste0("task_row_", task_id), "process-expanded")
+    
+    # Track state for potential future use
+    if (task_id %in% rv$expanded_process_panes) {
+      rv$expanded_process_panes <- setdiff(rv$expanded_process_panes, task_id)
+    } else {
+      rv$expanded_process_panes <- c(rv$expanded_process_panes, task_id)
+    }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   # Log pane toggle handler
@@ -2636,9 +2641,15 @@ server <- function(input, output, session) {
     # Initialize log settings for this task if not exists
     init_log_settings(rv, task_id)
     
-    # Toggle visibility and button class directly via DOM manipulation
-    shinyjs::toggle(paste0("log_pane_", task_id))
-    shinyjs::toggleClass(paste0("btn_expand_log_", task_id), "expanded")
+    # Toggle container class - CSS handles visibility and button styling
+    shinyjs::toggleClass(paste0("task_row_", task_id), "log-expanded")
+    
+    # Track state for log content observers and auto-refresh
+    if (task_id %in% rv$expanded_log_panes) {
+      rv$expanded_log_panes <- setdiff(rv$expanded_log_panes, task_id)
+    } else {
+      rv$expanded_log_panes <- c(rv$expanded_log_panes, task_id)
+    }
     
     # Force log refresh when expanding
     rv$log_refresh_trigger <- rv$log_refresh_trigger + 1
