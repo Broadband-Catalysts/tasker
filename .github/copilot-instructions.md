@@ -1,6 +1,6 @@
 # GitHub Copilot Instructions for tasker-dev
 
-# 🚡🚡🚡 MANDATORY PRE-FLIGHT 🚡🚡🚡
+# �🛑🛑 MANDATORY PRE-FLIGHT 🛑🛑🛑
 
 **BEFORE RESPONDING:** Execute `/preflight` slash command to ensure compliance.
 
@@ -44,6 +44,29 @@ See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 - **#r-script-execution** - For running scripts and managing packages
 - **#unit-testing** - For creating and maintaining test coverage
 - **#manage_todo_list** - For multi-step task tracking and planning
+- **#taskerCommand** - Task registration, progress tracking, error handling patterns
+
+## When to Use Agent Skills
+
+**Invoke skills explicitly** (using `#skill-name` in your message) when:
+- You need step-by-step guidance through a multi-step procedural task
+- Implementing Shiny UI updates without flickering (#shiny-ui-patterns)
+- Adding or enhancing tasker progress tracking (#taskerCommand)
+- Creating/updating unit tests (#unit-testing)
+- The pattern is well-defined and documented in a skill file
+- You want the agent to follow a specific structured approach
+
+**Skills are automatically selected** when:
+- Your request clearly matches a skill's purpose (e.g., "add progress tracking" or "update UI without flickering")
+- Copilot recognizes the task fits a documented skill pattern
+- No explicit skill reference is needed for straightforward requests
+
+**Keep reading this file** for:
+- Shiny application anti-patterns (renderUI, reactive dependencies)
+- Database connection handling in parallel workers
+- Error handling patterns (.Last() function, tryCatch anti-patterns)
+- Testing requirements and continuous integration
+- Project-specific workflows (tasker-dev vs tasker deployment)
 
 ## 🔀 Development Workflow
 
