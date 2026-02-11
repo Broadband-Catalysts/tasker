@@ -55,7 +55,7 @@ register_tasks <- function(tasks_df, conn = NULL) {
     
   }, finally = {
     if (close_on_exit) {
-      DBI::dbDisconnect(conn)
+      safe_disconnect(conn)
     }
   })
 }

@@ -52,8 +52,7 @@ get_subtask_progress_batch <- function(run_ids, conn = NULL) {
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()
-    # Only disconnect if it's a regular connection, not a pool
-    close_on_exit <- !inherits(conn, "Pool")
+    close_on_exit <- TRUE
   }
   
   config <- getOption("tasker.config")
@@ -92,13 +91,13 @@ get_subtask_progress_batch <- function(run_ids, conn = NULL) {
     )
     
     if (close_on_exit) {
-      DBI::dbDisconnect(conn)
+      safe_disconnect(conn)
     }
     
     return(result)
   }, error = function(e) {
     if (close_on_exit) {
-      DBI::dbDisconnect(conn)
+      safe_disconnect(conn)
     }
     stop(sprintf("Error fetching batch subtask progress: %s", e$message), call. = FALSE)
   })

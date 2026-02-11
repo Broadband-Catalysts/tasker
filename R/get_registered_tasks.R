@@ -34,8 +34,8 @@ get_registered_tasks <- function(stage = NULL, name = NULL, conn = NULL) {
   
   # Ensure cleanup on exit
   on.exit({
-    if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
-      DBI::dbDisconnect(conn)
+    if (close_on_exit) {
+      safe_disconnect(conn)
     }
   })
   

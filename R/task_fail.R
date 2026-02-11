@@ -70,8 +70,8 @@ task_fail <- function(error_message, error_detail = NULL, quiet = FALSE, conn = 
                         run_id = run_id)
   
   # Close connection if we created it
-  if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
-    DBI::dbDisconnect(conn)
+  if (close_on_exit) {
+    safe_disconnect(conn)
   }
   
   # Close and remove the connection for this run_id

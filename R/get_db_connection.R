@@ -72,5 +72,41 @@ get_db_connection <- function() {
   conn
 }
 
+#' Safely close a database connection
+#'
+#' Closes a database connection, but only if it's not a Pool object.
+#' Pool objects should not be disconnected as they manage their own lifecycle.
+#' Also checks if connection is valid before attempting to close.
+#'
+#' @param conn Database connection to close
+#' @return TRUE if connection was closed (or was Pool), FALSE otherwise
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' conn <- get_db_connection()
+#' # ... do work ...
+#' safe_disconnect(conn)
+#' }
+safe_disconnect <- function(conn) {
+  # Don't close Pool objects - they manage their own lifecycle
+  if (inherits(conn, "Pool")) {
+    return(TRUE)
+  }
+  
+  # Check if connection is valid before closing
+  if (!is.null(conn) && DBI::dbIsValid(conn)) {
+    tryCatch({
+      DBI::dbDisconnect(conn)
+      TRUE
+    }, error = function(e) {
+      warning("Error disconnecting: ", e$message)
+      FALSE
+    })
+  } else {
+    TRUE
+  }
+}
+
 
 # get_placeholder and build_sql are defined in utils.R

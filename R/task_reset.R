@@ -36,7 +36,7 @@ task_reset <- function(stage, task, run_id = NULL, quiet = FALSE, conn = NULL) {
   
   on.exit({
     if (close_on_exit) {
-      DBI::dbDisconnect(conn)
+      safe_disconnect(conn)
     }
   })
   

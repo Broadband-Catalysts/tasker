@@ -209,8 +209,8 @@ task_start <- function(
     },
     error = function(e) {
       # Clean up connection on error
-      if (close_on_exit && !is.null(conn) && DBI::dbIsValid(conn)) {
-        DBI::dbDisconnect(conn)
+      if (close_on_exit) {
+        safe_disconnect(conn)
       }
       stop(e)
     }

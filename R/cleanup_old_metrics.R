@@ -30,7 +30,7 @@ cleanup_old_metrics <- function(retention_days = 30,
 		conn <- get_tasker_db_connection()
 		close_conn <- TRUE
 		on.exit({
-			if (close_conn && !is.null(conn) && DBI::dbIsValid(conn)) DBI::dbDisconnect(conn)
+			if (close_conn) safe_disconnect(conn)
 		})
 	} else {
 		close_conn <- FALSE

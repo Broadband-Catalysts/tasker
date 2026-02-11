@@ -235,7 +235,7 @@ register_task <- function(stage,
     
   }, finally = {
     if (close_on_exit) {
-      DBI::dbDisconnect(conn)
+      safe_disconnect(conn)
     }
   })
 }

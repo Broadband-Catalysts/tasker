@@ -36,7 +36,7 @@ get_active_tasks <- function(conn = NULL) {
     DBI::dbGetQuery(conn, sprintf("SELECT * FROM %s", table_ref))
   }, finally = {
     if (close_on_exit) {
-      DBI::dbDisconnect(conn)
+      safe_disconnect(conn)
     }
   })
 }

@@ -1,5 +1,20 @@
 # Test helpers
 
+#' Get verbosity setting for SQL scripts during tests
+#' 
+#' Checks TASKER_TEST_SQL_VERBOSE environment variable to determine if
+#' SQL script execution should be verbose. Defaults to FALSE (quiet) unless
+#' explicitly set to "true", "1", or "yes".
+#' 
+#' @return Logical indicating if SQL scripts should print verbose output
+#' @examples
+#' # In tests:
+#' bbcDB::dbExecuteScript(conn, schema_file, .quiet = !sql_script_verbose())
+sql_script_verbose <- function() {
+  env_val <- Sys.getenv("TASKER_TEST_SQL_VERBOSE", "false")
+  tolower(env_val) %in% c("true", "1", "yes")
+}
+
 # Use SQLite for testing by default
 get_test_db_path <- function() {
   file.path(tempdir(), "tasker_test.db")
@@ -26,7 +41,8 @@ setup_test_db <- function() {
   options(tasker.process_reporter.auto_start = FALSE)
   
   # Create full schema (tables + reporter tables + views)
-  tasker::setup_tasker_db(force = TRUE, quiet = TRUE)
+  # Use environment variable to control SQL verbosity during testing
+  tasker::setup_tasker_db(force = TRUE, quiet = !sql_script_verbose())
 
   # Persist the path for callers that need it
   options(tasker.test_db_path = db_path)

@@ -147,6 +147,61 @@ server <- function(input, output, session) {
 
 **For details:** See #shiny-ui-patterns skill for update patterns, updateXXX() functions, shinyjs, reactive triggers.
 
+### CRITICAL: Separate Structure from Data in renderUI
+
+**This anti-pattern has been reintroduced multiple times in the tasker monitoring app!**
+
+**❌ INCORRECT - UI depends on frequently-updating data:**
+```r
+output$pipeline_stages_accordion <- renderUI({
+  req(task_data())  # task_data() refreshes every 5 seconds!
+  struct <- pipeline_structure()
+  # ... build UI ...
+})
+# Result: Entire UI destroyed and recreated every 5 seconds = flickering
+```
+
+**✅ CORRECT - UI depends only on structure:**
+```r
+output$pipeline_stages_accordion <- renderUI({
+  # NEVER add req(task_data()) here!
+  struct <- pipeline_structure()  # Only changes when stages/tasks added/removed
+  # ... build UI ...
+  # Task status updates happen through individual reactive outputs
+})
+```
+
+**Key Principle:** renderUI() for UI structure should depend ONLY on structure changes (rare), NOT data updates (frequent).
+
+### CRITICAL: Bare observe() Creates Reactive Loop
+
+**❌ INCORRECT - Runs on every reactive invalidation:**
+```r
+observe({
+  structure <- get_structure()
+  rv$current_structure <- structure
+  # Infinite loop: updating rv triggers observe again!
+})
+```
+
+**✅ CORRECT - Use initialization flag:**
+```r
+rv <- reactiveValues(structure_initialized = FALSE)
+
+observe({
+  if (rv$structure_initialized) return()  # Only run once
+  
+  structure <- isolate({  # Prevent reactive dependencies
+    get_structure()
+  })
+  
+  rv$current_structure <- structure
+  rv$structure_initialized <- TRUE
+})
+```
+
+**Why:** Without the flag, observe() runs on every reactive change in the app, creating infinite loops.
+
 ## Parallel Processing with Database Connections
 
 ### Critical: clusterEvalQ Connection Serialization

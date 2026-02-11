@@ -896,10 +896,10 @@ server <- function(input, output, session) {
     sql_trigger = NULL,
     # SQL queries last refresh timestamp
     sql_last_refresh_time = Sys.time(),
-    # Trigger for forcing initial DOM renders
-    initial_render_trigger = 0,
     # Query state tracking to prevent reactive flooding
     query_running = FALSE,
+    # Track structure initialization to prevent re-running
+    structure_initialized = FALSE,
     last_query_time = Sys.time() - 60,
     # Track initial load separately to avoid observer self-dependency
     initial_load_complete = FALSE
@@ -960,30 +960,36 @@ server <- function(input, output, session) {
     showNotification("Pipeline structure refreshed", type = "message", duration = 2)
   })
   
-  # Initialize structure
+  # Initialize structure (runs only once on startup)
+  # CRITICAL: This observer uses a flag to run only once. Without this,
+  # it would run on every reactive invalidation, causing an infinite loop
+  # that makes the UI blank out repeatedly.
   observe({
-    structure <- tryCatch({
-      stages <- tasker::get_stages() |>
-      filter(
-        stage_name != "TEST",
-        !is.na(stage_order), 
-        stage_order != 999
-      )
-      
-      registered_tasks <- tasker::get_registered_tasks()
-      
-      list(stages = stages, tasks = registered_tasks)
-    }, error = function(e) {
-      showNotification(paste("Error loading structure:", e$message), type = "error")
-      NULL
+    # Only run once - prevents reactive loop
+    if (rv$structure_initialized) return()
+    
+    # Load structure in isolate() to prevent reactive dependencies
+    # This ensures we only read the data once at startup, not on every change
+    structure <- isolate({
+      tryCatch({
+        stages <- tasker::get_stages() |>
+        filter(
+          stage_name != "TEST",
+          !is.na(stage_order), 
+          stage_order != 999
+        )
+        
+        registered_tasks <- tasker::get_registered_tasks()
+        
+        list(stages = stages, tasks = registered_tasks)
+      }, error = function(e) {
+        showNotification(paste("Error loading structure:", e$message), type = "error")
+        NULL
+      })
     })
     
     pipeline_structure(structure)
-    
-    # Trigger initial render after DOM creation with slight delay
-    shinyjs::delay(100, {
-      rv$initial_render_trigger <- rv$initial_render_trigger + 1
-    })
+    rv$structure_initialized <- TRUE
   })
   
   # Manual refresh of pipeline structure
@@ -1005,9 +1011,6 @@ server <- function(input, output, session) {
     if (!is.null(structure)) {
       pipeline_structure(structure)
       showNotification("Pipeline structure refreshed", type = "message", duration = 2)
-      
-      # Trigger DOM re-render
-      rv$initial_render_trigger <- rv$initial_render_trigger + 1
     }
   })
   
@@ -1794,10 +1797,24 @@ server <- function(input, output, session) {
   
   # Build the entire accordion UI structure using proper Shiny reactive UI
   output$pipeline_stages_accordion <- renderUI({
-    # Priority 3 fix: Wait for initial data before rendering UI to avoid
-    # creating 320+ empty reactive outputs that all update simultaneously
-    req(task_data())
-    
+    # CRITICAL ANTI-PATTERN: DO NOT add req(task_data()) here!
+    # 
+    # WHY: Adding req(task_data()) causes the ENTIRE UI structure to be destroyed
+    # and recreated every time task_data() refreshes (every 5 seconds).
+    # 
+    # SYMPTOMS when broken:
+    # - UI blanks out during refresh
+    # - Page appears to "flicker" or redraw
+    # - Content disappears then reappears
+    # - Poor user experience, looks unstable
+    # 
+    # CORRECT PATTERN:
+    # - renderUI() depends ONLY on pipeline_structure() (rarely changes)
+    # - Task status updates happen via individual renderText/renderUI outputs
+    # - Each task has its own reactive output that updates independently
+    # - This allows smooth updates without destroying/recreating DOM elements
+    # 
+    # This mistake has been reintroduced multiple times. DO NOT ADD req(task_data())!
     struct <- pipeline_structure()
     if (is.null(struct)) {
       return(div(class = "alert alert-info", "Loading pipeline structure..."))
