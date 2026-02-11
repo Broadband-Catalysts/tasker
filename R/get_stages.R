@@ -9,7 +9,8 @@ get_stages <- function(conn = NULL) {
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()
-    close_on_exit <- TRUE
+    # Only disconnect if it's a regular connection, not a pool
+    close_on_exit <- !inherits(conn, "Pool")
   }
   
   config <- getOption("tasker.config")
