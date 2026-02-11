@@ -35,7 +35,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     r-cran-logger \
     r-cran-lubridate \
     r-cran-pillar \
-    r-cran-pool \
     r-cran-ps \
     r-cran-purrr \
     r-cran-r.utils \

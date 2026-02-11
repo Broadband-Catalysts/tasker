@@ -32,7 +32,6 @@ Suggests:
     RPostgres,
     RSQLite,
     RMariaDB,
-    pool,
     testthat (>= 3.0.0),
     mockery,
     crayon

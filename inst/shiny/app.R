@@ -48,58 +48,6 @@ if (is.null(config_file)) {
 # Load and set configuration
 config <- tasker::tasker_config(config_file = config_file)
 
-# ============================================================================
-# CONNECTION POOLING: Create database connection pool for performance
-# ============================================================================
-
-# Create connection pool (Priority 1 fix)
-pool <- NULL
-if (config$database$driver == "postgresql") {
-  # Note: config uses 'dbname' (matching DBI::dbConnect parameter)
-  pool <- pool::dbPool(
-    drv = RPostgres::Postgres(),
-    host = config$database$host,
-    port = as.integer(config$database$port),
-    dbname = config$database$dbname,
-    user = config$database$user,
-    password = config$database$password,
-    minSize = 2,
-    maxSize = 10
-  )
-  message("Created PostgreSQL connection pool")
-  message("  Host: ", config$database$host)
-  message("  Port: ", config$database$port)
-  message("  Database: ", config$database$dbname)
-  message("  User: ", config$database$user)
-} else if (config$database$driver == "sqlite") {
-  pool <- pool::dbPool(
-    drv = RSQLite::SQLite(),
-    dbname = config$database$dbname,
-    minSize = 1,
-    maxSize = 5
-  )
-  message("Created SQLite connection pool")
-}
-
-# Register cleanup on app stop and make pool available to tasker functions
-if (!is.null(pool)) {
-  # Make pool available to tasker functions via option
-  options(tasker.pool = pool)
-  message("Set tasker.pool option for connection pooling")
-  
-  onStop(function() {
-    tryCatch({
-      # Clear the option first
-      options(tasker.pool = NULL)
-      # Then close the pool
-      pool::poolClose(pool)
-      message("Closed database connection pool")
-    }, error = function(e) {
-      message("Error closing pool: ", e$message)
-    })
-  })
-}
-
 # Read build information once at startup
 # Assign to global environment so ui.R can access them
 build_info_file <- "/app/build_info.txt"

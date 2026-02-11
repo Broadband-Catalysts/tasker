@@ -97,42 +97,6 @@ calculate_stage_progress <- function(stage_tasks) {
   )
 }
 
-# ============================================================================
-# PRIORITY 4 FIX: Completion estimate caching (reduces CPU load by 90%)
-# ============================================================================
-
-# Create cache environment for completion estimates (10-second TTL)
-estimate_cache <- new.env(parent = emptyenv())
-
-get_cached_estimate <- function(run_id, subtask_number) {
-  cache_key <- paste0(run_id, "_", subtask_number)
-  cached <- estimate_cache[[cache_key]]
-  
-  # Return cached value if less than 10 seconds old
-  if (!is.null(cached) && 
-      difftime(Sys.time(), cached$timestamp, units = "secs") < 10) {
-    return(cached$value)
-  }
-  
-  # Compute new estimate
-  estimate <- tasker::get_completion_estimate(
-    progress_history_env, 
-    run_id, 
-    subtask_number, 
-    quiet = TRUE
-  )
-  
-  completion_text <- tasker::format_completion_with_ci(estimate, quiet = TRUE)
-  
-  # Cache the result
-  estimate_cache[[cache_key]] <- list(
-    value = completion_text,
-    timestamp = Sys.time()
-  )
-  
-  return(completion_text)
-}
-
 # Initialize log settings with defaults
 init_log_settings <- function(rv, task_id) {
   if (is.null(rv$log_settings[[task_id]])) {
@@ -839,8 +803,9 @@ build_process_status_html <- function(task_data, stage_name, task_name, progress
               items_total_safe <- if (!is.null(local_items_total) && !is.na(local_items_total)) as.numeric(local_items_total) else 0
               
               if (status_safe %in% c("RUNNING", "STARTED") && items_total_safe > 0 && !is.null(local_run_id) && !is.na(local_run_id)) {
-                # Priority 4 fix: Use cached estimate instead of recomputing every time
-                completion_text <- get_cached_estimate(local_run_id, local_subtask_number)
+                # Read from environment - this will update at the global refresh interval due to invalidateLater
+                estimate <- tasker::get_completion_estimate(progress_history_env, local_run_id, local_subtask_number, quiet = TRUE)
+                completion_text <- tasker::format_completion_with_ci(estimate, quiet = TRUE)
                 if (is.null(completion_text) || completion_text == "") {
                   "Computing..."
                 } else {
@@ -1213,28 +1178,6 @@ server <- function(input, output, session) {
     current_status <- task_data()
     rv$force_refresh  # Also depend on force_refresh
     
-    # ============================================================================
-    # PRIORITY 2 FIX: Batch subtask queries (reduces 20 queries -> 1 per refresh)
-    # ============================================================================
-    
-    # Get all running task run_ids and fetch subtasks in single batch query
-    running_run_ids <- if (!is.null(current_status) && nrow(current_status) > 0) {
-      current_status$run_id[current_status$status %in% c("RUNNING", "STARTED") & !is.na(current_status$run_id)]
-    } else {
-      character(0)
-    }
-    
-    batch_subtasks <- if (length(running_run_ids) > 0) {
-      tryCatch({
-        tasker::get_subtask_progress_batch(running_run_ids)
-      }, error = function(e) {
-        message("Error in batch subtask query: ", e$message)
-        NULL
-      })
-    } else {
-      NULL
-    }
-    
     message("[OBSERVER] Starting, initial_load_complete=", isolate(rv$initial_load_complete))
     message("[OBSERVER] main_tabs=", isolate(input$main_tabs))
     
@@ -1325,16 +1268,11 @@ server <- function(input, output, session) {
       completed_subtasks <- 0
       # Use total_subtasks from database if available, otherwise 0
       # total_subtasks <- if (!is.na(task_status$total_subtasks)) task_status$total_subtasks else 0
-      
-      # NOTE: Subtasks are fetched in batch BEFORE this loop (Priority 2 fix)
-      # This section now just looks up the cached subtask data
       if (!is.na(task_status$run_id) && task_status$status %in% c("RUNNING", "STARTED")) {
-        # Get subtasks from batch query result (cached in batch_subtasks)
-        subs <- if (!is.null(batch_subtasks) && nrow(batch_subtasks) > 0) {
-          batch_subtasks[batch_subtasks$run_id == task_status$run_id, ]
-        } else {
-          NULL
-        }
+        # Get all subtasks for this run
+        subs <- tryCatch({
+          tasker::get_subtask_progress(task_status$run_id)
+        }, error = function(e) NULL)
         
         # Count completed subtasks and total subtasks OUTSIDE tryCatch
         if (!is.null(subs) && nrow(subs) > 0) {
@@ -1430,26 +1368,6 @@ server <- function(input, output, session) {
       # Only update if something changed
       if (is.null(current_val) || !identical(current_val, new_val)) {
         task_reactives[[task_key]] <- new_val
-      }
-    }
-    
-    # ============================================================================
-    # PRIORITY 5 FIX: Progress history cleanup (prevents memory accumulation)
-    # ============================================================================
-    
-    # Clean up progress history for completed tasks to prevent memory leaks
-    for (task_key in names(task_reactives)) {
-      task <- task_reactives[[task_key]]
-      if (!is.null(task$status) && task$status %in% c("COMPLETED", "FAILED") && !is.null(task$run_id) && !is.na(task$run_id)) {
-        # Clean up progress history for this run
-        run_key <- paste0("run_", task$run_id)
-        env_keys <- ls(progress_history_env)
-        cleanup_keys <- env_keys[grepl(paste0("^", run_key), env_keys)]
-        
-        if (length(cleanup_keys) > 0) {
-          rm(list = cleanup_keys, envir = progress_history_env)
-          message("Cleaned up ", length(cleanup_keys), " progress history entries for run ", task$run_id)
-        }
       }
     }
     
@@ -1794,10 +1712,6 @@ server <- function(input, output, session) {
   
   # Build the entire accordion UI structure using proper Shiny reactive UI
   output$pipeline_stages_accordion <- renderUI({
-    # Priority 3 fix: Wait for initial data before rendering UI to avoid
-    # creating 320+ empty reactive outputs that all update simultaneously
-    req(task_data())
-    
     struct <- pipeline_structure()
     if (is.null(struct)) {
       return(div(class = "alert alert-info", "Loading pipeline structure..."))

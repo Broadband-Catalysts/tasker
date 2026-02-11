@@ -7,16 +7,14 @@
 get_db_connection()
 }
 \value{
-DBI connection object (or pool object that behaves like a connection)
+DBI connection object
 }
 \description{
-Uses connection pool if available (set via options(tasker.pool = pool)),
-otherwise creates a new connection.
+Get database connection
 }
 \examples{
 \dontrun{
 conn <- get_db_connection()
-# If not using pool, disconnect when done:
-# DBI::dbDisconnect(conn)
+DBI::dbDisconnect(conn)
 }
 }

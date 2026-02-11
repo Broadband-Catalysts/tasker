@@ -34,8 +34,7 @@ get_task_status <- function(stage = NULL, task = NULL, status = NULL,
   close_on_exit <- FALSE
   if (is.null(conn)) {
     conn <- get_db_connection()
-    # Only disconnect if it's a regular connection, not a pool
-    close_on_exit <- !inherits(conn, "Pool")
+    close_on_exit <- TRUE
   }
   
   # Ensure cleanup on exit

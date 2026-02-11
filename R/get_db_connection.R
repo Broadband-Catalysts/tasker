@@ -1,29 +1,16 @@
 #' Get database connection
 #'
-#' Uses connection pool if available (set via options(tasker.pool = pool)),
-#' otherwise creates a new connection.
-#'
-#' @return DBI connection object (or pool object that behaves like a connection)
+#' @return DBI connection object
 #' @export
 #'
 #' @examples
 #' \dontrun{
 #' conn <- get_db_connection()
-#' # If not using pool, disconnect when done:
-#' # DBI::dbDisconnect(conn)
+#' DBI::dbDisconnect(conn)
 #' }
 get_db_connection <- function() {
   ensure_configured()
   
-  # Check for connection pool first (set by Shiny app)
-  pool <- getOption("tasker.pool", default = NULL)
-  if (!is.null(pool)) {
-    # Return pool object - it can be used like a regular connection
-    # Pool automatically manages checkout/return
-    return(pool)
-  }
-  
-  # No pool available, create individual connection
   config <- getOption("tasker.config")
   db <- config$database
   
