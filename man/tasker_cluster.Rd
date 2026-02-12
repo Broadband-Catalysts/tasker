@@ -14,7 +14,15 @@ tasker_cluster(
 )
 }
 \arguments{
-\item{ncores}{Number of cores (default: auto-detect as detectCores() - 2, max 32)}
+\item{ncores}{Number of cores or named numeric vector for distributed processing.
+Can be:
+\itemize{
+\item A single number: creates workers on localhost (e.g., 16)
+\item A named numeric vector: distributes workers across hosts
+(e.g., c("manager"=16, "worker2"=16))
+\item NULL (default): auto-detect as c("localhost"=max(detectCores() - 2, 32))
+For remote hosts, SSH access must be configured and R must be in the PATH.
+}}
 
 \item{packages}{Character vector of package names to load on workers (optional).
 The tasker package is always loaded automatically. Additionally, all packages
@@ -71,6 +79,17 @@ cl <- tasker_cluster(
     devtools::load_all()
     con <- dbConnectBBC(mode = "rw")
     NULL  # Important: return NULL to avoid serialization error
+  })
+)
+
+# Distributed processing across multiple hosts
+cl <- tasker_cluster(
+  ncores = c("manager" = 16, "worker2" = 16),
+  export = c("data_path"),
+  setup_expr = quote({
+    devtools::load_all()
+    con <- dbConnectBBC(mode = "rw")
+    NULL
   })
 )
 

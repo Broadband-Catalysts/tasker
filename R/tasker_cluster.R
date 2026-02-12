@@ -9,7 +9,13 @@
 #' automatically loaded on workers, eliminating the need to manually specify common
 #' dependencies.
 #'
-#' @param ncores Number of cores (default: auto-detect as detectCores() - 2, max 32)
+#' @param ncores Number of cores or named numeric vector for distributed processing.
+#'   Can be:
+#'   - A single number: creates workers on localhost (e.g., 16)
+#'   - A named numeric vector: distributes workers across hosts 
+#'     (e.g., c("manager"=16, "worker2"=16))
+#'   - NULL (default): auto-detect as c("localhost"=max(detectCores() - 2, 32))
+#'   For remote hosts, SSH access must be configured and R must be in the PATH.
 #' @param packages Character vector of package names to load on workers (optional).
 #'   The tasker package is always loaded automatically. Additionally, all packages
 #'   currently attached in the main session (excluding base packages) are
@@ -57,6 +63,17 @@
 #'   })
 #' )
 #'
+#' # Distributed processing across multiple hosts
+#' cl <- tasker_cluster(
+#'   ncores = c("manager" = 16, "worker2" = 16),
+#'   export = c("data_path"),
+#'   setup_expr = quote({
+#'     devtools::load_all()
+#'     con <- dbConnectBBC(mode = "rw")
+#'     NULL
+#'   })
+#' )
+#'
 #' # Full example with context
 #' task_start("PROCESS", "County Analysis")
 #' subtask_start("Process counties", items_total = 3143)
@@ -81,10 +98,35 @@ tasker_cluster <- function(ncores   = NULL,
   
   # Input validation
   if (!is.null(ncores)) {
-    if (!is.numeric(ncores) || length(ncores) != 1 || ncores < 1) {
-      stop("'ncores' must be a positive integer", call. = FALSE)
+    if (!is.numeric(ncores)) {
+      stop("'ncores' must be a positive integer or named numeric vector", call. = FALSE)
     }
-    ncores <- as.integer(ncores)
+    
+    # Check for valid values
+    if (any(ncores < 1)) {
+      stop("All ncores values must be positive integers", call. = FALSE)
+    }
+    
+    # Preserve names before converting to integer
+    ncores_names <- names(ncores)
+    
+    # If single value, ensure it's unnamed
+    if (length(ncores) == 1 && !is.null(ncores_names)) {
+      # Convert single named value to named vector format
+      # e.g., c("host"=8) stays as is
+      ncores <- as.integer(ncores)
+      names(ncores) <- ncores_names
+    } else if (length(ncores) == 1) {
+      # Single unnamed value - will use localhost
+      ncores <- as.integer(ncores)
+    } else {
+      # Multiple values - must be named
+      if (is.null(ncores_names) || any(ncores_names == "")) {
+        stop("Multiple ncores values must be named with hostnames", call. = FALSE)
+      }
+      ncores <- as.integer(ncores)
+      names(ncores) <- ncores_names  # Restore names after conversion
+    }
   }
   
   if (!is.null(packages)) {
@@ -105,8 +147,10 @@ tasker_cluster <- function(ncores   = NULL,
   
   # Auto-detect number of cores
   if (is.null(ncores)) {
-    ncores <- parallel::detectCores() - 2
-    ncores <- max(1, min(ncores, 32))  # At least 1, max 32 by default
+    detected <- parallel::detectCores() - 2
+    detected <- max(1, min(detected, 32))  # At least 1, max 32 by default
+    ncores <- c("localhost" = detected)
+    names(ncores) <- "localhost"
   }
   
   # Merge with user-specified packages (user-specified takes precedence)
@@ -116,12 +160,53 @@ tasker_cluster <- function(ncores   = NULL,
     all_packages <- loadedNamespaces()
   }
   
+  # Create cluster specification
+  # If ncores is a named vector, expand to host list for makeCluster
+  # If ncores is a single number, use it directly (localhost)
+  if (length(ncores) == 1 && is.null(names(ncores))) {
+    # Single unnamed number - use localhost
+    cluster_spec <- ncores
+    total_workers <- ncores
+    message(sprintf("Creating cluster with %d workers on localhost", total_workers))
+  } else {
+    # Named vector - distribute across hosts
+    # Expand c("host1"=4, "host2"=2) to c("host1", "host1", "host1", "host1", "host2", "host2")
+    cluster_spec <- unlist(mapply(
+      function(host, count) rep(host, count),
+      names(ncores),
+      ncores,
+      SIMPLIFY = FALSE,
+      USE.NAMES = FALSE
+    ))
+    total_workers <- sum(ncores)
+    
+    # Summarize distribution for user
+    host_summary <- paste(sprintf("%s:%d", names(ncores), ncores), collapse=", ")
+    message(sprintf("Creating cluster with %d workers across hosts: %s", 
+                    total_workers, host_summary))
+  }
+  
   # Create cluster
-  cl <- parallel::makeCluster(ncores)
+  cl <- parallel::makeCluster(cluster_spec)
   
   # Store cluster info for cleanup and tracking
   attr(cl, "tasker_managed") <- TRUE
   attr(cl, "tasker_created_at") <- Sys.time()
+  
+  # Store distribution info for debugging
+  if (length(ncores) == 1 && is.null(names(ncores))) {
+    attr(cl, "tasker_distribution") <- list(
+      type = "localhost",
+      total_workers = total_workers
+    )
+  } else {
+    attr(cl, "tasker_distribution") <- list(
+      type = "distributed",
+      hosts = names(ncores),
+      workers_per_host = as.integer(ncores),
+      total_workers = total_workers
+    )
+  }
   
   # Disable renv watchdog on all workers to prevent extra processes
   parallel::clusterEvalQ(cl, {

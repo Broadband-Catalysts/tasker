@@ -281,3 +281,133 @@ test_that("tasker_cluster setup_expr without NULL return causes no issues", {
   
   tasker::stop_tasker_cluster(cl)
 })
+# =============================================================================
+# Distributed Processing Tests
+# =============================================================================
+
+test_that("tasker_cluster accepts single numeric value (backward compatibility)", {
+  skip_on_cran()
+  skip_if_not(requireNamespace("parallel", quietly = TRUE))
+  
+  # Create cluster with single number
+  cl <- tasker::tasker_cluster(ncores = 2, load_all = TRUE)
+  on.exit(tasker::stop_tasker_cluster(cl), add = TRUE)
+  
+  expect_true(!is.null(cl))
+  expect_true(!is.null(attr(cl, "tasker_managed")))
+  expect_equal(length(cl), 2)
+  
+  # Check distribution attribute
+  dist_info <- attr(cl, "tasker_distribution")
+  expect_equal(dist_info$type, "localhost")
+  expect_equal(dist_info$total_workers, 2)
+  
+  # Verify workers are functional
+  results <- parallel::parLapply(cl, 1:4, function(x) x * 2)
+  expect_equal(results, list(2, 4, 6, 8))
+  
+  tasker::stop_tasker_cluster(cl)
+})
+
+test_that("tasker_cluster accepts named vector with single host", {
+  skip_on_cran()
+  skip_if_not(requireNamespace("parallel", quietly = TRUE))
+  
+  # Create cluster with single named host
+  cl <- tasker::tasker_cluster(ncores = c("localhost" = 3), load_all = TRUE)
+  on.exit(tasker::stop_tasker_cluster(cl), add = TRUE)
+  
+  expect_true(!is.null(cl))
+  expect_equal(length(cl), 3)
+  
+  # Check distribution attribute
+  dist_info <- attr(cl, "tasker_distribution")
+  expect_equal(dist_info$type, "distributed")
+  expect_equal(dist_info$hosts, "localhost")
+  expect_equal(dist_info$workers_per_host, 3)
+  expect_equal(dist_info$total_workers, 3)
+  
+  # Verify workers are functional
+  results <- parallel::parLapply(cl, 1:3, function(x) x + 1)
+  expect_equal(results, list(2, 3, 4))
+  
+  tasker::stop_tasker_cluster(cl)
+})
+
+test_that("tasker_cluster accepts named vector with multiple hosts", {
+  skip_on_cran()
+  skip_if_not(requireNamespace("parallel", quietly = TRUE))
+  
+  # Create cluster distributed across "hosts" (both localhost in testing)
+  # In production, these would be different machines like c("manager"=8, "worker2"=8)
+  cl <- tasker::tasker_cluster(
+    ncores = c("localhost" = 2, "127.0.0.1" = 2),
+    load_all = TRUE
+  )
+  on.exit(tasker::stop_tasker_cluster(cl), add = TRUE)
+  
+  expect_true(!is.null(cl))
+  expect_equal(length(cl), 4)
+  
+  # Check distribution attribute
+  dist_info <- attr(cl, "tasker_distribution")
+  expect_equal(dist_info$type, "distributed")
+  expect_equal(dist_info$hosts, c("localhost", "127.0.0.1"))
+  expect_equal(dist_info$workers_per_host, c(2, 2))
+  expect_equal(dist_info$total_workers, 4)
+  
+  # Verify all workers are functional
+  results <- parallel::parLapply(cl, 1:4, function(x) x * 3)
+  expect_equal(results, list(3, 6, 9, 12))
+  
+  tasker::stop_tasker_cluster(cl)
+})
+
+test_that("tasker_cluster default uses localhost with auto-detected cores", {
+  skip_on_cran()
+  skip_if_not(requireNamespace("parallel", quietly = TRUE))
+  
+  # Create cluster with default (NULL ncores)
+  cl <- tasker::tasker_cluster(load_all = TRUE)
+  on.exit(tasker::stop_tasker_cluster(cl), add = TRUE)
+  
+  expect_true(!is.null(cl))
+  
+  # Check distribution attribute
+  dist_info <- attr(cl, "tasker_distribution")
+  expect_equal(dist_info$type, "distributed")  # Default is now named vector
+  expect_equal(dist_info$hosts, "localhost")
+  expect_true(dist_info$total_workers >= 1)
+  expect_true(dist_info$total_workers <= 32)
+  
+  tasker::stop_tasker_cluster(cl)
+})
+
+test_that("tasker_cluster validates ncores input", {
+  skip_on_cran()
+  
+  # Non-numeric
+  expect_error(
+    tasker::tasker_cluster(ncores = "invalid"),
+    "must be a positive integer or named numeric vector"
+  )
+  
+  # Negative values
+  expect_error(
+    tasker::tasker_cluster(ncores = -1),
+    "must be positive"
+  )
+  
+  # Multiple unnamed values
+  expect_error(
+    tasker::tasker_cluster(ncores = c(2, 3)),
+    "must be named with hostnames"
+  )
+  
+  # Partially named
+  expect_error(
+    # Create a partially named vector
+    tasker::tasker_cluster(ncores = c("host1" = 2, 3)),
+    "must be named with hostnames"
+  )
+})

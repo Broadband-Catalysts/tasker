@@ -24,7 +24,7 @@
 #' estimate <- get_completion_estimate(env, "run_123", 1)
 #' estimate_90 <- get_completion_estimate(env, "run_123", 1, confidence_level = 0.90)
 #' }
-get_completion_estimate <- function(progress_history_env, run_id, subtask_number, confidence_level = 0.95, quiet = FALSE) {
+get_completion_estimate <- function(progress_history_env, run_id, subtask_number, confidence_level = 0.95, max_window=300, quiet = FALSE) {
   # Build storage key
   run_key <- paste0("run_", run_id)
   subtask_key <- paste0("subtask_", subtask_number)
@@ -50,7 +50,7 @@ get_completion_estimate <- function(progress_history_env, run_id, subtask_number
   
   # Use a rolling window of recent snapshots for more stable estimates
   # This prevents wild swings when processing rate changes over time
-  max_window_size <- 30  # Use last 30 snapshots (about 2.5 minutes at 5-second intervals)
+  max_window_size <- min(max_window, 30)  # Use last 30 snapshots (about 2.5 minutes at 5-second intervals)
   window_start_idx <- max(1, length(history_list) - max_window_size + 1)
   
   # Get the first snapshot in the window and the most recent snapshot

@@ -9,6 +9,7 @@ get_completion_estimate(
   run_id,
   subtask_number,
   confidence_level = 0.95,
+  max_window = 300,
   quiet = FALSE
 )
 }
