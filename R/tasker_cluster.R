@@ -220,26 +220,7 @@ tasker_cluster <- function(ncores   = NULL,
     writeLines(
       c("#!/bin/bash",
         sprintf("cd '%s' || exit 1", working_dir),
-        "",
-        "# Separate Rscript arguments from environment variables",
-        "# Environment vars are in KEY=VALUE format, everything else is an Rscript arg",
-        "rscript_args=()",
-        'for arg in "$@"; do',
-        '  if [[ "$arg" =~ ^[A-Z_]+= ]]; then',
-        '    # This is an environment variable - export it',
-        '    export "$arg"',
-        '  else',
-        '    # This is an Rscript argument',
-        '    rscript_args+=("$arg")',
-        '  fi',
-        'done',
-        "",
-        "# Explicitly source .Rprofile to activate renv",
-        'if [ -f .Rprofile ]; then',
-        '  export R_PROFILE_USER=./.Rprofile',
-        'fi',
-        "",
-        'exec Rscript "${rscript_args[@]}"'),
+        'exec Rscript "$@"'),
       wrapper_script
     )
     Sys.chmod(wrapper_script, mode = "0755")
@@ -253,7 +234,7 @@ tasker_cluster <- function(ncores   = NULL,
       cat(sprintf("Wrapper script: %s\n", wrapper_script))
       cat("\nWrapper script contents:\n")
       cat(paste(readLines(wrapper_script), collapse="\n"), "\n")
-      cat("\nWrapper script will separate environment variables from Rscript args\n")
+      cat("\nWrapper changes directory then passes all arguments to Rscript\n")
       cat("===================================\n\n")
     }
     
