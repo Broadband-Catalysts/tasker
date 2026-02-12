@@ -10,7 +10,8 @@ tasker_cluster(
   export = NULL,
   setup_expr = NULL,
   envir = parent.frame(),
-  load_all = FALSE
+  load_all = FALSE,
+  debug = FALSE
 )
 }
 \arguments{
@@ -21,7 +22,16 @@ Can be:
 \item A named numeric vector: distributes workers across hosts
 (e.g., c("manager"=16, "worker2"=16))
 \item NULL (default): auto-detect as c("localhost"=max(detectCores() - 2, 32))
-For remote hosts, SSH access must be configured and R must be in the PATH.
+}
+
+For remote hosts:
+\itemize{
+\item SSH access must be configured (passwordless SSH keys recommended)
+\item Rscript must be in the PATH on remote hosts
+\item The project directory must exist at the same path on all hosts
+(e.g., via NFS mount or synchronized git repositories)
+\item Workers will automatically start in the same working directory as the
+master process and hence will use the .Renviron and .Rprofile files (enabling renv activation)
 }}
 
 \item{packages}{Character vector of package names to load on workers (optional).
@@ -39,6 +49,8 @@ or a serializable value to avoid serialization errors. (optional)}
 \item{envir}{Environment to export objects from (default: parent.frame())}
 
 \item{load_all}{If TRUE, call devtools::load_all() on workers (default: FALSE)}
+
+\item{debug}{If TRUE, display debugging information including command strings (default: FALSE)}
 }
 \value{
 Cluster object from parallel::makeCluster()

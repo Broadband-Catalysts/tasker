@@ -16,3 +16,4 @@
 
 # OneByOne session tracking (ephemeral metadata)
 .github/obo_sessions/
+.tasker_rscript_*.sh

@@ -15,7 +15,14 @@
 #'   - A named numeric vector: distributes workers across hosts 
 #'     (e.g., c("manager"=16, "worker2"=16))
 #'   - NULL (default): auto-detect as c("localhost"=max(detectCores() - 2, 32))
-#'   For remote hosts, SSH access must be configured and R must be in the PATH.
+#'   
+#'   For remote hosts:
+#'   - SSH access must be configured (passwordless SSH keys recommended)
+#'   - Rscript must be in the PATH on remote hosts
+#'   - The project directory must exist at the same path on all hosts
+#'     (e.g., via NFS mount or synchronized git repositories)
+#'   - Workers will automatically start in the same working directory as the
+#'     master process and hence will use the .Renviron and .Rprofile files (enabling renv activation)
 #' @param packages Character vector of package names to load on workers (optional).
 #'   The tasker package is always loaded automatically. Additionally, all packages
 #'   currently attached in the main session (excluding base packages) are
@@ -27,6 +34,7 @@
 #'   or a serializable value to avoid serialization errors. (optional)
 #' @param envir Environment to export objects from (default: parent.frame())
 #' @param load_all If TRUE, call devtools::load_all() on workers (default: FALSE)
+#' @param debug If TRUE, display debugging information including command strings (default: FALSE)
 #' @return Cluster object from parallel::makeCluster()
 #'
 #' @seealso [export_tasker_context()] to add context to existing clusters,
@@ -94,7 +102,8 @@ tasker_cluster <- function(ncores   = NULL,
                            export   = NULL,
                            setup_expr = NULL,
                            envir    = parent.frame(),
-                           load_all = FALSE) {
+                           load_all = FALSE,
+                           debug    = FALSE) {
   
   # Input validation
   if (!is.null(ncores)) {
@@ -145,6 +154,10 @@ tasker_cluster <- function(ncores   = NULL,
     stop("'load_all' must be TRUE or FALSE", call. = FALSE)
   }
   
+  if (!is.logical(debug) || length(debug) != 1) {
+    stop("'debug' must be TRUE or FALSE", call. = FALSE)
+  }
+  
   # Auto-detect number of cores
   if (is.null(ncores)) {
     detected <- parallel::detectCores() - 2
@@ -168,6 +181,7 @@ tasker_cluster <- function(ncores   = NULL,
     cluster_spec <- ncores
     total_workers <- ncores
     message(sprintf("Creating cluster with %d workers on localhost", total_workers))
+    has_remote_hosts <- FALSE
   } else {
     # Named vector - distribute across hosts
     # Expand c("host1"=4, "host2"=2) to c("host1", "host1", "host1", "host1", "host2", "host2")
@@ -180,14 +194,79 @@ tasker_cluster <- function(ncores   = NULL,
     ))
     total_workers <- sum(ncores)
     
+    # Check if we have any non-localhost hosts
+    has_remote_hosts <- any(!names(ncores) %in% c("localhost", "127.0.0.1"))
+    
     # Summarize distribution for user
     host_summary <- paste(sprintf("%s:%d", names(ncores), ncores), collapse=", ")
     message(sprintf("Creating cluster with %d workers across hosts: %s", 
                     total_workers, host_summary))
   }
   
-  # Create cluster
-  cl <- parallel::makeCluster(cluster_spec)
+  # Create cluster with renv support for remote hosts
+  if (has_remote_hosts) {
+    # Get current working directory to ensure remote workers start in same location
+    # This is critical for renv to work properly
+    working_dir <- getwd()
+    
+    # Create a temporary wrapper script that:
+    # 1. Changes to the project directory
+    # 2. Explicitly sources .Rprofile to activate renv
+    # 3. Starts Rscript with all passed arguments
+    # This ensures renv is properly activated even if makePSOCKcluster passes --vanilla
+    # Place wrapper in shared project directory so remote workers can access it
+    wrapper_script <- file.path(working_dir, sprintf(".tasker_rscript_%s.sh", 
+                                                      format(Sys.time(), "%Y%m%d_%H%M%S")))
+    writeLines(
+      c("#!/bin/bash",
+        sprintf("cd '%s' || exit 1", working_dir),
+        "# Debug: Display all arguments",
+        'echo "=== Wrapper Script Debug ===" >&2',
+        'echo "Working directory: $(pwd)" >&2',
+        'echo "Number of arguments: $#" >&2',
+        'echo "All arguments: $*" >&2',
+        'for i in "$@"; do echo "  Arg: $i" >&2; done',
+        'echo "=========================" >&2',
+        "# Explicitly source .Rprofile to activate renv",
+        'if [ -f .Rprofile ]; then',
+        '  export R_PROFILE_USER=./.Rprofile',
+        'fi',
+        'exec Rscript "$@"'),
+      wrapper_script
+    )
+    Sys.chmod(wrapper_script, mode = "0755")
+    
+    message(sprintf("Remote workers will start in directory: %s", working_dir))
+    
+    if (debug) {
+      cat("\n=== DEBUG: Cluster Configuration ===\n")
+      cat(sprintf("Working directory: %s\n", working_dir))
+      cat(sprintf("Cluster spec: %s\n", paste(cluster_spec, collapse=", ")))
+      cat(sprintf("Wrapper script: %s\n", wrapper_script))
+      cat("Wrapper script contents:\n")
+      cat(paste(readLines(wrapper_script), collapse="\n"), "\n")
+      cat("===================================\n\n")
+    }
+    
+    cl <- parallel::makePSOCKcluster(
+      cluster_spec,
+      rscript = wrapper_script,
+      homogeneous = TRUE  # Assume same directory structure on all hosts
+    )
+    
+    # Store wrapper script path for cleanup
+    attr(cl, "tasker_wrapper_script") <- wrapper_script
+  } else {
+    # Local cluster - no special handling needed
+    if (debug) {
+      cat("\n=== DEBUG: Cluster Configuration ===\n")
+      cat(sprintf("Cluster spec: %s\n", paste(cluster_spec, collapse=", ")))
+      cat("Local cluster (no custom rscript)\n")
+      cat("===================================\n\n")
+    }
+    
+    cl <- parallel::makePSOCKcluster(cluster_spec)
+  }
   
   # Store cluster info for cleanup and tracking
   attr(cl, "tasker_managed") <- TRUE
