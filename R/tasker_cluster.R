@@ -220,18 +220,26 @@ tasker_cluster <- function(ncores   = NULL,
     writeLines(
       c("#!/bin/bash",
         sprintf("cd '%s' || exit 1", working_dir),
-        "# Debug: Display all arguments",
-        'echo "=== Wrapper Script Debug ===" >&2',
-        'echo "Working directory: $(pwd)" >&2',
-        'echo "Number of arguments: $#" >&2',
-        'echo "All arguments: $*" >&2',
-        'for i in "$@"; do echo "  Arg: $i" >&2; done',
-        'echo "=========================" >&2',
+        "",
+        "# Separate Rscript arguments from environment variables",
+        "# Environment vars are in KEY=VALUE format, everything else is an Rscript arg",
+        "rscript_args=()",
+        'for arg in "$@"; do',
+        '  if [[ "$arg" =~ ^[A-Z_]+= ]]; then',
+        '    # This is an environment variable - export it',
+        '    export "$arg"',
+        '  else',
+        '    # This is an Rscript argument',
+        '    rscript_args+=("$arg")',
+        '  fi',
+        'done',
+        "",
         "# Explicitly source .Rprofile to activate renv",
         'if [ -f .Rprofile ]; then',
         '  export R_PROFILE_USER=./.Rprofile',
         'fi',
-        'exec Rscript "$@"'),
+        "",
+        'exec Rscript "${rscript_args[@]}"'),
       wrapper_script
     )
     Sys.chmod(wrapper_script, mode = "0755")
@@ -243,8 +251,9 @@ tasker_cluster <- function(ncores   = NULL,
       cat(sprintf("Working directory: %s\n", working_dir))
       cat(sprintf("Cluster spec: %s\n", paste(cluster_spec, collapse=", ")))
       cat(sprintf("Wrapper script: %s\n", wrapper_script))
-      cat("Wrapper script contents:\n")
+      cat("\nWrapper script contents:\n")
       cat(paste(readLines(wrapper_script), collapse="\n"), "\n")
+      cat("\nWrapper script will separate environment variables from Rscript args\n")
       cat("===================================\n\n")
     }
     
