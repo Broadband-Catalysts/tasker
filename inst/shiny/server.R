@@ -1676,6 +1676,118 @@ server <- function(input, output, session) {
   
   # Note: Stage expansion state is now managed by bslib::accordion()
   
+  # Handle stage reset button clicks - show confirmation modal
+  observeEvent(input$stage_reset_clicked, {
+    req(input$stage_reset_clicked)
+    
+    stage <- input$stage_reset_clicked$stage
+    
+    # Get all tasks in this stage
+    struct <- pipeline_structure()
+    stage_tasks <- struct$tasks[struct$tasks$stage_name == stage, ]
+    
+    # Store the stage info for the confirm handler
+    rv$reset_pending_stage_all <- stage
+    rv$reset_pending_stage_tasks <- stage_tasks
+    
+    # Show confirmation modal
+    showModal(modalDialog(
+      title = tags$span(
+        icon("exclamation-triangle"),
+        " Confirm Stage Reset"
+      ),
+      div(
+        style = "font-size: 14px;",
+        tags$p(
+          style = "font-weight: bold; color: #d9534f;",
+          "WARNING: This action is irreversible and cannot be undone!"
+        ),
+        tags$p(
+          "You are about to reset ALL tasks in the following stage:"
+        ),
+        tags$div(
+          style = "background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace;",
+          tags$div(sprintf("Stage: %s", stage)),
+          tags$div(sprintf("Number of tasks: %d", nrow(stage_tasks)))
+        ),
+        tags$p(
+          "This will delete all execution history, progress data, and subtask information for ALL tasks in this stage."
+        ),
+        tags$p(
+          style = "margin-bottom: 0;",
+          "All task statuses will be set back to NOT_STARTED."
+        )
+      ),
+      footer = tagList(
+        actionButton("confirm_stage_reset", "Reset All Tasks", 
+                    class = "btn-danger",
+                    icon = icon("trash")),
+        modalButton("Cancel")
+      ),
+      easyClose = FALSE,
+      size = "m"
+    ))
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  
+  # Handle confirmed stage reset
+  observeEvent(input$confirm_stage_reset, {
+    stage <- rv$reset_pending_stage_all
+    stage_tasks <- rv$reset_pending_stage_tasks
+    
+    req(stage, nrow(stage_tasks) > 0)
+    
+    # Close the modal
+    removeModal()
+    
+    # Perform the reset for all tasks
+    reset_count <- 0
+    reset_errors <- character(0)
+    
+    for (i in seq_len(nrow(stage_tasks))) {
+      task_name <- stage_tasks[i, ]$task_name
+      
+      tryCatch({
+        tasker::task_reset(stage = stage, task = task_name, quiet = TRUE)
+        reset_count <- reset_count + 1
+        
+        # Reset the task reactive to NOT_STARTED state
+        task_key <- paste(stage, task_name, sep = "||")
+        task_reactives[[task_key]] <- list(
+          status = "NOT_STARTED",
+          overall_percent_complete = 0,
+          current_subtask = 0,
+          total_subtasks = 0,
+          current_subtask_name = "",
+          current_subtask_number = 0,
+          items_total = 0,
+          items_complete = 0
+        )
+      }, error = function(e) {
+        reset_errors <<- c(reset_errors, sprintf("%s: %s", task_name, e$message))
+      })
+    }
+    
+    # Show result notification
+    if (length(reset_errors) == 0) {
+      showNotification(
+        sprintf("Successfully reset %d task(s) in stage '%s'", reset_count, stage),
+        type = "message",
+        duration = 5
+      )
+    } else {
+      showNotification(
+        sprintf("Reset %d task(s) in stage '%s' with %d error(s):\n%s",
+                reset_count, stage, length(reset_errors),
+                paste(reset_errors, collapse = "\n")),
+        type = "warning",
+        duration = 10
+      )
+    }
+    
+    # Trigger refresh
+    rv$refresh_trigger <- rv$refresh_trigger + 1
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  
   # Handle task reset button clicks - show confirmation modal
   observeEvent(input$task_reset_clicked, {
     req(input$task_reset_clicked)
@@ -1890,18 +2002,20 @@ server <- function(input, output, session) {
               htmlOutput(paste0("task_status_", task_id), inline = TRUE, container = function(...) span(class = "task-status-badge", ...)),
               htmlOutput(paste0("task_progress_", task_id), inline = TRUE, container = function(...) div(class = "task-progress-container", ...)),
               textOutput(paste0("task_message_", task_id), inline = TRUE, container = function(...) div(class = "task-message", ...)),
-              div(id = paste0("task_reset_", task_id), class = "task-reset-button", 
-                  tags$button(
-                    id = paste0("reset_btn_", task_id),
-                    class = "btn btn-sm btn-warning task-reset-btn",
-                    title = "Reset this task to NOT_STARTED",
-                    onclick = sprintf(
-                      "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
-                      htmltools::htmlEscape(stage_name),
-                      htmltools::htmlEscape(task_name)
-                    ),
-                    "Reset"
-                  )
+              div(
+                id = paste0("task_reset_", task_id), 
+                class = "task-reset-button", 
+                tags$button(
+                  id = paste0("reset_btn_", task_id),
+                  class = "btn btn-sm btn-warning task-reset-btn",
+                  title = "Reset this task to NOT_STARTED",
+                  onclick = sprintf(
+                    "Shiny.setInputValue('task_reset_clicked', {stage: '%s', task: '%s', timestamp: Date.now()}, {priority: 'event'})",
+                    htmltools::htmlEscape(stage_name),
+                    htmltools::htmlEscape(task_name)
+                  ),
+                  "Reset"
+                )
               )
             ),
             # Process status sub-pane (hidden by default via CSS)
@@ -1973,11 +2087,25 @@ server <- function(input, output, session) {
             `aria-expanded` = "false",
             `aria-controls` = paste0("collapse_", stage_id),
             div(
-              class = "stage-header",
               div(class = "stage-name", stage_name),
+              class = "stage-header",
               htmlOutput(paste0("stage_badge_", stage_id), inline = TRUE, container = function(...) span(class = "stage-badge", ...)),
               htmlOutput(paste0("stage_progress_", stage_id), inline = TRUE, container = function(...) span(class = "stage-progress", ...)),
               textOutput(paste0("stage_count_", stage_id), inline = TRUE, container = function(...) span(class = "stage-count", ...))
+              # ,
+              # div(id = paste0("stage_reset_", stage_id),
+              #     class = "stage-reset-button",
+              #     tags$button(
+              #       id = paste0("stage_reset_btn_", stage_id),
+              #       class = "btn btn-sm btn-warning stage-reset-btn",
+              #       title = "Reset all tasks in this stage to NOT_STARTED",
+              #       onclick = sprintf(
+              #         "Shiny.setInputValue('stage_reset_clicked', {stage: '%s', timestamp: Date.now()}, {priority: 'event'})",
+              #         htmltools::htmlEscape(stage_name)
+              #       ),
+              #       "Reset"
+              #     )
+              # )
             )
           )
         ),

@@ -132,6 +132,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .stage-header:hover {
@@ -142,7 +143,9 @@
   font-weight: 600;
   font-size: 16px;
   flex: 0 0 auto;
-  min-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stage-badge,
@@ -239,6 +242,37 @@ span[id^="stage_progress_"] {
   flex: 0 0 auto;
   min-width: 60px;
   text-align: right;
+}
+
+.stage-reset-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.stage-reset-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  white-space: nowrap;
+  /* Match Bootstrap btn-warning styling */
+  color: #664d03;
+  background-color: #fff3cd;
+  border-color: #ffecb5;
+}
+
+.stage-reset-btn:hover {
+  background-color: #ffecb5;
+  border-color: #ffe69c;
+  color: #664d03;
 }
 
 .stage-body {
@@ -886,6 +920,13 @@ span[id^="stage_progress_"] {
   white-space: nowrap;
 }
 
+/* Task reset button positioning */
+.task-reset-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+  pointer-events: auto;
+}
+
 /* Accordion styling to match previous stage design */
 .accordion {
   width: 100%;
@@ -941,6 +982,7 @@ span[id^="stage_progress_"] {
   width: 100%;
   flex: 1;
   display: flex;
+  flex-wrap: nowrap;
   pointer-events: none;
 }
 

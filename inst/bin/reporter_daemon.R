@@ -57,6 +57,34 @@ if (is.null(getOption("tasker.config"))) {
   stop("Failed to load tasker configuration in background process")
 }
 
+# Check if another reporter is already running for this hostname
+# This prevents duplicate reporters when daemon is started directly or via race conditions
+current_pid <- Sys.getpid()
+tryCatch({
+  con <- tasker:::get_db_connection()
+  existing_status <- tasker:::get_reporter_database_status(hostname, con = con)
+  
+  if (!is.null(existing_status) && existing_status$process_id != current_pid) {
+    # Check if the existing process is actually alive
+    status <- tasker:::get_reporter_status(existing_status$process_id, hostname, con = con)
+    
+    if (status$is_alive) {
+      message("[Reporter] ", Sys.time(), " Another reporter already running (PID: ", 
+              existing_status$process_id, "). Exiting.")
+      DBI::dbDisconnect(con)
+      quit(save = "no", status = 0)
+    } else {
+      message("[Reporter] ", Sys.time(), " Existing reporter appears dead (PID: ", 
+              existing_status$process_id, "). Proceeding to start.")
+    }
+  }
+  
+  DBI::dbDisconnect(con)
+}, error = function(e) {
+  # If we can't check (e.g., DB error), log and proceed anyway
+  warning("[Reporter] ", Sys.time(), " Could not check for existing reporter: ", e$message)
+})
+
 # The main loop will handle reporter registration through update_reporter_heartbeat()
 # Run main loop (this will handle its own database connection)
 tasker:::reporter_main_loop(
