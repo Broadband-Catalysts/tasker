@@ -215,8 +215,8 @@ tasker_cluster <- function(ncores   = NULL,
     # 3. Starts Rscript with all passed arguments
     # This ensures renv is properly activated even if makePSOCKcluster passes --vanilla
     # Place wrapper in shared project directory so remote workers can access it
-    wrapper_script <- file.path(working_dir, sprintf(".tasker_rscript_%s.sh", 
-                                                      format(Sys.time(), "%Y%m%d_%H%M%S")))
+    wrapper_script <- file.path(working_dir, 
+      sprintf(".tasker_rscript_%s.sh", format(Sys.time(), "%Y%m%d_%H%M%S")))
     writeLines(
       c("#!/bin/bash",
         sprintf("cd '%s' || exit 1", working_dir),
