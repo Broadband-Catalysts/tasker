@@ -101,16 +101,16 @@ calculate_stage_progress <- function(stage_tasks) {
 # PRIORITY 4 FIX: Completion estimate caching (reduces CPU load by 90%)
 # ============================================================================
 
-# Create cache environment for completion estimates (10-second TTL)
+# Create cache environment for completion estimates (30-second TTL for stability)
 estimate_cache <- new.env(parent = emptyenv())
 
 get_cached_estimate <- function(run_id, subtask_number) {
   cache_key <- paste0(run_id, "_", subtask_number)
   cached <- estimate_cache[[cache_key]]
   
-  # Return cached value if less than 10 seconds old
+  # Return cached value if less than 30 seconds old (increased from 10 for more stability)
   if (!is.null(cached) && 
-      difftime(Sys.time(), cached$timestamp, units = "secs") < 10) {
+      difftime(Sys.time(), cached$timestamp, units = "secs") < 30) {
     return(cached$value)
   }
   
@@ -124,10 +124,21 @@ get_cached_estimate <- function(run_id, subtask_number) {
   
   completion_text <- tasker::format_completion_with_ci(estimate, quiet = TRUE)
   
-  # Cache the result
+  # Apply exponential smoothing if we have a previous estimate to prevent sudden jumps
+  if (!is.null(cached) && !is.null(estimate) && !is.null(cached$last_estimate)) {
+    # Smooth the ETA with weight 0.7 on new value, 0.3 on old value
+    smoothed_eta <- 0.7 * estimate$eta + 0.3 * cached$last_estimate$eta
+    estimate$eta <- smoothed_eta
+    
+    # Recalculate the formatted text with smoothed estimate
+    completion_text <- tasker::format_completion_with_ci(estimate, quiet = TRUE)
+  }
+  
+  # Cache the result and the raw estimate for smoothing
   estimate_cache[[cache_key]] <- list(
     value = completion_text,
-    timestamp = Sys.time()
+    timestamp = Sys.time(),
+    last_estimate = estimate
   )
   
   return(completion_text)

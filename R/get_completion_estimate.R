@@ -1,7 +1,12 @@
 #' Estimate task completion time with confidence intervals
 #'
-#' Calculates estimated time to completion using simple linear extrapolation:
-#' (elapsed time / items completed) * items remaining. 
+#' Calculates estimated time to completion using linear extrapolation based on 
+#' recent progress. Uses a rolling window of the last 30 snapshots (or all available
+#' if fewer) to calculate the rate, making estimates more responsive to current
+#' processing speed and reducing wild swings from variable processing rates.
+#' 
+#' Formula: (elapsed time / items completed in window) * items remaining
+#' 
 #' Provides confidence intervals using normal approximation for the rate estimate.
 #'
 #' @param progress_history_env Environment containing progress snapshot history
@@ -43,11 +48,16 @@ get_completion_estimate <- function(progress_history_env, run_id, subtask_number
     return(NULL)
   }
   
-  # Get the first and most recent snapshots
-  first_snapshot <- history_list[[1]]
+  # Use a rolling window of recent snapshots for more stable estimates
+  # This prevents wild swings when processing rate changes over time
+  max_window_size <- 30  # Use last 30 snapshots (about 2.5 minutes at 5-second intervals)
+  window_start_idx <- max(1, length(history_list) - max_window_size + 1)
+  
+  # Get the first snapshot in the window and the most recent snapshot
+  first_snapshot <- history_list[[window_start_idx]]
   current_snapshot <- tail(history_list, 1)[[1]]
   
-  # Calculate elapsed time and items completed
+  # Calculate elapsed time and items completed within the window
   elapsed_time <- as.numeric(difftime(current_snapshot$timestamp, first_snapshot$timestamp, units = "secs"))
   items_complete <- current_snapshot$items_complete - first_snapshot$items_complete
   items_remaining <- current_snapshot$items_total - current_snapshot$items_complete

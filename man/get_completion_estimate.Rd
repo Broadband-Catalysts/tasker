@@ -28,8 +28,14 @@ List with eta, confidence_interval, confidence level, rate, and items_remaining,
 or NULL if insufficient data
 }
 \description{
-Calculates estimated time to completion using simple linear extrapolation:
-(elapsed time / items completed) * items remaining.
+Calculates estimated time to completion using linear extrapolation based on
+recent progress. Uses a rolling window of the last 30 snapshots (or all available
+if fewer) to calculate the rate, making estimates more responsive to current
+processing speed and reducing wild swings from variable processing rates.
+}
+\details{
+Formula: (elapsed time / items completed in window) * items remaining
+
 Provides confidence intervals using normal approximation for the rate estimate.
 }
 \examples{
