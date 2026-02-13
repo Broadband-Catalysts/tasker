@@ -274,10 +274,6 @@ tasker_cluster <- function(ncores   = NULL,
     )
   }
   
-  # Return cluster immediately - post-processing disabled due to dependency issues
-  # Users can handle package loading via setup_expr parameter if needed
-  return(cl)
-  
   # Disable renv watchdog on all workers to prevent extra processes
   parallel::clusterEvalQ(cl, {
     Sys.setenv(RENV_WATCHDOG_ENABLED = "FALSE")
