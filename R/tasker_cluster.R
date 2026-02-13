@@ -244,15 +244,23 @@ tasker_cluster <- function(ncores   = NULL,
       NULL
     })
     
-    # Activate renv library by setting library paths manually
-    # This avoids issues with .Rprofile expecting packages that aren't installed yet
-    parallel::clusterEvalQ(cl, {
-      renv_lib <- file.path(working_dir, "renv/library/linux-ubuntu-noble/R-4.5/x86_64-pc-linux-gnu")
-      if (dir.exists(renv_lib)) {
-        .libPaths(c(renv_lib, .libPaths()))
+    # Load .Rprofile if it exists (for renv activation, package loading and other setup)
+    parallel::clusterEvalQ(cl,
+      {
+        rprofile_file <- file.path(working_dir, ".Rprofile")
+        if (file.exists(rprofile_file)) {
+          source(rprofile_file)
+        }
       }
-      NULL
-    })
+    )
+
+    # parallel::clusterEvalQ(cl, {
+    #   renv_lib <- file.path(working_dir, "renv/library/linux-ubuntu-noble/R-4.5/x86_64-pc-linux-gnu")
+    #   if (dir.exists(renv_lib)) {
+    #     .libPaths(c(renv_lib, .libPaths()))
+    #   }
+    #   NULL
+    # })
 
   } else {
     # Local cluster - no special handling needed
