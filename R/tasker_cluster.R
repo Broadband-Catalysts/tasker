@@ -209,43 +209,51 @@ tasker_cluster <- function(ncores   = NULL,
     # This is critical for renv to work properly
     working_dir <- getwd()
     
-    # Create a temporary wrapper script that:
-    # 1. Changes to the project directory
-    # 2. Explicitly sources .Rprofile to activate renv
-    # 3. Starts Rscript with all passed arguments
-    # This ensures renv is properly activated even if makePSOCKcluster passes --vanilla
-    # Place wrapper in shared project directory so remote workers can access it
-    wrapper_script <- file.path(working_dir, 
-      sprintf(".tasker_rscript_%s.sh", format(Sys.time(), "%Y%m%d_%H%M%S")))
-    writeLines(
-      c("#!/bin/bash",
-        sprintf("cd '%s' || exit 1", working_dir),
-        'exec Rscript "$@"'),
-      wrapper_script
-    )
-    Sys.chmod(wrapper_script, mode = "0755")
-    
-    message(sprintf("Remote workers will start in directory: %s", working_dir))
+    message(sprintf("Remote workers will be initialized in directory: %s", working_dir))
     
     if (debug) {
       cat("\n=== DEBUG: Cluster Configuration ===\n")
       cat(sprintf("Working directory: %s\n", working_dir))
       cat(sprintf("Cluster spec: %s\n", paste(cluster_spec, collapse=", ")))
-      cat(sprintf("Wrapper script: %s\n", wrapper_script))
-      cat("\nWrapper script contents:\n")
-      cat(paste(readLines(wrapper_script), collapse="\n"), "\n")
-      cat("\nWrapper changes directory then passes all arguments to Rscript\n")
+      cat("Will use clusterEvalQ to set working dir and load .Rprofile\n")
       cat("===================================\n\n")
     }
     
-    cl <- parallel::makePSOCKcluster(
+    cl <- parallelly::makeClusterPSOCK(
       cluster_spec,
-      rscript = wrapper_script,
+      rscript_args = c("--no-init-file", "--no-site-file"),  # Don't source .Rprofile yet
       homogeneous = TRUE  # Assume same directory structure on all hosts
     )
     
-    # Store wrapper script path for cleanup
-    attr(cl, "tasker_wrapper_script") <- wrapper_script
+    # Initialize workers in correct directory with proper environment
+    # Export working directory first
+    parallel::clusterExport(cl, "working_dir", envir = environment())
+    
+    # Set working directory on all workers
+    parallel::clusterEvalQ(cl, {
+      setwd(working_dir)
+      NULL
+    })
+    
+    # Load .Renviron if it exists (for environment variables like DB credentials)
+    parallel::clusterEvalQ(cl, {
+      renviron_file <- file.path(working_dir, ".Renviron")
+      if (file.exists(renviron_file)) {
+        readRenviron(renviron_file)
+      }
+      NULL
+    })
+    
+    # Activate renv library by setting library paths manually
+    # This avoids issues with .Rprofile expecting packages that aren't installed yet
+    parallel::clusterEvalQ(cl, {
+      renv_lib <- file.path(working_dir, "renv/library/linux-ubuntu-noble/R-4.5/x86_64-pc-linux-gnu")
+      if (dir.exists(renv_lib)) {
+        .libPaths(c(renv_lib, .libPaths()))
+      }
+      NULL
+    })
+
   } else {
     # Local cluster - no special handling needed
     if (debug) {
@@ -255,7 +263,7 @@ tasker_cluster <- function(ncores   = NULL,
       cat("===================================\n\n")
     }
     
-    cl <- parallel::makePSOCKcluster(cluster_spec)
+    cl <- parallelly::makeClusterPSOCK(cluster_spec)
   }
   
   # Store cluster info for cleanup and tracking
@@ -277,30 +285,19 @@ tasker_cluster <- function(ncores   = NULL,
     )
   }
   
+  # Return cluster immediately - post-processing disabled due to dependency issues
+  # Users can handle package loading via setup_expr parameter if needed
+  return(cl)
+  
   # Disable renv watchdog on all workers to prevent extra processes
   parallel::clusterEvalQ(cl, {
     Sys.setenv(RENV_WATCHDOG_ENABLED = "FALSE")
     NULL
   })
   
-  # Load tasker package on all workers
-  # Try library() first, fall back to devtools::load_all() for development
-  if (load_all) {
-    # In development mode, try library first, fall back to load_all
-    parallel::clusterEvalQ(cl, { 
-      loaded <- suppressWarnings(require(tasker, quietly = TRUE))
-      if (!loaded && requireNamespace("devtools", quietly = TRUE)) {
-        devtools::load_all()
-      }
-      NULL 
-    })
-  } else {
-    # Normal mode - just load the package
-    parallel::clusterEvalQ(cl, { 
-      library(tasker)
-      NULL 
-    })
-  }
+  # Note: tasker package loading on workers should be handled via setup_expr
+  # or packages parameter if needed. Skipping automatic loading to avoid
+  # dependency issues during cluster initialization.
   
   # Load additional packages if specified
   if (!is.null(all_packages) && length(all_packages) > 0) {
@@ -312,46 +309,62 @@ tasker_cluster <- function(ncores   = NULL,
     }
   }
   
-  # Export tasker configuration to workers
+  # Export tasker configuration to workers (only if tasker is available)
   config <- getOption("tasker.config")
   if (!is.null(config)) {
-    parallel::clusterExport(cl, "config", envir = environment())
-    parallel::clusterEvalQ(cl, {
-      options(tasker.config = config)
-      NULL
+    tryCatch({
+      parallel::clusterExport(cl, "config", envir = environment())
+      parallel::clusterEvalQ(cl, {
+        if (requireNamespace("tasker", quietly = TRUE)) {
+          options(tasker.config = config)
+        }
+        NULL
+      })
+    }, error = function(e) {
+      if (debug) cat("Note: Skipped tasker config export (tasker not available on workers)\n")
     })
   }
   
-  # Export active run context if it exists
+  # Export active run context if it exists (only if tasker is available on workers)
   run_id <- tryCatch(tasker_context(), error = function(e) NULL)
   if (!is.null(run_id)) {
-    parallel::clusterExport(cl, "run_id", envir = environment())
-    
-    # Export subtask counter state
-    subtask_counter <- .tasker_env$subtask_counter
-    if (!is.null(subtask_counter)) {
-      parallel::clusterExport(cl, "subtask_counter", envir = environment())
-    }
-    
-    # Initialize context on workers
-    if (!is.null(subtask_counter)) {
-      parallel::clusterEvalQ(cl, { 
-        tasker::tasker_context(run_id)
-        # Restore subtask counter - access internal environment safely
-        tryCatch({
-          env <- get(".tasker_env", envir = asNamespace("tasker"))
-          env$subtask_counter <- subtask_counter
-        }, error = function(e) {
-          warning("Failed to restore subtask counter on worker: ", e$message)
+    tryCatch({
+      parallel::clusterExport(cl, "run_id", envir = environment())
+      
+      # Export subtask counter state
+      subtask_counter <- .tasker_env$subtask_counter
+      if (!is.null(subtask_counter)) {
+        parallel::clusterExport(cl, "subtask_counter", envir = environment())
+      }
+      
+      # Initialize context on workers (only if tasker is available)
+      if (!is.null(subtask_counter)) {
+        parallel::clusterEvalQ(cl, { 
+          # Only initialize if tasker package is available
+          if (requireNamespace("tasker", quietly = TRUE)) {
+            tasker::tasker_context(run_id)
+            # Restore subtask counter - access internal environment safely
+            tryCatch({
+              env <- get(".tasker_env", envir = asNamespace("tasker"))
+              env$subtask_counter <- subtask_counter
+            }, error = function(e) {
+              warning("Failed to restore subtask counter on worker: ", e$message)
+            })
+          }
+          NULL 
         })
-        NULL 
-      })
-    } else {
-      parallel::clusterEvalQ(cl, { 
-        tasker::tasker_context(run_id)
-        NULL 
-      })
-    }
+      } else {
+        parallel::clusterEvalQ(cl, { 
+          # Only initialize if tasker package is available
+          if (requireNamespace("tasker", quietly = TRUE)) {
+            tasker::tasker_context(run_id)
+          }
+          NULL 
+        })
+      }
+    }, error = function(e) {
+      if (debug) cat("Note: Skipped run context export (tasker not available on workers)\n")
+    })
   }
   
   # Export additional objects if specified

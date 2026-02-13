@@ -27,7 +27,8 @@ Imports:
     callr (>= 3.7.0),
     R.utils,
     stringr,
-    shinyTZ
+    shinyTZ,
+    parallelly
 Suggests:
     RPostgres,
     RSQLite,
