@@ -25,10 +25,16 @@ stop_tasker_cluster <- function(cl, quiet = FALSE) {
   # Check if this is a tasker-managed cluster
   is_tasker_managed <- !is.null(attr(cl, "tasker_managed"))
   created_at <- attr(cl, "tasker_created_at")
+  wrapper_script <- attr(cl, "tasker_wrapper_script")
   
   # Stop the cluster
   tryCatch({
     parallel::stopCluster(cl)
+    
+    # Clean up wrapper script if it exists
+    if (!is.null(wrapper_script) && file.exists(wrapper_script)) {
+      unlink(wrapper_script)
+    }
     
     if (!quiet && is_tasker_managed) {
       if (!is.null(created_at)) {

@@ -22,9 +22,33 @@ ui <- page_fluid(
       
       console.log('[JS-INIT] Tasker monitor JavaScript loaded');
       
+      // Track page visibility to prevent accumulated updates
+      var isPageVisible = !document.hidden;
+      var becameVisibleAt = null;
+      
+      // Monitor page visibility changes
+      document.addEventListener('visibilitychange', function() {
+        var wasVisible = isPageVisible;
+        isPageVisible = !document.hidden;
+        
+        console.log('[JS-VISIBILITY] Page ' + (isPageVisible ? 'visible' : 'hidden'));
+        
+        // Send visibility state to Shiny
+        Shiny.setInputValue('page_visible', isPageVisible);
+        
+        // Track when page became visible for single update trigger
+        if (!wasVisible && isPageVisible) {
+          becameVisibleAt = Date.now();
+          console.log('[JS-VISIBILITY] Page became visible, triggering single update');
+          Shiny.setInputValue('trigger_single_update', becameVisibleAt, {priority: 'event'});
+        }
+      });
+      
       // Log when Shiny is ready
       $(document).on('shiny:connected', function() {
         console.log('[JS-CONNECTED] Shiny connected');
+        // Send initial visibility state to Shiny
+        Shiny.setInputValue('page_visible', isPageVisible);
       });
       
       // Log input changes

@@ -206,61 +206,42 @@ tasker_cluster <- function(ncores   = NULL,
   # Create cluster with renv support for remote hosts
   if (has_remote_hosts) {
     # Get current working directory to ensure remote workers start in same location
-    # This is critical for renv to work properly
+    # This is critical for renv to work properly - R must start in the project directory
+    # so that .Rprofile can activate renv during R initialization
     working_dir <- getwd()
     
-    message(sprintf("Remote workers will be initialized in directory: %s", working_dir))
+    # Create a simple wrapper script that changes to project directory before starting Rscript
+    # This ensures Rscript starts in the correct location and .Rprofile activates renv properly
+    wrapper_script <- file.path(working_dir, 
+      sprintf(".tasker_rscript_%s.sh", format(Sys.time(), "%Y%m%d_%H%M%S")))
+    writeLines(
+      c(
+        "#!/bin/bash",
+        sprintf("cd '%s' || exit 1", working_dir),
+        'exec Rscript "$@"'
+      ),
+      wrapper_script
+    )
+    Sys.chmod(wrapper_script, mode = "0755")
+    
+    message(sprintf("Remote workers will start in directory: %s", working_dir))
     
     if (debug) {
       cat("\n=== DEBUG: Cluster Configuration ===\n")
       cat(sprintf("Working directory: %s\n", working_dir))
       cat(sprintf("Cluster spec: %s\n", paste(cluster_spec, collapse=", ")))
-      cat("Will use clusterEvalQ to set working dir and load .Rprofile\n")
+      cat(sprintf("Wrapper script: %s\n", wrapper_script))
       cat("===================================\n\n")
     }
     
     cl <- parallelly::makeClusterPSOCK(
       cluster_spec,
-      rscript_args = c("--no-init-file", "--no-site-file"),  # Don't source .Rprofile yet
+      rscript = wrapper_script,
       homogeneous = TRUE  # Assume same directory structure on all hosts
     )
     
-    # Initialize workers in correct directory with proper environment
-    # Export working directory first
-    parallel::clusterExport(cl, "working_dir", envir = environment())
-    
-    # Set working directory on all workers
-    parallel::clusterEvalQ(cl, {
-      setwd(working_dir)
-      NULL
-    })
-    
-    # Load .Renviron if it exists (for environment variables like DB credentials)
-    parallel::clusterEvalQ(cl, {
-      renviron_file <- file.path(working_dir, ".Renviron")
-      if (file.exists(renviron_file)) {
-        readRenviron(renviron_file)
-      }
-      NULL
-    })
-    
-    # Load .Rprofile if it exists (for renv activation, package loading and other setup)
-    parallel::clusterEvalQ(cl,
-      {
-        rprofile_file <- file.path(working_dir, ".Rprofile")
-        if (file.exists(rprofile_file)) {
-          source(rprofile_file)
-        }
-      }
-    )
-
-    # parallel::clusterEvalQ(cl, {
-    #   renv_lib <- file.path(working_dir, "renv/library/linux-ubuntu-noble/R-4.5/x86_64-pc-linux-gnu")
-    #   if (dir.exists(renv_lib)) {
-    #     .libPaths(c(renv_lib, .libPaths()))
-    #   }
-    #   NULL
-    # })
+    # Store wrapper script path for cleanup
+    attr(cl, "tasker_wrapper_script") <- wrapper_script
 
   } else {
     # Local cluster - no special handling needed

@@ -1116,10 +1116,29 @@ server <- function(input, output, session) {
   observe({
     auto_refresh_timer()  # Depend ONLY on timer
     # Use isolate() to prevent reactive dependencies on conditional checks
-    if (isolate(input$auto_refresh) && isolate(!rv$query_running)) {
+    # CRITICAL: Only process auto-refresh when page is visible to prevent accumulated updates
+    page_visible <- isolate(input$page_visible)
+    if (is.null(page_visible)) page_visible <- TRUE  # Default to visible if not yet set
+    
+    if (isolate(input$auto_refresh) && isolate(!rv$query_running) && page_visible) {
       new_val <- isolate(refresh_trigger()) + 1
       refresh_trigger(new_val)
-      message(sprintf("[AUTO-REFRESH] Incremented refresh_trigger to %d (query_running=%s)", new_val, isolate(rv$query_running)))
+      message(sprintf("[AUTO-REFRESH] Incremented refresh_trigger to %d (query_running=%s, page_visible=%s)", 
+                      new_val, isolate(rv$query_running), page_visible))
+    } else if (!page_visible) {
+      message("[AUTO-REFRESH] Skipping update - page not visible")
+    }
+  })
+  
+  # Handle single update when page becomes visible after being hidden
+  observeEvent(input$trigger_single_update, {
+    message(sprintf("[VISIBILITY-REFRESH] Page became visible, triggering single update (timestamp=%s)", input$trigger_single_update))
+    if (!rv$query_running) {
+      new_val <- refresh_trigger() + 1
+      refresh_trigger(new_val)
+      message(sprintf("[VISIBILITY-REFRESH] Incremented refresh_trigger to %d", new_val))
+    } else {
+      message("[VISIBILITY-REFRESH] Skipping update - query already running")
     }
   })
   
