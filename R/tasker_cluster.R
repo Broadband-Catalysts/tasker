@@ -5,9 +5,10 @@
 #' on all workers. It encapsulates the common pattern of cluster setup, reducing
 #' boilerplate from 8-10 lines to 1-2 lines.
 #'
-#' All packages currently attached in the main session (except base packages) are
-#' automatically loaded on workers, eliminating the need to manually specify common
-#' dependencies.
+#' All packages currently loaded in the main session are automatically replicated
+#' on workers, preserving the distinction between loaded namespaces (loaded via
+#' \code{loadNamespace()}) and attached packages (loaded via \code{library()}).
+#' This ensures workers have the same package environment as the main session.
 #'
 #' @param ncores Number of cores or named numeric vector for distributed processing.
 #'   Can be:
@@ -23,10 +24,14 @@
 #'     (e.g., via NFS mount or synchronized git repositories)
 #'   - Workers will automatically start in the same working directory as the
 #'     master process and hence will use the .Renviron and .Rprofile files (enabling renv activation)
-#' @param packages Character vector of package names to load on workers (optional).
-#'   The tasker package is always loaded automatically. Additionally, all packages
-#'   currently attached in the main session (excluding base packages) are
-#'   automatically detected and loaded on workers.
+#' @param namespaces Character vector of package names to load on workers using
+#'   \code{loadNamespace()} (optional). These packages will be loaded but not
+#'   attached to the search path. Additionally, all namespaces currently loaded
+#'   in the main session are automatically loaded on workers.
+#' @param packages Character vector of package names to attach on workers using
+#'   \code{library()} (optional). These packages will be attached to the worker's
+#'   search path. Additionally, all packages currently attached in the main
+#'   session are automatically attached on workers.
 #' @param export Character vector of object names to export to workers (optional).
 #'   The active run_id is always exported automatically if one exists.
 #' @param setup_expr Expression to evaluate on each worker after packages are loaded
@@ -46,18 +51,18 @@
 #' @examples
 #' \dontrun{
 #' # Simple setup with auto-detection
-#' # All currently attached packages will be loaded on workers
+#' # All currently loaded/attached packages replicated on workers
 #' library(dplyr)
 #' library(sf)
 #' cl <- tasker_cluster()
 #' results <- parLapply(cl, items, worker_function)
 #' stop_tasker_cluster(cl)
 #'
-#' # With custom packages and objects
-#' # Both specified packages and attached packages will be loaded
+#' # With custom namespaces and packages
 #' cl <- tasker_cluster(
 #'   ncores = 16,
-#'   packages = c("dplyr", "sf"),
+#'   namespaces = c("jsonlite", "httr"),  # Loaded but not attached
+#'   packages = c("dplyr", "sf"),         # Attached to search path
 #'   export = c("counties", "data_path")
 #' )
 #'
@@ -97,13 +102,14 @@
 #' subtask_complete()
 #' task_complete()
 #' }
-tasker_cluster <- function(ncores   = NULL,
-                           packages = NULL,
-                           export   = NULL,
+tasker_cluster <- function(ncores     = NULL,
+                           namespaces = NULL,
+                           packages   = NULL,
+                           export     = NULL,
                            setup_expr = NULL,
-                           envir    = parent.frame(),
-                           load_all = FALSE,
-                           debug    = FALSE) {
+                           envir      = parent.frame(),
+                           load_all   = FALSE,
+                           debug      = FALSE) {
   
   # Input validation
   if (!is.null(ncores)) {
@@ -138,16 +144,16 @@ tasker_cluster <- function(ncores   = NULL,
     }
   }
   
-  if (!is.null(packages)) {
-    if (!is.character(packages)) {
-      stop("'packages' must be a character vector of package names", call. = FALSE)
-    }
+  if (!is.null(namespaces) && !is.character(namespaces)) {
+      stop("'namespaces' must be a character vector of package names", call. = FALSE)
   }
   
-  if (!is.null(export)) {
-    if (!is.character(export)) {
+  if (!is.null(packages) && !is.character(packages)) {
+      stop("'packages' must be a character vector of package names", call. = FALSE)
+  }
+  
+  if (!is.null(export) && !is.character(export)) {
       stop("'export' must be a character vector of object names", call. = FALSE)
-    }
   }
   
   if (!is.logical(load_all) || length(load_all) != 1) {
@@ -165,13 +171,35 @@ tasker_cluster <- function(ncores   = NULL,
     ncores <- c("localhost" = detected)
     names(ncores) <- "localhost"
   }
+
+  # Detect currently loaded and attached packages
+  # loadedNamespaces() returns all loaded namespaces (attached or not)
+  # search() returns attached packages with "package:" prefix
+  loaded_namespaces <- loadedNamespaces()
   
-  # Merge with user-specified packages (user-specified takes precedence)
-  if (!is.null(packages)) {
-    all_packages <- unique(c(packages, loadedNamespaces()))
-  } else {
-    all_packages <- loadedNamespaces()
+  # Extract attached package names from search() which returns entries like "package:dplyr"
+  search_results <- search()
+  attached_packages <- gsub("^package:", "", search_results[grepl("^package:", search_results)])
+  
+  # Packages that are loaded but NOT attached (use loadNamespace)
+  namespaces_only <- setdiff(loaded_namespaces, attached_packages)
+  
+  # Merge user-specified packages with auto-detected ones
+  if (!is.null(namespaces)) {
+    # User-specified namespaces to load (not attach)
+    namespaces_only <- unique(c(namespaces, namespaces_only))
   }
+  
+  if (!is.null(packages)) {
+    # User-specified packages to attach (use library)
+    attached_packages <- unique(c(packages, attached_packages))
+  }
+  
+  # Remove base packages from both lists (they're always available)
+  base_packages <- c("base", "tools", "utils", "grDevices", "graphics", 
+                     "stats", "datasets", "methods", "parallel")
+  namespaces_only <- setdiff(namespaces_only, base_packages)
+  attached_packages <- setdiff(attached_packages, base_packages)
   
   # Create cluster specification
   # If ncores is a named vector, expand to host list for makeCluster
@@ -231,6 +259,7 @@ tasker_cluster <- function(ncores   = NULL,
       cat(sprintf("Working directory: %s\n", working_dir))
       cat(sprintf("Cluster spec: %s\n", paste(cluster_spec, collapse=", ")))
       cat(sprintf("Wrapper script: %s\n", wrapper_script))
+      cat(sprintf("Namespaces: %s\n", paste(loadedNamespaces(), collapse=", ")))
       cat("===================================\n\n")
     }
     
@@ -280,13 +309,27 @@ tasker_cluster <- function(ncores   = NULL,
     NULL
   })
   
-  # Note: tasker package loading on workers should be handled via setup_expr
-  # or packages parameter if needed. Skipping automatic loading to avoid
-  # dependency issues during cluster initialization.
+  # Load namespaces on workers (for packages that were loaded but not attached)
+  if (length(namespaces_only) > 0) {
+    if (debug) {
+      cat(sprintf("Loading namespaces on workers: %s\n", 
+                  paste(namespaces_only, collapse=", ")))
+    }
+    for (pkg in namespaces_only) {
+      parallel::clusterCall(cl, function(p) {
+        loadNamespace(p)
+        NULL
+      }, p = pkg)
+    }
+  }
   
-  # Load additional packages if specified
-  if (!is.null(all_packages) && length(all_packages) > 0) {
-    for (pkg in all_packages) {
+  # Attach packages on workers (for packages that were attached in main session)
+  if (length(attached_packages) > 0) {
+    if (debug) {
+      cat(sprintf("Attaching packages on workers: %s\n", 
+                  paste(attached_packages, collapse=", ")))
+    }
+    for (pkg in attached_packages) {
       parallel::clusterCall(cl, function(p) {
         library(p, character.only = TRUE)
         NULL

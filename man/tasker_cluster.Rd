@@ -6,6 +6,7 @@
 \usage{
 tasker_cluster(
   ncores = NULL,
+  namespaces = NULL,
   packages = NULL,
   export = NULL,
   setup_expr = NULL,
@@ -34,10 +35,15 @@ For remote hosts:
 master process and hence will use the .Renviron and .Rprofile files (enabling renv activation)
 }}
 
-\item{packages}{Character vector of package names to load on workers (optional).
-The tasker package is always loaded automatically. Additionally, all packages
-currently attached in the main session (excluding base packages) are
-automatically detected and loaded on workers.}
+\item{namespaces}{Character vector of package names to load on workers using
+\code{loadNamespace()} (optional). These packages will be loaded but not
+attached to the search path. Additionally, all namespaces currently loaded
+in the main session are automatically loaded on workers.}
+
+\item{packages}{Character vector of package names to attach on workers using
+\code{library()} (optional). These packages will be attached to the worker's
+search path. Additionally, all packages currently attached in the main
+session are automatically attached on workers.}
 
 \item{export}{Character vector of object names to export to workers (optional).
 The active run_id is always exported automatically if one exists.}
@@ -62,25 +68,26 @@ on all workers. It encapsulates the common pattern of cluster setup, reducing
 boilerplate from 8-10 lines to 1-2 lines.
 }
 \details{
-All packages currently attached in the main session (except base packages) are
-automatically loaded on workers, eliminating the need to manually specify common
-dependencies.
+All packages currently loaded in the main session are automatically replicated
+on workers, preserving the distinction between loaded namespaces (loaded via
+\code{loadNamespace()}) and attached packages (loaded via \code{library()}).
+This ensures workers have the same package environment as the main session.
 }
 \examples{
 \dontrun{
 # Simple setup with auto-detection
-# All currently attached packages will be loaded on workers
+# All currently loaded/attached packages replicated on workers
 library(dplyr)
 library(sf)
 cl <- tasker_cluster()
 results <- parLapply(cl, items, worker_function)
 stop_tasker_cluster(cl)
 
-# With custom packages and objects
-# Both specified packages and attached packages will be loaded
+# With custom namespaces and packages
 cl <- tasker_cluster(
   ncores = 16,
-  packages = c("dplyr", "sf"),
+  namespaces = c("jsonlite", "httr"),  # Loaded but not attached
+  packages = c("dplyr", "sf"),         # Attached to search path
   export = c("counties", "data_path")
 )
 

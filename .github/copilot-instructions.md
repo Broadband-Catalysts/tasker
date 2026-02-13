@@ -218,16 +218,17 @@ Use `subtask_increment()` for atomic counter updates from parallel workers:
 
 ```r
 # ✅ CORRECT - Atomic increment (safe for parallel execution)
+# After export_tasker_context(cl), workers have context
 process_item <- function(item) {
   # ... do work ...
-  subtask_increment(run_id, subtask_number, increment = 1)
+  subtask_increment(increment = 1)  # Context from export_tasker_context()
 }
 
 # ❌ INCORRECT - Race condition (parallel workers overwrite each other)
 process_item <- function(item) {
   # ... do work ...
   current <- get_count()  # Worker A reads 10
-  subtask_update(run_id, subtask_number, items_complete = current + 1)  # Workers overwrite
+  subtask_update(items_complete = current + 1)  # Workers overwrite
 }
 ```
 
@@ -422,15 +423,16 @@ All exported functions must have roxygen2 documentation:
 #' @export
 #'
 #' @examples
-#' run_id <- task_start("STAGE", "Task Name")
-#' subtask_start(run_id, 1, "Process items", items_total = 100)
+#' run_id <- task_start()
+#' subtask_start("Process items", items_total = 100)
 #' 
-#' # Safe for parallel workers
+#' # Safe for parallel workers (after export_tasker_context)
+#' export_tasker_context(cl)
 #' parLapply(cl, items, function(item) {
 #'   process_item(item)
-#'   subtask_increment(run_id, 1, increment = 1)
+#'   subtask_increment(increment = 1)
 #' })
-subtask_increment <- function(run_id, subtask_number, increment = 1, quiet = TRUE, conn = NULL) {
+subtask_increment <- function(run_id = NULL, subtask_number = NULL, increment = 1, quiet = TRUE, conn = NULL) {
   # Implementation
 }
 ```
