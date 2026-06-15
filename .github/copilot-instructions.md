@@ -10,7 +10,7 @@
 3. Execute `/preflight` command if required by prompt
 4. Only proceed with response after compliance verified
 
-See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
+See agent-config/.github/prompts/preflight.prompt.md for complete requirements.
 
 ---
 
@@ -19,7 +19,7 @@ See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 # 📖 REQUIRED READING
 
 **ALWAYS read the user-level copilot-instructions.md file first:**
-- **Location**: `/home/warnes/src/vscode-config/copilot-instructions.md`
+- **Location**: `/home/warnes/src/agent-config/copilot-instructions.md`
 - **Contains**: Communication style, token monitoring, cross-project development patterns
 - **Why**: Establishes baseline behavior and standards across all projects
 
@@ -33,7 +33,7 @@ See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 
 ## Quick Skill Reference
 
-**📋 Complete Skills Index:** See [SKILLS_INDEX.md](../../../vscode-config/copilot-skills/SKILLS_INDEX.md) for comprehensive guide to all available procedural patterns.
+**📋 Complete Skills Index:** See [SKILLS_INDEX.md](../../../agent-config/copilot-skills/SKILLS_INDEX.md) for comprehensive guide to all available procedural patterns.
 
 - **#code-review** - REQUIRED before finalizing any code changes
 - **#git-commit-message** - For commit message generation  
@@ -163,16 +163,17 @@ Use `subtask_increment()` for atomic counter updates from parallel workers:
 
 ```r
 # ✅ CORRECT - Atomic increment (safe for parallel execution)
+# After export_tasker_context(cl), workers have context
 process_item <- function(item) {
   # ... do work ...
-  subtask_increment(run_id, subtask_number, increment = 1)
+  subtask_increment(increment = 1)  # Context from export_tasker_context()
 }
 
 # ❌ INCORRECT - Race condition (parallel workers overwrite each other)
 process_item <- function(item) {
   # ... do work ...
   current <- get_count()  # Worker A reads 10
-  subtask_update(run_id, subtask_number, items_complete = current + 1)  # Workers overwrite
+  subtask_update(items_complete = current + 1)  # Workers overwrite
 }
 ```
 
@@ -367,15 +368,16 @@ All exported functions must have roxygen2 documentation:
 #' @export
 #'
 #' @examples
-#' run_id <- task_start("STAGE", "Task Name")
-#' subtask_start(run_id, 1, "Process items", items_total = 100)
+#' run_id <- task_start()
+#' subtask_start("Process items", items_total = 100)
 #' 
-#' # Safe for parallel workers
+#' # Safe for parallel workers (after export_tasker_context)
+#' export_tasker_context(cl)
 #' parLapply(cl, items, function(item) {
 #'   process_item(item)
-#'   subtask_increment(run_id, 1, increment = 1)
+#'   subtask_increment(increment = 1)
 #' })
-subtask_increment <- function(run_id, subtask_number, increment = 1, quiet = TRUE, conn = NULL) {
+subtask_increment <- function(run_id = NULL, subtask_number = NULL, increment = 1, quiet = TRUE, conn = NULL) {
   # Implementation
 }
 ```
