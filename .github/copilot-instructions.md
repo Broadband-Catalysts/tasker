@@ -10,7 +10,7 @@
 3. Execute `/preflight` command if required by prompt
 4. Only proceed with response after compliance verified
 
-See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
+See agent-config/.github/prompts/preflight.prompt.md for complete requirements.
 
 ---
 
@@ -19,7 +19,7 @@ See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 # 📖 REQUIRED READING
 
 **ALWAYS read the user-level copilot-instructions.md file first:**
-- **Location**: `/home/warnes/src/vscode-config/copilot-instructions.md`
+- **Location**: `/home/warnes/src/agent-config/copilot-instructions.md`
 - **Contains**: Communication style, token monitoring, cross-project development patterns
 - **Why**: Establishes baseline behavior and standards across all projects
 
@@ -33,7 +33,7 @@ See vscode-config/.github/prompts/preflight.prompt.md for complete requirements.
 
 ## Quick Skill Reference
 
-**📋 Complete Skills Index:** See [SKILLS_INDEX.md](../../../vscode-config/copilot-skills/SKILLS_INDEX.md) for comprehensive guide to all available procedural patterns.
+**📋 Complete Skills Index:** See [SKILLS_INDEX.md](../../../agent-config/copilot-skills/SKILLS_INDEX.md) for comprehensive guide to all available procedural patterns.
 
 - **#code-review** - REQUIRED before finalizing any code changes
 - **#git-commit-message** - For commit message generation  
